@@ -139,6 +139,19 @@ export interface SetLog {
   created_at: string;
 }
 
+/** set_entries — one row per actual set; unique (session_id, slot_id, set_number) */
+export interface SetEntry {
+  id: string;
+  user_id: string;
+  session_id: string;
+  slot_id: string;
+  set_number: number;
+  load: number | null;
+  reps: number | null;
+  rir: number | null;
+  created_at: string;
+}
+
 /** body_metrics — unique (user_id, measured_on) */
 export interface BodyMetric {
   id: string;
@@ -226,6 +239,8 @@ export interface SlotTargets {
 export interface SlotView {
   slot: ExerciseSlot;
   log: SetLog | null;
+  /** Individual sets logged for this slot (ordered by set_number). */
+  entries: SetEntry[];
   targets: SlotTargets;
   result: import("@/lib/engine/engine").EngineResult;
 }

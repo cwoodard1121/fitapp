@@ -16,6 +16,7 @@ export {
   ensureWeekSessions,
   getSessionForDay,
   getSetLogsForSession,
+  getSetEntriesForSession,
   getPrevDecisionForSlot,
   computeSlotTargets,
   buildTodayView,

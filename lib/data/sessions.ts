@@ -2,6 +2,7 @@ import type {
   ExerciseSlot,
   Program,
   Session,
+  SetEntry,
   SetLog,
   SlotTargets,
   SlotView,
@@ -127,6 +128,29 @@ export async function getSetLogsForSession(
 }
 
 /**
+ * Map of slot_id -> ordered set_entries for a session.
+ */
+export async function getSetEntriesForSession(
+  sessionId: string,
+): Promise<Record<string, SetEntry[]>> {
+  const supabase = await createClient()
+  const userId = await requireUserId(supabase)
+  const { data, error } = await supabase
+    .from('set_entries')
+    .select('*')
+    .eq('session_id', sessionId)
+    .eq('user_id', userId)
+    .order('set_number', { ascending: true })
+  if (error) throw error
+
+  const map: Record<string, SetEntry[]> = {}
+  for (const row of (data as SetEntry[]) ?? []) {
+    ;(map[row.slot_id] ??= []).push(row)
+  }
+  return map
+}
+
+/**
  * Previous-week set_log for a single slot (week - 1). Null if none.
  */
 async function getPrevWeekLog(
@@ -242,10 +266,12 @@ export async function buildTodayView(
   const week = session.week
   const slotIds = slots.map((s) => s.id)
   const prevLogs = await getPrevWeekLogsForSlots(slotIds, week)
+  const entriesBySlot = await getSetEntriesForSession(session.id)
 
   return slots.map((slot) => {
     const config = slotConfigFromRow(slot)
     const log = logs[slot.id] ?? null
+    const entries = entriesBySlot[slot.id] ?? []
     const prev = derivePrevTargets(config, prevLogs[slot.id], week - 1, deloadWeek)
 
     const targets: SlotTargets = {
@@ -265,7 +291,7 @@ export async function buildTodayView(
     }
     const result = evaluateSlot(setLogInputFromRow(log), config, ctx)
 
-    return { slot, log, targets, result }
+    return { slot, log, entries, targets, result }
   })
 }
 

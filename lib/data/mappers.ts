@@ -5,7 +5,65 @@ import type {
   SetLogInput,
   SlotConfig,
 } from '@/lib/engine/engine'
-import { evaluateSlot } from '@/lib/engine/engine'
+import { evaluateSlot, epley1RM } from '@/lib/engine/engine'
+
+export interface SetEntryValues {
+  load: number | null
+  reps: number | null
+  rir: number | null
+}
+
+export interface SetAggregate {
+  actual_load: number | null
+  best_reps: number | null
+  actual_sets: number | null
+  actual_rir: number | null
+}
+
+/**
+ * Collapse a slot's individual sets into the aggregate the engine reads. The
+ * "best set" (highest Epley e1RM, falling back to most reps) drives load/reps/RIR
+ * so e1RM and the rep-cap / load decisions stay internally consistent; the count
+ * of real sets drives the volume signal. Representative RIR = the best set's RIR,
+ * else the lowest RIR logged (closest to failure).
+ */
+export function aggregateFromEntries(entries: SetEntryValues[]): SetAggregate {
+  const real = entries.filter((e) => e.load != null || e.reps != null)
+  if (real.length === 0) {
+    return { actual_load: null, best_reps: null, actual_sets: null, actual_rir: null }
+  }
+
+  let best: SetEntryValues | null = null
+  let bestScore = -Infinity
+  for (const e of real) {
+    if (e.load != null && e.reps != null) {
+      const score = epley1RM(e.load, e.reps)
+      if (score > bestScore) {
+        bestScore = score
+        best = e
+      }
+    }
+  }
+  if (!best) {
+    best = real.reduce(
+      (a, b) => ((b.reps ?? -1) > (a.reps ?? -1) ? b : a),
+      real[0],
+    )
+  }
+
+  const rirs = real
+    .map((e) => e.rir)
+    .filter((r): r is number => r != null)
+  const actual_rir =
+    best.rir != null ? best.rir : rirs.length ? Math.min(...rirs) : null
+
+  return {
+    actual_load: best.load,
+    best_reps: best.reps,
+    actual_sets: real.length,
+    actual_rir,
+  }
+}
 
 /**
  * Map an exercise_slots row (snake_case) to the engine's SlotConfig (camelCase).

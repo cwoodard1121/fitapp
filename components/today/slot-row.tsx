@@ -2,15 +2,16 @@
 
 import * as React from 'react'
 import { toast } from 'sonner'
-import { Check, Loader2 } from 'lucide-react'
+import { Check, Loader2, Plus, X } from 'lucide-react'
 
 import type { SlotView, Unit } from '@/lib/types'
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Stat } from '@/components/ui/stat'
 import { DecisionBadge } from '@/components/ui/decision-badge'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { saveSetEntry } from '@/app/(app)/today/actions'
+import { saveSetEntries } from '@/app/(app)/today/actions'
 import { ReadinessSheet } from '@/components/today/readiness-sheet'
 
 interface SlotRowProps {
@@ -21,6 +22,12 @@ interface SlotRowProps {
   allSlotIds: string[]
 }
 
+interface Row {
+  load: string
+  reps: string
+  rir: string
+}
+
 /** Parse a numeric input string to a finite number, or null when empty/invalid. */
 function num(s: string): number | null {
   const t = s.trim()
@@ -29,8 +36,48 @@ function num(s: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function toField(n: number | null): string {
+function toField(n: number | null | undefined): string {
   return n == null ? '' : String(n)
+}
+
+function row(load: number | null, reps: number | null, rir: number | null): Row {
+  return { load: toField(load), reps: toField(reps), rir: toField(rir) }
+}
+
+/** Build the starting set list: saved sets, else legacy aggregate, padded with
+ *  prefilled (target-load) rows up to the planned set count for fast logging. */
+function initialRows(view: SlotView): Row[] {
+  const target = Math.max(1, Math.round(view.targets.sets ?? 0) || 1)
+  let rows: Row[] = []
+
+  if (view.entries.length > 0) {
+    rows = view.entries.map((e) => row(e.load, e.reps, e.rir))
+  } else if (
+    view.log &&
+    (view.log.actual_load != null ||
+      view.log.best_reps != null ||
+      view.log.actual_sets != null)
+  ) {
+    // Legacy aggregate row (logged before per-set) — show it as editable sets.
+    const n = Math.max(1, Math.round(view.log.actual_sets ?? 1))
+    rows = Array.from({ length: n }, () =>
+      row(view.log!.actual_load, view.log!.best_reps, view.log!.actual_rir),
+    )
+  }
+
+  const padLoad = rows.length ? num(rows[rows.length - 1].load) : view.targets.load
+  while (rows.length < target) rows.push(row(padLoad, null, null))
+  if (rows.length === 0) rows.push(row(view.targets.load, null, null))
+  return rows
+}
+
+/** JSON of the "performed" sets (those with reps) — what actually persists. */
+function realSnapshot(rows: Row[]): string {
+  return JSON.stringify(
+    rows
+      .map((r) => ({ load: num(r.load), reps: num(r.reps), rir: num(r.rir) }))
+      .filter((r) => r.reps != null),
+  )
 }
 
 const GATE_BADGE: Record<string, 'success' | 'warning' | 'danger'> = {
@@ -39,60 +86,51 @@ const GATE_BADGE: Record<string, 'success' | 'warning' | 'danger'> = {
   Red: 'danger',
 }
 
-export function SlotRow({
-  view,
-  sessionId,
-  week,
-  unit,
-  allSlotIds,
-}: SlotRowProps) {
+export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProps) {
   const { slot, log, targets, result } = view
 
-  const [load, setLoad] = React.useState(toField(log?.actual_load ?? null))
-  const [reps, setReps] = React.useState(toField(log?.best_reps ?? null))
-  const [sets, setSets] = React.useState(toField(log?.actual_sets ?? null))
-  const [rir, setRir] = React.useState(toField(log?.actual_rir ?? null))
-
+  const [rows, setRows] = React.useState<Row[]>(() => initialRows(view))
   const [pending, startTransition] = React.useTransition()
   const [savedFlash, setSavedFlash] = React.useState(false)
+  const lastSaved = React.useRef(realSnapshot(initialRows(view)))
 
-  // Snapshot of the last persisted values so blur only writes on a real change.
-  const lastSaved = React.useRef({
-    load: log?.actual_load ?? null,
-    reps: log?.best_reps ?? null,
-    sets: log?.actual_sets ?? null,
-    rir: log?.actual_rir ?? null,
-  })
+  const setField = (i: number, field: keyof Row, value: string) => {
+    setRows((prev) => {
+      const next = prev.slice()
+      next[i] = { ...next[i], [field]: value }
+      return next
+    })
+  }
 
-  function commit() {
-    const next = {
-      load: num(load),
-      reps: num(reps),
-      sets: num(sets),
-      rir: num(rir),
-    }
-    const prev = lastSaved.current
-    if (
-      next.load === prev.load &&
-      next.reps === prev.reps &&
-      next.sets === prev.sets &&
-      next.rir === prev.rir
-    ) {
-      return
-    }
+  const addSet = () => {
+    setRows((prev) => {
+      const last = prev[prev.length - 1]
+      // Carry the previous set's load (most sets repeat the working weight).
+      return [...prev, row(last ? num(last.load) : targets.load, null, null)]
+    })
+  }
+
+  const removeSet = (i: number) => {
+    if (rows.length <= 1) return
+    const next = rows.filter((_, j) => j !== i)
+    setRows(next)
+    commitRows(next) // persist the removal right away (explicit next list)
+  }
+
+  function commitRows(rowsToSave: Row[]) {
+    const snap = realSnapshot(rowsToSave)
+    if (snap === lastSaved.current) return
+
+    const payload = rowsToSave.map((r) => ({
+      load: num(r.load),
+      reps: num(r.reps),
+      rir: num(r.rir),
+    }))
 
     startTransition(async () => {
-      const res = await saveSetEntry({
-        sessionId,
-        slotId: slot.id,
-        week,
-        actualLoad: next.load,
-        bestReps: next.reps,
-        actualSets: next.sets,
-        actualRir: next.rir,
-      })
+      const res = await saveSetEntries({ sessionId, slotId: slot.id, week, entries: payload })
       if (res.ok) {
-        lastSaved.current = next
+        lastSaved.current = snap
         setSavedFlash(true)
         window.setTimeout(() => setSavedFlash(false), 1400)
       } else {
@@ -101,28 +139,15 @@ export function SlotRow({
     })
   }
 
-  const hasData =
-    num(load) != null ||
-    num(reps) != null ||
-    num(sets) != null ||
-    num(rir) != null
+  const commit = () => commitRows(rows)
 
+  const performedSets = rows.filter((r) => num(r.reps) != null).length
+  const hasData = performedSets > 0
   const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) =>
     e.currentTarget.select()
 
-  const fields: {
-    key: string
-    label: string
-    value: string
-    set: (v: string) => void
-    unit?: string
-    step?: string
-  }[] = [
-    { key: 'load', label: 'Load', value: load, set: setLoad, unit, step: 'any' },
-    { key: 'reps', label: 'Reps', value: reps, set: setReps, step: '1' },
-    { key: 'sets', label: 'Sets', value: sets, set: setSets, step: '1' },
-    { key: 'rir', label: 'RIR', value: rir, set: setRir, step: 'any' },
-  ]
+  const inputCls =
+    'h-11 w-full rounded-md border border-border bg-background px-1 text-center font-mono text-base font-semibold tabular-nums text-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface'
 
   return (
     <Card className="overflow-hidden">
@@ -161,47 +186,92 @@ export function SlotRow({
         </span>
         <Stat size="sm" label="Load" value={targets.load} unit={unit} />
         <Stat size="sm" label="Sets" value={targets.sets} />
-        <Stat
-          size="sm"
-          label="Reps"
-          value={targets.reps}
-          placeholder="—"
-        />
+        <Stat size="sm" label="Reps" value={targets.reps} placeholder="—" />
         <Stat size="sm" label="RIR" value={targets.rir} />
       </div>
 
       <Separator />
 
-      {/* Fast inline entry */}
-      <div className="grid grid-cols-4 gap-2 p-4 pt-3">
-        {fields.map((f) => (
-          <div key={f.key} className="space-y-1">
-            <label
-              htmlFor={`${f.key}-${slot.id}`}
-              className="block text-[11px] font-medium uppercase tracking-wider text-muted"
+      {/* Per-set entry */}
+      <div className="p-4 pt-3">
+        <div className="mb-1.5 grid grid-cols-[1.75rem_1fr_1fr_1fr_1.75rem] items-center gap-1.5 px-0.5 text-[11px] font-medium uppercase tracking-wider text-muted">
+          <span className="text-center">#</span>
+          <span className="text-center">Load{unit ? ` ${unit}` : ''}</span>
+          <span className="text-center">Reps</span>
+          <span className="text-center">RIR</span>
+          <span />
+        </div>
+
+        <div className="space-y-1.5">
+          {rows.map((r, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-[1.75rem_1fr_1fr_1fr_1.75rem] items-center gap-1.5"
             >
-              {f.label}
-              {f.unit ? (
-                <span className="ml-1 normal-case text-muted/80">
-                  {f.unit}
-                </span>
-              ) : null}
-            </label>
-            <input
-              id={`${f.key}-${slot.id}`}
-              type="number"
-              inputMode="decimal"
-              step={f.step}
-              min={0}
-              value={f.value}
-              onChange={(e) => f.set(e.target.value)}
-              onFocus={selectOnFocus}
-              onBlur={commit}
-              placeholder="—"
-              className="h-12 w-full rounded-md border border-border bg-background px-2 text-center font-mono text-lg font-semibold tabular-nums text-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-            />
-          </div>
-        ))}
+              <span className="text-center font-mono text-sm font-semibold tabular-nums text-muted">
+                {i + 1}
+              </span>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min={0}
+                aria-label={`Set ${i + 1} load`}
+                value={r.load}
+                onChange={(e) => setField(i, 'load', e.target.value)}
+                onFocus={selectOnFocus}
+                onBlur={commit}
+                placeholder="—"
+                className={inputCls}
+              />
+              <input
+                type="number"
+                inputMode="numeric"
+                step="1"
+                min={0}
+                aria-label={`Set ${i + 1} reps`}
+                value={r.reps}
+                onChange={(e) => setField(i, 'reps', e.target.value)}
+                onFocus={selectOnFocus}
+                onBlur={commit}
+                placeholder="—"
+                className={inputCls}
+              />
+              <input
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min={0}
+                aria-label={`Set ${i + 1} RIR`}
+                value={r.rir}
+                onChange={(e) => setField(i, 'rir', e.target.value)}
+                onFocus={selectOnFocus}
+                onBlur={commit}
+                placeholder="—"
+                className={inputCls}
+              />
+              <button
+                type="button"
+                onClick={() => removeSet(i)}
+                disabled={rows.length <= 1}
+                aria-label={`Remove set ${i + 1}`}
+                className="inline-flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:text-gate-red disabled:opacity-30"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={addSet}
+          className="mt-2.5 h-10 w-full gap-1.5"
+        >
+          <Plus className="size-4" aria-hidden />
+          Add set
+        </Button>
       </div>
 
       {/* Decision readout — the signature element */}
@@ -230,13 +300,16 @@ export function SlotRow({
           </>
         ) : (
           <p className="text-sm text-muted">
-            Log your set to get the engine&apos;s call.
+            Log a set to get the engine&apos;s call.
           </p>
         )}
       </div>
 
       {/* Save status strip */}
-      <div className="flex h-6 items-center justify-end px-4 pb-2 text-xs">
+      <div className="flex h-6 items-center justify-between px-4 pb-2 text-xs">
+        <span className="font-mono text-muted">
+          {performedSets} set{performedSets === 1 ? '' : 's'} logged
+        </span>
         {pending ? (
           <span className="inline-flex items-center gap-1 text-muted">
             <Loader2 className="size-3 animate-spin" aria-hidden />

@@ -69,13 +69,14 @@ export function SlotReadout({
   unit: Unit
   e1rmSeries: number[]
 }) {
-  const { slot, log, result } = view
-  const logged =
+  const { slot, log, entries, result } = view
+  const aggLogged =
     log != null &&
     (log.actual_load != null ||
       log.best_reps != null ||
       log.actual_sets != null ||
       log.actual_rir != null)
+  const logged = entries.length > 0 || aggLogged
 
   return (
     <div className="rounded-lg border border-border bg-surface">
@@ -116,15 +117,39 @@ export function SlotReadout({
 
       <Separator />
 
-      {/* The set the user actually did */}
-      {logged ? (
+      {/* The sets the user actually did */}
+      {entries.length > 0 ? (
+        <div className="p-4">
+          <div className="grid grid-cols-[1.75rem_1fr_1fr_1fr] gap-1.5 px-0.5 pb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted">
+            <span className="text-center">#</span>
+            <span className="text-center">Load</span>
+            <span className="text-center">Reps</span>
+            <span className="text-center">RIR</span>
+          </div>
+          <div className="space-y-1">
+            {entries.map((e, i) => (
+              <div
+                key={e.id}
+                className="grid grid-cols-[1.75rem_1fr_1fr_1fr] items-center gap-1.5 rounded-md border border-border bg-background px-0.5 py-1.5 font-mono text-sm font-semibold tabular-nums"
+              >
+                <span className="text-center text-muted">{i + 1}</span>
+                <span className="text-center">
+                  {e.load ?? "—"}
+                  {e.load != null ? (
+                    <span className="ml-0.5 text-[0.7em] font-normal text-muted">
+                      {unit}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="text-center">{e.reps ?? "—"}</span>
+                <span className="text-center text-muted">{e.rir ?? "—"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : aggLogged ? (
         <div className="grid grid-cols-4 gap-2 p-4">
-          <Stat
-            label="Load"
-            value={log?.actual_load ?? null}
-            unit={unit}
-            size="sm"
-          />
+          <Stat label="Load" value={log?.actual_load ?? null} unit={unit} size="sm" />
           <Stat label="Reps" value={log?.best_reps ?? null} size="sm" />
           <Stat label="Sets" value={log?.actual_sets ?? null} size="sm" />
           <Stat
