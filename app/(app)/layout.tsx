@@ -60,9 +60,9 @@ export default async function AppLayout({
           displayName={profile.display_name}
           email={user?.email ?? null}
         />
-        <main className="flex-1 px-4 pb-20 pt-4 md:px-6 md:pb-0 md:pt-6">
-          <div className="mx-auto w-full max-w-5xl">{children}</div>
-        </main>
+        {/* Pages own their own horizontal padding + max-width; the shell only
+            guarantees vertical rhythm and mobile bottom-nav clearance. */}
+        <main className="flex-1 pb-20 pt-4 md:pb-2 md:pt-6">{children}</main>
       </div>
 
       {/* Mobile bottom tab bar + More sheet (hidden at md+) */}

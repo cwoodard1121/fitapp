@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Toaster } from "sonner";
+import { ServiceWorker } from "@/components/app/service-worker";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,6 +10,18 @@ export const metadata: Metadata = {
   description: "Personal strength-training autoregulation.",
   applicationName: "simplegym",
   manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "simplegym",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
 };
 
 export const viewport: Viewport = {
@@ -31,6 +44,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         {children}
         <Toaster richColors theme="dark" />
+        <ServiceWorker />
       </body>
     </html>
   );

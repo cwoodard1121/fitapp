@@ -240,7 +240,7 @@ export function ProgramEditor({
   }, [days, slots])
 
   return (
-    <div className="mx-auto w-full max-w-3xl pb-28 sm:pb-12">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-28 sm:pb-12">
       <header className="mb-5">
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
           Program editor

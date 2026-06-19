@@ -28,7 +28,7 @@ export default async function ProgramPage() {
 
   if (!full) {
     return (
-      <div className="mx-auto w-full max-w-3xl py-8">
+      <div className="mx-auto w-full max-w-3xl px-4 py-8">
         <h1 className="text-xl font-semibold tracking-tight">Program</h1>
         <p className="mt-2 text-sm text-muted">
           We couldn’t load your program. Reload the page to try again.
