@@ -5,9 +5,16 @@
  * deterministic function of its inputs so it can run identically on the server
  * (data layer) and the client (UI explanations) and be unit-tested in isolation.
  *
- * Ported verbatim from the spreadsheet spec. The derived flags, growth score,
- * recovery gate, volume signal and the first-match-wins decision ladder are LAW
- * — do not "improve" them here; tune the program config instead.
+ * Two layers:
+ *  1. The faithful spreadsheet port — derived flags, growth score, recovery
+ *     gate, volume signal, and the first-match-wins decision ladder. Pinned by
+ *     the §10 acceptance tests; do not drift from these.
+ *  2. A "smart" autoregulation layer on top, tuned for a returning/detrained
+ *     lifter (see the SMART AUTOREGULATION LAYER block): faster ramp when
+ *     readiness is clearly green, a doubled load step when the bar is far too
+ *     light, an "Add 2 reps" jump, and a stimulus rule — a low pump earns a set
+ *     even when load/rep progression is blocked. These only change behaviour
+ *     outside the pinned cases, so the acceptance tests stay green.
  */
 
 /* ------------------------------------------------------------------ */
@@ -21,6 +28,7 @@ export type Gate = 'Green' | 'Yellow' | 'Red'
 
 export type Decision =
   | 'Add 5 lb'
+  | 'Add 2 reps'
   | 'Add 1 rep'
   | 'Add 1 set'
   | 'Maintain'
@@ -29,6 +37,38 @@ export type Decision =
   | 'Deload / maintain'
   | 'Calibrate (set baseline)'
   | null
+
+/**
+ * Readiness-score weights. Defaults reproduce the spreadsheet exactly; the
+ * Settings screen can tune them. Pass via EngineContext.weights to override.
+ */
+export interface ReadinessWeights {
+  recoveryGood: number
+  recoveryBad: number
+  perfUp: number
+  perfDown: number
+  pumpGood: number
+  pumpBad: number
+  enjoyment: number
+  sorenessBand: number
+  sorenessHighNoRecovery: number
+  rirTooEasy: number
+  rirLow: number
+}
+
+export const DEFAULT_WEIGHTS: ReadinessWeights = {
+  recoveryGood: 2,
+  recoveryBad: -3,
+  perfUp: 1,
+  perfDown: -2,
+  pumpGood: 2,
+  pumpBad: 1,
+  enjoyment: 1,
+  sorenessBand: 1,
+  sorenessHighNoRecovery: -2,
+  rirTooEasy: 1,
+  rirLow: -1,
+}
 
 export interface SlotConfig {
   progressBias: ProgressBias
@@ -59,6 +99,8 @@ export interface EngineContext {
   prevNextLoad?: number | null
   prevNextSets?: number | null
   prevNextReps?: number | null
+  /** Optional tuned readiness weights; defaults to DEFAULT_WEIGHTS. */
+  weights?: ReadinessWeights
 }
 
 export interface EngineResult {
@@ -191,18 +233,19 @@ export function evaluateSlot(
   const perfup = performance === 'Up'
   const perfok = performance == null || performance === 'Same' || performance === 'Up'
 
-  /* --- Growth score --- */
+  /* --- Growth score (weighted; defaults reproduce the spreadsheet) --- */
+  const w = ctx.weights ?? DEFAULT_WEIGHTS
   const score =
-    (goodrecovery ? 2 : badrecovery ? -3 : 0) +
-    (perfup ? 1 : perfdown ? -2 : 0) +
-    (goodpump ? 2 : badpump ? 1 : 0) +
-    (enjoyment != null && enjoyment >= 7 ? 1 : 0) +
+    (goodrecovery ? w.recoveryGood : badrecovery ? w.recoveryBad : 0) +
+    (perfup ? w.perfUp : perfdown ? w.perfDown : 0) +
+    (goodpump ? w.pumpGood : badpump ? w.pumpBad : 0) +
+    (enjoyment != null && enjoyment >= 7 ? w.enjoyment : 0) +
     (soreness != null && soreness >= 3 && soreness <= 7
-      ? 1
+      ? w.sorenessBand
       : highsore && !goodrecovery
-        ? -2
+        ? w.sorenessHighNoRecovery
         : 0) +
-    (tooeasy ? 1 : lowrir ? -1 : 0)
+    (tooeasy ? w.rirTooEasy : lowrir ? w.rirLow : 0)
 
   /* --- Recovery gate --- */
   const gate: Gate =
@@ -215,13 +258,33 @@ export function evaluateSlot(
         ? 'Green'
         : 'Yellow'
 
-  /* --- Volume signal --- */
+  /* === SMART AUTOREGULATION LAYER ===================================
+   * Tuned for a returning / detrained lifter: bank easy progress fast,
+   * and treat a low pump as an under-stimulus signal that earns volume
+   * even when load/rep progression is blocked. The §10 acceptance cases
+   * are unaffected — they all sit on-target (RIR == target, high pump),
+   * outside these smart thresholds. */
+  const SET_CAP = 5 // willing to ramp hypertrophy work up to 5 work sets
+  const PROGRESS_SCORE = 4 // was 5: a clean green session shouldn't stall
+
+  // Clearly more in the tank than the +2 "too easy" -> the load is too light.
+  const veryeasy = actualRir != null && actualRir >= targetRir + 3
+  // Volume is for hypertrophy work, not heavy compounds (Load +5).
+  const canVolume = progressBias !== 'Load +5'
+
+  // Stimulus-driven volume signal: a low pump (or low soreness) means the
+  // muscle was under-stimulated, so it earns a SET — and this is checked
+  // BEFORE load/rep progression, so "can't add load/reps cleanly but pump is
+  // low -> add a set" falls out naturally. Relaxed from the original (good
+  // recovery -> any non-red gate) so a low pump still earns a set on a
+  // merely-okay day. Heavy compounds (Load +5) are excluded — pump isn't their
+  // signal and extra sets there just pile on fatigue.
   const addSet =
-    progressBias !== 'Load +5' &&
-    goodrecovery &&
+    canVolume &&
+    gate !== 'Red' &&
     perfok &&
     (badpump || lowsore) &&
-    (actualSets == null || actualSets < 4)
+    (actualSets == null || actualSets < SET_CAP)
 
   const noData =
     actualLoad == null && bestReps == null && actualSets == null && actualRir == null
@@ -229,66 +292,84 @@ export function evaluateSlot(
   /* --- Decision: FIRST MATCH WINS, in this exact order --- */
   let decision: Decision
   let reason: string
+  let bigJump = false // doubled load step on a clearly-too-light session
 
   if (week === deloadWeek) {
     decision = 'Deload / maintain'
-    reason = 'Deload week -> maintain'
+    reason = 'Deload week — keep loads light and let fatigue drop.'
   } else if (week === 1) {
     decision = 'Calibrate (set baseline)'
-    reason = 'Week 1 -> set your baseline'
+    reason = 'Week 1 — log honest numbers to set your baseline; no push yet.'
   } else if (noData) {
     decision = null
-    reason = 'No set logged yet -> nothing to evaluate'
+    reason = 'Nothing logged yet.'
   } else if (status === 'Skip') {
     decision = 'Skip'
-    reason = 'Marked skip -> no change'
+    reason = 'Marked skip — no change.'
   } else if (gate === 'Red') {
     decision = 'Hold/reduce'
-    reason = 'Recovery red -> hold/reduce'
+    reason = badrecovery
+      ? 'Recovery is poor — hold or drop a touch and rebuild.'
+      : "Readiness is red — hold or reduce, don't add stress."
   } else if (addSet) {
     decision = 'Add 1 set'
-    reason = 'Low pump + low soreness + good recovery -> add volume, not load'
-  } else if (perfok && goodrecovery && !lowrir && (score >= 5 || tooeasy)) {
+    reason = badpump
+      ? 'Low pump with recovery to spare — under-stimulated, so add a set (volume, not load).'
+      : 'Low soreness with recovery to spare — room for more volume, add a set.'
+  } else if (perfok && goodrecovery && !lowrir && (score >= PROGRESS_SCORE || tooeasy)) {
     if (progressBias === 'Load +5') {
       decision = 'Add 5 lb'
-      reason = tooeasy
-        ? 'Reps to spare with good recovery -> add load'
-        : 'Strong session with good recovery -> add load'
+      bigJump = veryeasy
+      reason = veryeasy
+        ? 'Way more in the tank — jump the load up harder this time.'
+        : 'Strong session, recovery green — add load.'
     } else if (progressBias === 'Reps first') {
       if (bestReps != null && bestReps + 1 > maxRep) {
         decision = 'Add 5 lb'
-        reason = 'Hit top of rep range with reps to spare -> add load'
+        bigJump = veryeasy
+        reason = veryeasy
+          ? 'Topped the rep range with plenty left — bump the load up a chunk.'
+          : 'Hit the top of the rep range — convert the progress to load.'
+      } else if (veryeasy && bestReps != null && bestReps + 2 <= maxRep) {
+        decision = 'Add 2 reps'
+        reason = 'Lots left in the tank — chase two reps this time, not one.'
       } else {
         decision = 'Add 1 rep'
-        reason = 'Strong session in range -> add a rep'
+        reason = 'Strong session inside the range — add a rep.'
       }
     } else if (progressBias === 'Set optional') {
       decision = 'Add 1 set'
-      reason = 'Strong session -> add a set'
+      reason = 'Strong session — add a set to drive more volume.'
     } else {
       decision = 'Maintain'
-      reason = 'On track -> maintain'
+      reason = 'On track — repeat and beat it next time.'
     }
   } else if (tooeasy && perfok && progressBias === 'Load +5') {
     decision = 'Add 5 lb'
-    reason = 'Too easy -> add load'
+    bigJump = veryeasy
+    reason = veryeasy ? 'Too light — jump the load up harder.' : 'That was too light — add load.'
   } else {
     decision = 'Maintain'
-    reason = 'Hold steady -> repeat and progress next time'
+    reason = lowrir
+      ? 'That was a grind — repeat it and clean up the reps before adding.'
+      : 'Hold steady — repeat and progress next time.'
   }
 
-  /* --- Display label: substitute the real increment for "Add 5 lb" --- */
+  /* --- Step sizes: double the load step on a clearly-too-light session --- */
+  const loadStep = bigJump ? loadIncrement * 2 : loadIncrement
+
+  /* --- Display label: show the real numbers the user will act on --- */
   const decisionLabel =
     decision === null
       ? '—'
       : decision === 'Add 5 lb'
-        ? `Add ${loadIncrement} lb`
+        ? `Add ${loadStep} lb`
         : decision
 
   /* --- Carry-forward next targets (keyed off the canonical decision) --- */
   const nextLoad =
     decision === 'Add 5 lb'
-      ? (actualLoad ?? 0) + loadIncrement
+      ? (actualLoad ?? 0) + loadStep
       : decision === 'Hold/reduce'
         ? Math.max(0, (actualLoad ?? 0) - loadIncrement)
         : actualLoad
@@ -301,7 +382,11 @@ export function evaluateSlot(
         : actualSets
 
   const nextReps =
-    decision === 'Add 1 rep' ? (bestReps ?? repLow) + 1 : bestReps
+    decision === 'Add 2 reps'
+      ? (bestReps ?? repLow) + 2
+      : decision === 'Add 1 rep'
+        ? (bestReps ?? repLow) + 1
+        : bestReps
 
   /* --- Derived metrics --- */
   const e1rm =
@@ -319,6 +404,7 @@ export function evaluateSlot(
     lowrir,
     verylowrir,
     tooeasy,
+    veryeasy,
     badpump,
     goodpump,
     lowsore,
@@ -329,6 +415,7 @@ export function evaluateSlot(
     perfup,
     perfok,
     addSet,
+    bigJump,
   }
 
   return {
@@ -344,5 +431,56 @@ export function evaluateSlot(
     nextSets,
     nextReps,
     flags,
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Plateau / stall detection (cross-session)                           */
+/* ------------------------------------------------------------------ */
+
+/** One slot's result from a past session, oldest-to-newest. */
+export interface StallSample {
+  e1rm: number | null
+  decision: Decision
+}
+
+/**
+ * Detect a stall for one exercise across recent sessions: the engine kept
+ * saying "Maintain"/"Hold/reduce" AND the estimated 1RM stayed flat. Surfaces
+ * the "stalled — consider a swap or early deload" nudge the spreadsheet couldn't.
+ *
+ *  - window: how many recent sessions must agree (default 3).
+ *  - tolerancePct: max e1RM spread (% of the low) still counted as "flat" (default 1.5%).
+ */
+export function detectStall(
+  recent: StallSample[],
+  opts: { window?: number; tolerancePct?: number } = {},
+): { stalled: boolean; reason: string } {
+  const window = opts.window ?? 3
+  const tol = opts.tolerancePct ?? 1.5
+  const samples = recent.slice(-window)
+  if (samples.length < window) return { stalled: false, reason: '' }
+
+  const noProgress = samples.every(
+    (s) => s.decision === 'Maintain' || s.decision === 'Hold/reduce',
+  )
+
+  const e1rms = samples
+    .map((s) => s.e1rm)
+    .filter((v): v is number => v != null)
+
+  let flat = false
+  if (e1rms.length >= 2) {
+    const min = Math.min(...e1rms)
+    const max = Math.max(...e1rms)
+    flat = min > 0 && ((max - min) / min) * 100 <= tol
+  }
+
+  const stalled = noProgress && (e1rms.length < 2 || flat)
+  return {
+    stalled,
+    reason: stalled
+      ? `${window} sessions without progress and a flat e1RM — consider swapping the exercise or pulling an early deload.`
+      : '',
   }
 }

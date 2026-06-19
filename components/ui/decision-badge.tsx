@@ -36,6 +36,8 @@ function decisionMeta(decision: Decision): DecisionMeta {
       return { tone: "signal", Icon: Plus, fallbackLabel: "Add 5 lb" }
     case "Add 1 rep":
       return { tone: "signal", Icon: ArrowUp, fallbackLabel: "Add 1 rep" }
+    case "Add 2 reps":
+      return { tone: "signal", Icon: ArrowUp, fallbackLabel: "Add 2 reps" }
     case "Add 1 set":
       return { tone: "signal", Icon: PlusSquare, fallbackLabel: "Add 1 set" }
     case "Hold/reduce":

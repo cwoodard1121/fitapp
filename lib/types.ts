@@ -10,7 +10,12 @@
  *   to engine inputs).
  */
 
-import type { ProgressBias, Performance, RirOverride } from "@/lib/engine/engine";
+import type {
+  ProgressBias,
+  Performance,
+  RirOverride,
+  ReadinessWeights,
+} from "@/lib/engine/engine";
 
 // Re-export the engine's canonical enum/result types for consumers that only
 // want to import from "@/lib/types".
@@ -21,6 +26,7 @@ export type {
   Gate,
   Decision,
   EngineResult,
+  ReadinessWeights,
 } from "@/lib/engine/engine";
 
 /* ------------------------------------------------------------------ */
@@ -55,6 +61,8 @@ export interface Profile {
   unit: Unit;
   start_date: string | null;
   deload_week: number;
+  /** Optional tuned engine weights; null = engine DEFAULT_WEIGHTS. */
+  readiness_weights: ReadinessWeights | null;
   created_at: string;
 }
 

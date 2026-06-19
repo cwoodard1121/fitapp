@@ -6,7 +6,7 @@ import type {
   SlotTargets,
   SlotView,
 } from '@/lib/types'
-import type { EngineContext } from '@/lib/engine/engine'
+import type { EngineContext, ReadinessWeights } from '@/lib/engine/engine'
 import { evaluateSlot, targetLoad, targetSets } from '@/lib/engine/engine'
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId } from '@/lib/data/auth'
@@ -237,6 +237,7 @@ export async function buildTodayView(
   slots: ExerciseSlot[],
   logs: Record<string, SetLog>,
   deloadWeek: number,
+  weights?: ReadinessWeights | null,
 ): Promise<SlotView[]> {
   const week = session.week
   const slotIds = slots.map((s) => s.id)
@@ -260,6 +261,7 @@ export async function buildTodayView(
       prevNextLoad: prev.prevNextLoad,
       prevNextSets: prev.prevNextSets,
       prevNextReps: prev.prevNextReps,
+      weights: weights ?? undefined,
     }
     const result = evaluateSlot(setLogInputFromRow(log), config, ctx)
 

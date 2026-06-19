@@ -4,6 +4,8 @@ import {
   targetSets,
   targetLoad,
   epley1RM,
+  detectStall,
+  DEFAULT_WEIGHTS,
   type SlotConfig,
   type SetLogInput,
   type EngineContext,
@@ -338,5 +340,152 @@ describe('targetSets / targetLoad — per-week derivation', () => {
     const s = slot()
     expect(targetSets(5, 5, s, 5)).toBe(3) // round(3.0)
     expect(targetLoad(5, 5, s, 200)).toBe(180) // round(180.0)
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* Smart autoregulation layer — the upgrades on top of the port.       */
+/* ------------------------------------------------------------------ */
+
+describe('smart layer — detrained ramp (don\'t stall a clean green session)', () => {
+  it('progresses on a green session scoring 4 (would Maintain under the old >=5 gate)', () => {
+    // recovery +2, perf up +1, enjoyment +1 = score 4; pump/soreness null so no
+    // volume signal; RIR on target. Old engine needed >=5 here -> Maintain.
+    const s = slot({ progressBias: 'Reps first', repLow: 8, repHigh: 15 })
+    const l = log({
+      actualLoad: 80,
+      bestReps: 10,
+      actualSets: 2,
+      actualRir: 3,
+      recovery: 8,
+      performance: 'Up',
+      enjoyment: 7,
+    })
+    const res = evaluateSlot(l, s, ctx())
+    expect(res.score).toBe(4)
+    expect(res.gate).toBe('Green')
+    expect(res.decision).toBe('Add 1 rep')
+    expect(res.nextReps).toBe(11)
+  })
+})
+
+describe('smart layer — bigger jumps when the bar is clearly too light', () => {
+  it('doubles the load step on a very-easy Load +5 session (veryeasy: RIR >= target+3)', () => {
+    const s = slot({ progressBias: 'Load +5', loadIncrement: 5, repLow: 5, repHigh: 5, seedLoad: 135 })
+    const l = strongLog({ actualLoad: 135, bestReps: 5, actualRir: 6 }) // target 3 -> +3 over = veryeasy
+    const res = evaluateSlot(l, s, ctx())
+    expect(res.flags.veryeasy).toBe(true)
+    expect(res.flags.bigJump).toBe(true)
+    expect(res.decision).toBe('Add 5 lb')
+    expect(res.decisionLabel).toBe('Add 10 lb') // doubled step
+    expect(res.nextLoad).toBe(145) // 135 + 2*5
+  })
+
+  it('adds two reps when very easy and well below the rep cap', () => {
+    const s = slot({ progressBias: 'Reps first', repLow: 8, repHigh: 15 })
+    const l = strongLog({ bestReps: 10, actualRir: 6 }) // veryeasy, 10+2 <= 15
+    const res = evaluateSlot(l, s, ctx())
+    expect(res.decision).toBe('Add 2 reps')
+    expect(res.nextReps).toBe(12)
+  })
+
+  it('keeps the single step on an on-target session (RIR == target, not veryeasy)', () => {
+    const s = slot({ progressBias: 'Load +5', loadIncrement: 5, seedLoad: 135 })
+    const res = evaluateSlot(strongLog({ actualLoad: 135, bestReps: 5, actualRir: 3 }), s, ctx())
+    expect(res.flags.bigJump).toBe(false)
+    expect(res.nextLoad).toBe(140)
+  })
+})
+
+describe('smart layer — low pump earns a set (stimulus over load)', () => {
+  it('adds a set on a low-pump day even when recovery is only yellow', () => {
+    // Yellow gate (recovery 6), low pump, room under the set cap, perf ok.
+    const s = slot({ progressBias: 'Reps first', baseSets: 2 })
+    const l = log({
+      actualLoad: 40,
+      bestReps: 12,
+      actualSets: 2,
+      actualRir: 3,
+      pump: 4, // badpump
+      recovery: 6, // yellow, not green
+      performance: 'Same',
+    })
+    const res = evaluateSlot(l, s, ctx())
+    expect(res.gate).toBe('Yellow')
+    expect(res.flags.addSet).toBe(true)
+    expect(res.decision).toBe('Add 1 set')
+    expect(res.nextSets).toBe(3)
+  })
+
+  it('does NOT pile sets on a heavy compound (Load +5) from low pump', () => {
+    const s = slot({ progressBias: 'Load +5', baseSets: 3 })
+    const l = log({
+      actualLoad: 225,
+      bestReps: 5,
+      actualSets: 3,
+      actualRir: 3,
+      pump: 4, // badpump
+      recovery: 6,
+      performance: 'Same',
+    })
+    const res = evaluateSlot(l, s, ctx())
+    expect(res.flags.addSet).toBe(false)
+    expect(res.decision).not.toBe('Add 1 set')
+  })
+
+  it('ramps volume up to 5 sets, then stops adding', () => {
+    const s = slot({ progressBias: 'Reps first', baseSets: 2 })
+    const base = {
+      actualLoad: 40,
+      bestReps: 12,
+      actualRir: 3,
+      pump: 4,
+      recovery: 8,
+      performance: 'Same' as const,
+    }
+    expect(evaluateSlot(log({ ...base, actualSets: 4 }), s, ctx()).decision).toBe('Add 1 set')
+    expect(evaluateSlot(log({ ...base, actualSets: 5 }), s, ctx()).flags.addSet).toBe(false)
+  })
+})
+
+describe('smart layer — configurable readiness weights', () => {
+  it('defaults reproduce the spreadsheet score exactly', () => {
+    const l = log({ recovery: 8, performance: 'Up', pump: 8, enjoyment: 8, soreness: 5, actualRir: 6, actualLoad: 100, bestReps: 5, actualSets: 2 })
+    const base = evaluateSlot(l, slot(), ctx()).score
+    const withDefaults = evaluateSlot(l, slot(), ctx({ weights: DEFAULT_WEIGHTS })).score
+    expect(withDefaults).toBe(base)
+    expect(withDefaults).toBe(8)
+  })
+
+  it('respects a tuned weight (e.g. recovery matters more)', () => {
+    const l = log({ recovery: 8, actualLoad: 100, bestReps: 5, actualSets: 2, actualRir: 3 })
+    const tuned = { ...DEFAULT_WEIGHTS, recoveryGood: 5 }
+    expect(evaluateSlot(l, slot(), ctx({ weights: tuned })).score).toBe(5)
+    expect(evaluateSlot(l, slot(), ctx()).score).toBe(2)
+  })
+})
+
+describe('detectStall — plateau detection', () => {
+  it('flags a stall after 3 flat, no-progress sessions', () => {
+    const r = detectStall([
+      { e1rm: 200, decision: 'Maintain' },
+      { e1rm: 201, decision: 'Maintain' },
+      { e1rm: 200, decision: 'Hold/reduce' },
+    ])
+    expect(r.stalled).toBe(true)
+    expect(r.reason).toMatch(/swap|deload/i)
+  })
+
+  it('does not flag when e1RM is climbing', () => {
+    const r = detectStall([
+      { e1rm: 200, decision: 'Add 1 rep' },
+      { e1rm: 210, decision: 'Add 5 lb' },
+      { e1rm: 220, decision: 'Add 5 lb' },
+    ])
+    expect(r.stalled).toBe(false)
+  })
+
+  it('needs a full window before deciding', () => {
+    expect(detectStall([{ e1rm: 200, decision: 'Maintain' }]).stalled).toBe(false)
   })
 })

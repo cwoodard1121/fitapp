@@ -19,12 +19,15 @@ create extension if not exists pgcrypto;
 -- 1) profiles  (1:1 with auth.users; id = auth.uid())
 -- ============================================================================
 create table if not exists public.profiles (
-  id           uuid primary key references auth.users (id) on delete cascade,
-  display_name text,
-  unit         text not null default 'lb' check (unit in ('lb', 'kg')),
-  start_date   date,
-  deload_week  int  not null default 5,
-  created_at   timestamptz default now()
+  id                uuid primary key references auth.users (id) on delete cascade,
+  display_name      text,
+  unit              text not null default 'lb' check (unit in ('lb', 'kg')),
+  start_date        date,
+  deload_week       int  not null default 5,
+  -- Optional tuned readiness weights for the autoregulation engine (Settings).
+  -- null = use the engine's DEFAULT_WEIGHTS.
+  readiness_weights jsonb,
+  created_at        timestamptz default now()
 );
 
 -- ============================================================================
