@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getSupabaseEnv } from '@/lib/supabase/env'
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions }
 
@@ -29,8 +30,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const { url: supabaseUrl, key: supabaseKey } = getSupabaseEnv()
 
   // Env not configured (e.g. vars not set at build time) — degrade gracefully
   // to /login instead of throwing inside the Edge runtime.
