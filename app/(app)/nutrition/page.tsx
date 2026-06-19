@@ -1,7 +1,7 @@
 import { format } from 'date-fns'
 
 import { createClient } from '@/lib/supabase/server'
-import { requireUserId } from '@/lib/data'
+import { requireUserId, getProfile } from '@/lib/data'
 import type { Block, NutritionLog } from '@/lib/types'
 
 import { NutritionClient } from '@/components/nutrition/nutrition-client'
@@ -14,6 +14,7 @@ const WINDOW_DAYS = 21
 export default async function NutritionPage() {
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
+  const profile = await getProfile()
 
   const today = format(new Date(), 'yyyy-MM-dd')
 
@@ -54,7 +55,13 @@ export default async function NutritionPage() {
         </p>
       </header>
 
-      <NutritionClient today={today} activeBlock={activeBlock} logs={logs} />
+      <NutritionClient
+        today={today}
+        activeBlock={activeBlock}
+        logs={logs}
+        maintenance={profile?.maintenance_calories ?? null}
+        unit={profile?.unit ?? 'lb'}
+      />
     </div>
   )
 }

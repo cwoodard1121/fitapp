@@ -87,6 +87,44 @@ export async function upsertNutritionLog(
   return { ok: true }
 }
 
+const maintenanceSchema = z.object({
+  maintenance_calories: optionalNumber.refine(
+    (v) => v === null || (v >= 800 && v <= 8000),
+    { message: 'Enter a realistic maintenance figure (800–8000).' },
+  ),
+})
+
+/** Set (or clear) the user's estimated maintenance calories. */
+export async function setMaintenanceCalories(
+  input: z.input<typeof maintenanceSchema>,
+): Promise<ActionResult> {
+  const parsed = maintenanceSchema.safeParse(input)
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? 'Enter a valid number.',
+    }
+  }
+
+  const supabase = await createClient()
+  let userId: string
+  try {
+    userId = await requireUserId(supabase)
+  } catch {
+    return { ok: false, error: 'Your session expired. Sign in again.' }
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ maintenance_calories: parsed.data.maintenance_calories })
+    .eq('id', userId)
+
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath(ROUTE)
+  return { ok: true }
+}
+
 const deleteSchema = z.object({
   logged_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a valid date.'),
 })

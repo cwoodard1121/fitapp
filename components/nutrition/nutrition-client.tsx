@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
-import type { Block, NutritionLog } from '@/lib/types'
+import type { Block, NutritionLog, Unit } from '@/lib/types'
 import {
   upsertNutritionLog,
   deleteNutritionLog,
@@ -13,6 +13,7 @@ import {
 
 import { DailyIntakeForm, type IntakeFormValues } from './daily-intake-form'
 import { TargetsProgress } from './targets-progress'
+import { WeeklyDeficit } from './weekly-deficit'
 import { RecentDays } from './recent-days'
 import { CaloriesTrend } from './calories-trend'
 
@@ -43,12 +44,16 @@ interface NutritionClientProps {
   today: string
   activeBlock: Block | null
   logs: NutritionLog[]
+  maintenance: number | null
+  unit: Unit
 }
 
 export function NutritionClient({
   today,
   activeBlock,
   logs,
+  maintenance,
+  unit,
 }: NutritionClientProps) {
   const router = useRouter()
   const [pending, startTransition] = React.useTransition()
@@ -119,6 +124,14 @@ export function NutritionClient({
   return (
     <div className="flex flex-col gap-5">
       <TargetsProgress activeBlock={activeBlock} todayLog={todayLog} />
+
+      <WeeklyDeficit
+        logs={logs}
+        today={today}
+        maintenance={maintenance}
+        calorieTarget={activeBlock?.calorie_target ?? null}
+        unit={unit}
+      />
 
       <DailyIntakeForm
         values={values}

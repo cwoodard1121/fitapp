@@ -49,7 +49,32 @@ import {
 import { cn } from '@/lib/utils'
 import { setGoalStatus, deleteGoal } from '@/app/(app)/goals/actions'
 import type { GoalWithCurrent } from './types'
-import { computeProgress, METRIC_LABELS } from './progress'
+import {
+  computeProgress,
+  computePacing,
+  METRIC_LABELS,
+  type PaceStatus,
+} from './progress'
+
+const PACE_META: Record<
+  PaceStatus,
+  { label: string; tone: string }
+> = {
+  reached: { label: 'Target reached', tone: 'text-gate-green' },
+  ahead: { label: 'Ahead of pace', tone: 'text-gate-green' },
+  'on-track': { label: 'On track', tone: 'text-signal' },
+  behind: { label: 'Behind pace', tone: 'text-gate-yellow' },
+  stalled: { label: 'Not on pace', tone: 'text-gate-red' },
+}
+
+/** Format a signed per-week rate, e.g. "-0.6 %/wk" or "+2.5 lb/wk". */
+function fmtRate(n: number | null, unit: string | null): string | null {
+  if (n == null || !Number.isFinite(n)) return null
+  const v = Math.round(n * 100) / 100
+  const sign = v > 0 ? '+' : ''
+  const u = unit ? `${unit}/wk` : '/wk'
+  return `${sign}${v} ${u}`
+}
 
 interface GoalCardProps {
   goal: GoalWithCurrent
@@ -77,6 +102,16 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
   const isActive = goal.status === 'active'
   const progress = computeProgress(goal.start_value, goal.current, goal.target_value)
   const dm = daysMeta(goal.target_date)
+  const pacing =
+    isActive
+      ? computePacing(
+          goal.start_value,
+          goal.current,
+          goal.target_value,
+          goal.created_at,
+          goal.target_date,
+        )
+      : null
 
   function runStatus(status: 'active' | 'achieved' | 'abandoned', msg: string) {
     startTransition(async () => {
@@ -260,6 +295,54 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
                   · {daysText}
                 </span>
               ) : null}
+            </div>
+          ) : null}
+
+          {pacing && pacing.status !== 'reached' ? (
+            <div className="rounded-md border border-border bg-background px-3 py-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
+                  Pace
+                </span>
+                <span
+                  className={cn(
+                    'font-mono text-xs font-semibold',
+                    PACE_META[pacing.status].tone,
+                  )}
+                >
+                  {PACE_META[pacing.status].label}
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-[11px] tabular-nums">
+                {fmtRate(pacing.requiredPerWeek, goal.target_unit) ? (
+                  <div className="flex flex-col">
+                    <span className="text-muted/70">need</span>
+                    <span className="text-foreground">
+                      {fmtRate(pacing.requiredPerWeek, goal.target_unit)}
+                    </span>
+                  </div>
+                ) : null}
+                {fmtRate(pacing.actualPerWeek, goal.target_unit) ? (
+                  <div className="flex flex-col">
+                    <span className="text-muted/70">trending</span>
+                    <span className="text-foreground">
+                      {fmtRate(pacing.actualPerWeek, goal.target_unit)}
+                    </span>
+                  </div>
+                ) : null}
+                {pacing.projectedDate ? (
+                  <div className="col-span-2 flex items-center justify-between border-t border-border/60 pt-1.5">
+                    <span className="text-muted/70">projected arrival</span>
+                    <span className="text-foreground">
+                      ~ {format(parseISO(pacing.projectedDate), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="col-span-2 border-t border-border/60 pt-1.5 text-muted">
+                    Not moving toward target yet — no ETA.
+                  </div>
+                )}
+              </div>
             </div>
           ) : null}
 

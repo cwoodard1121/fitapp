@@ -63,6 +63,8 @@ export interface Profile {
   deload_week: number;
   /** Optional tuned engine weights; null = engine DEFAULT_WEIGHTS. */
   readiness_weights: ReadinessWeights | null;
+  /** Estimated maintenance calories; basis for the weekly deficit tracker. */
+  maintenance_calories: number | null;
   created_at: string;
 }
 

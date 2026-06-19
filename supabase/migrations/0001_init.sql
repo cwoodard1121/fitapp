@@ -27,8 +27,15 @@ create table if not exists public.profiles (
   -- Optional tuned readiness weights for the autoregulation engine (Settings).
   -- null = use the engine's DEFAULT_WEIGHTS.
   readiness_weights jsonb,
+  -- Estimated maintenance calories — basis for the weekly deficit tracker.
+  maintenance_calories int,
   created_at        timestamptz default now()
 );
+
+-- Idempotent column adds so re-running this migration upgrades an existing
+-- profiles table (e.g. a DB created before these columns existed).
+alter table public.profiles add column if not exists readiness_weights jsonb;
+alter table public.profiles add column if not exists maintenance_calories int;
 
 -- ============================================================================
 -- 2) programs
