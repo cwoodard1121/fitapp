@@ -9,6 +9,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
+  const [code, setCode] = useState('')
+  const [verifying, setVerifying] = useState(false)
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -29,10 +31,35 @@ export default function LoginPage() {
     setLoading(false)
 
     if (error) {
-      toast.error(error.message || 'Could not send the link. Try again.')
+      toast.error(error.message || 'Could not send the email. Try again.')
       return
     }
     setSent(true)
+  }
+
+  async function onVerify(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const token = code.replace(/\D/g, '')
+    if (token.length < 6) {
+      toast.error('Enter the 6-digit code from the email.')
+      return
+    }
+
+    setVerifying(true)
+    const supabase = createClient()
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token,
+      type: 'email',
+    })
+    setVerifying(false)
+
+    if (error) {
+      toast.error(error.message || 'That code did not work. Check it and retry.')
+      return
+    }
+    // Full navigation so the middleware sees the freshly-set session cookie.
+    window.location.href = '/today'
   }
 
   return (
@@ -47,28 +74,80 @@ export default function LoginPage() {
             Sign in to train
           </h1>
           <p className="text-sm text-muted">
-            One link, no password. We email you a magic link.
+            No password. We email you a link and a code.
           </p>
         </div>
 
         <div className="rounded-lg border border-border bg-surface p-5 shadow-sm">
           {sent ? (
-            <div className="flex flex-col items-start gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-md border border-border bg-background text-signal">
-                <Mail className="h-5 w-5" aria-hidden />
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-background text-signal">
+                  <Mail className="h-5 w-5" aria-hidden />
+                </div>
+                <div className="space-y-1">
+                  <h2 className="text-base font-medium">Check your email</h2>
+                  <p className="text-sm text-muted">
+                    Sent to{' '}
+                    <span className="font-mono text-foreground">
+                      {email.trim()}
+                    </span>
+                    . Tap the link — or if you installed the app, enter the
+                    6-digit code below.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <h2 className="text-base font-medium">Check your email</h2>
-                <p className="text-sm text-muted">
-                  We sent a sign-in link to{' '}
-                  <span className="font-mono text-foreground">{email.trim()}</span>.
-                  Open it on this device to continue.
-                </p>
-              </div>
+
+              {/* Code entry — the reliable path for the installed PWA, where the
+                  email link would open in a separate browser. */}
+              <form onSubmit={onVerify} className="space-y-3">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="code"
+                    className="block text-sm font-medium text-foreground"
+                  >
+                    6-digit code
+                  </label>
+                  <input
+                    id="code"
+                    name="code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    value={code}
+                    onChange={(e) =>
+                      setCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                    }
+                    placeholder="123456"
+                    disabled={verifying}
+                    className="h-12 w-full rounded-md border border-border bg-background px-3 text-center font-mono text-lg tracking-[0.4em] text-foreground placeholder:tracking-normal placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={verifying}
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-md bg-signal px-4 text-sm font-semibold text-signal-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
+                >
+                  {verifying ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      Verifying
+                    </>
+                  ) : (
+                    'Verify code & sign in'
+                  )}
+                </button>
+              </form>
+
               <button
                 type="button"
-                onClick={() => setSent(false)}
-                className="mt-1 text-sm font-medium text-signal underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                onClick={() => {
+                  setSent(false)
+                  setCode('')
+                }}
+                className="text-sm font-medium text-signal underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
               >
                 Use a different email
               </button>
@@ -106,10 +185,10 @@ export default function LoginPage() {
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    Sending link
+                    Sending
                   </>
                 ) : (
-                  'Send magic link'
+                  'Email me a link + code'
                 )}
               </button>
             </form>
