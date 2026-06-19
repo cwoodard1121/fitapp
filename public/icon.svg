@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="simplegym">
+  <rect width="512" height="512" rx="112" fill="#14161A" />
+  <rect x="116" y="296" width="60" height="96" rx="14" fill="#C7F24A" />
+  <rect x="226" y="220" width="60" height="172" rx="14" fill="#C7F24A" />
+  <rect x="336" y="128" width="60" height="264" rx="14" fill="#C7F24A" />
+</svg>

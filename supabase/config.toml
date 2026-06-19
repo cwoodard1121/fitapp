@@ -1,0 +1,36 @@
+# Supabase CLI configuration for the "simplegym" project.
+# Minimal but complete enough for `supabase start` (local dev) and
+# `supabase db push` (apply migrations to a linked remote project).
+# Docs: https://supabase.com/docs/guides/cli/config
+
+project_id = "simplegym"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# Match Supabase hosted Postgres major version.
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+# Email auth with magic links (passwordless OTP).
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+# Magic-link sign-in does not require email confirmation flow.
+enable_confirmations = false

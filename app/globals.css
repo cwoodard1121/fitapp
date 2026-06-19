@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Design tokens — dark "instrument panel" theme (dark only).
+   These hex values are the single source of truth; tailwind.config.ts
+   maps semantic color names to these CSS variables.
+   ============================================================ */
+:root {
+  --bg: #14161a; /* app background */
+  --surface: #1e2228; /* cards */
+  --border: #2c313a; /* hairlines */
+  --text: #edeff2; /* primary text */
+  --muted: #8a92a0; /* secondary text */
+  --signal: #c7f24a; /* electric chartreuse — the ONE accent */
+  --signal-ink: #14161a; /* text on signal */
+  --gate-green: #5bd68a;
+  --gate-yellow: #e8c45a;
+  --gate-red: #f2685a;
+
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    @apply min-h-screen font-sans antialiased;
+  }
+
+  /* Visible focus ring — chartreuse halo with a background gap. */
+  :focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--bg),
+      0 0 0 4px var(--signal);
+  }
+}
+
+@layer utilities {
+  /* Instrument readouts: mono, tabular figures that align column-wise. */
+  .nums {
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* Tabular numerals without forcing the mono family. */
+  .tabular-figures {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
+
+/* Honor users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,17 @@
+-- ============================================================================
+-- simplegym — seed.sql
+-- ----------------------------------------------------------------------------
+-- Intentionally empty.
+--
+-- Seeding is APP-SIDE. There is no static seed data to load here because every
+-- row is owned by an authenticated user (user_id / id = auth.uid()) and RLS
+-- requires an auth context that does not exist during `supabase db reset`.
+--
+-- The default training program ("Mesocycle 1") is created the first time you
+-- sign in: the app calls seedDefaultProgram() (lib/data/seed.ts), which inserts
+-- the program, its 5 days, and their exercise slots for the logged-in user.
+-- This is idempotent and a no-op if a program already exists.
+--
+-- A profiles row is created automatically by the handle_new_user() trigger
+-- (see migrations/0001_init.sql) when the auth user is first created.
+-- ============================================================================
