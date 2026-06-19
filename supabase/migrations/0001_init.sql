@@ -108,7 +108,9 @@ create table if not exists public.set_logs (
   recovery         int,
   performance      text check (performance in ('Up', 'Same', 'Down')),
   notes            text,
-  created_at       timestamptz default now()
+  created_at       timestamptz default now(),
+  -- one set_log per slot per session: lets the logger upsert on conflict
+  unique (session_id, slot_id)
 );
 
 -- ============================================================================

@@ -11,6 +11,7 @@ export {
   getSlotsForDay,
 } from '@/lib/data/programs'
 export { seedDefaultProgram } from '@/lib/data/seed'
+export { weekForDate, mesocycleNumber } from '@/lib/data/week'
 export {
   ensureWeekSessions,
   getSessionForDay,

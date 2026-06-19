@@ -1,0 +1,128 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+
+import { createClient } from '@/lib/supabase/server'
+import { requireUserId, seedDefaultProgram } from '@/lib/data'
+import { DEFAULT_WEIGHTS, type ReadinessWeights } from '@/lib/engine/engine'
+
+export type ActionResult = { ok: true } | { ok: false; error: string }
+
+/* ------------------------------------------------------------------ */
+/* Profile + mesocycle                                                 */
+/* ------------------------------------------------------------------ */
+
+export interface ProfileInput {
+  display_name: string | null
+  unit: 'lb' | 'kg'
+  start_date: string | null
+  deload_week: number
+}
+
+function clampInt(value: unknown, min: number, max: number, fallback: number) {
+  const n = Math.round(Number(value))
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, n))
+}
+
+export async function updateProfile(input: ProfileInput): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+    const userId = await requireUserId(supabase)
+
+    const display_name = input.display_name?.trim() ? input.display_name.trim() : null
+    const unit: 'lb' | 'kg' = input.unit === 'kg' ? 'kg' : 'lb'
+    // Empty string -> null; otherwise keep the ISO yyyy-mm-dd date string.
+    const start_date = input.start_date && input.start_date.length >= 8 ? input.start_date : null
+    const deload_week = clampInt(input.deload_week, 0, 52, 0)
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ display_name, unit, start_date, deload_week })
+      .eq('id', userId)
+
+    if (error) return { ok: false, error: error.message }
+
+    revalidatePath('/settings')
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not save profile.' }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Readiness weights                                                   */
+/* ------------------------------------------------------------------ */
+
+const WEIGHT_KEYS = Object.keys(DEFAULT_WEIGHTS) as (keyof ReadinessWeights)[]
+
+function coerceWeights(input: Partial<ReadinessWeights>): ReadinessWeights {
+  const out = { ...DEFAULT_WEIGHTS }
+  for (const key of WEIGHT_KEYS) {
+    const raw = input[key]
+    const n = Number(raw)
+    if (Number.isFinite(n)) {
+      // Keep weights in a sane band and snapped to halves.
+      out[key] = Math.min(10, Math.max(-10, Math.round(n * 2) / 2))
+    }
+  }
+  return out
+}
+
+export async function updateReadinessWeights(
+  input: Partial<ReadinessWeights>
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+    const userId = await requireUserId(supabase)
+
+    const readiness_weights = coerceWeights(input)
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ readiness_weights })
+      .eq('id', userId)
+
+    if (error) return { ok: false, error: error.message }
+
+    revalidatePath('/settings')
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not save weights.' }
+  }
+}
+
+export async function resetReadinessWeights(): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+    const userId = await requireUserId(supabase)
+
+    // Null = engine falls back to DEFAULT_WEIGHTS.
+    const { error } = await supabase
+      .from('profiles')
+      .update({ readiness_weights: null })
+      .eq('id', userId)
+
+    if (error) return { ok: false, error: error.message }
+
+    revalidatePath('/settings')
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not reset weights.' }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Reseed default program (escape hatch — idempotent)                  */
+/* ------------------------------------------------------------------ */
+
+export async function reseedDefaultProgram(): Promise<ActionResult> {
+  try {
+    await seedDefaultProgram()
+    revalidatePath('/settings')
+    revalidatePath('/program')
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not seed program.' }
+  }
+}
