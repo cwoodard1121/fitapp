@@ -15,6 +15,7 @@ import {
 import type { Session, SessionStatus } from '@/lib/types'
 import { Badge } from '@/components/ui/badge'
 import { DaySelector } from '@/components/today/day-selector'
+import { SessionReadiness } from '@/components/today/session-readiness'
 import { SlotRow } from '@/components/today/slot-row'
 import { SessionBar } from '@/components/today/session-bar'
 import { EmptyState } from '@/components/today/empty-state'
@@ -96,6 +97,9 @@ export default async function TodayPage({
   )
 
   const allSlotIds = daySlots.map((s) => s.id)
+  // Session-level systemic recovery is fanned across slots — read it from any.
+  const sessionRecovery =
+    slotViews.find((v) => v.log?.recovery != null)?.log?.recovery ?? null
   const loggedCount = slotViews.filter((v) => {
     const l = v.log
     return (
@@ -132,6 +136,17 @@ export default async function TodayPage({
           statusByDay={statusByDay}
         />
       </div>
+
+      {daySlots.length > 0 ? (
+        <div className="mt-4">
+          <SessionReadiness
+            sessionId={session.id}
+            week={week}
+            allSlotIds={allSlotIds}
+            recovery={sessionRecovery}
+          />
+        </div>
+      ) : null}
 
       {daySlots.length === 0 ? (
         <div className="mt-6 rounded-lg border border-dashed border-border bg-surface p-6 text-center">

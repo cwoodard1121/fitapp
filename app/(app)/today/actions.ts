@@ -111,7 +111,60 @@ export async function saveSetEntries(
 }
 
 /* ------------------------------------------------------------------ */
-/* Readiness — pump / soreness / recovery / enjoyment / perf / notes   */
+/* Session readiness — INCOMING systemic fatigue/recovery.              */
+/* One value for the whole session (genuinely systemic). Soreness is    */
+/* NOT here — it is muscle-specific and lives per exercise.             */
+/* ------------------------------------------------------------------ */
+
+const sessionReadinessSchema = z.object({
+  sessionId: z.string().uuid(),
+  week: z.number().int().positive(),
+  recovery: nullableNumber,
+  allSlotIds: z.array(z.string().uuid()).min(1),
+})
+
+export type SessionReadinessInput = z.infer<typeof sessionReadinessSchema>
+
+export async function saveSessionReadiness(
+  input: SessionReadinessInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = sessionReadinessSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: 'That rating did not look right.' }
+  }
+  const v = parsed.data
+
+  try {
+    const supabase = await createClient()
+    const userId = await requireUserId(supabase)
+
+    // Systemic recovery is the same for the whole session, so it goes onto every
+    // exercise of the day. Upserting just this column preserves each slot's sets,
+    // soreness, and outcome ratings.
+    const rows = v.allSlotIds.map((id) => ({
+      user_id: userId,
+      session_id: v.sessionId,
+      slot_id: id,
+      week: v.week,
+      recovery: v.recovery,
+    }))
+    const { error } = await supabase
+      .from('set_logs')
+      .upsert(rows, { onConflict: 'session_id,slot_id' })
+    if (error) throw error
+
+    await bumpSessionInProgress(supabase, userId, v.sessionId)
+
+    revalidatePath(ROUTE)
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'Could not save your readiness. Try again.' }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Exercise readiness — per-exercise: pump / soreness / performance /  */
+/* enjoyment / notes. Soreness is muscle-specific, so it lives here.   */
 /* ------------------------------------------------------------------ */
 
 const readinessSchema = z.object({
@@ -120,14 +173,10 @@ const readinessSchema = z.object({
   week: z.number().int().positive(),
   pump: nullableNumber,
   soreness: nullableNumber,
-  recovery: nullableNumber,
   enjoyment: nullableNumber,
   performance: performanceSchema,
   hitRirOverride: rirOverrideSchema,
   notes: z.string().max(2000).nullable(),
-  /** Apply the systemic ratings (recovery + performance) to every slot. */
-  applyToAll: z.boolean(),
-  allSlotIds: z.array(z.string().uuid()),
 })
 
 export type ReadinessInput = z.infer<typeof readinessSchema>
@@ -145,7 +194,8 @@ export async function saveReadiness(
     const supabase = await createClient()
     const userId = await requireUserId(supabase)
 
-    // This slot gets the full readiness set (pump + soreness are exercise-specific).
+    // Per-exercise outcome ratings. Upserting just these columns preserves the
+    // slot's sets and the session-level recovery/soreness.
     const { error } = await supabase.from('set_logs').upsert(
       {
         user_id: userId,
@@ -154,7 +204,6 @@ export async function saveReadiness(
         week: v.week,
         pump: v.pump,
         soreness: v.soreness,
-        recovery: v.recovery,
         enjoyment: v.enjoyment,
         performance: v.performance,
         hit_rir_override: v.hitRirOverride,
@@ -163,26 +212,6 @@ export async function saveReadiness(
       { onConflict: 'session_id,slot_id' },
     )
     if (error) throw error
-
-    // Recovery + performance are systemic — optionally fan them out to the rest.
-    if (v.applyToAll) {
-      const others = v.allSlotIds
-        .filter((id) => id !== v.slotId)
-        .map((id) => ({
-          user_id: userId,
-          session_id: v.sessionId,
-          slot_id: id,
-          week: v.week,
-          recovery: v.recovery,
-          performance: v.performance,
-        }))
-      if (others.length > 0) {
-        const { error: fanErr } = await supabase
-          .from('set_logs')
-          .upsert(others, { onConflict: 'session_id,slot_id' })
-        if (fanErr) throw fanErr
-      }
-    }
 
     await bumpSessionInProgress(supabase, userId, v.sessionId)
 

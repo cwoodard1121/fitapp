@@ -23,7 +23,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { saveReadiness } from '@/app/(app)/today/actions'
 
@@ -102,7 +101,6 @@ export function ReadinessSheet({
 
   const [pump, setPump] = React.useState(log?.pump ?? 7)
   const [soreness, setSoreness] = React.useState(log?.soreness ?? 4)
-  const [recovery, setRecovery] = React.useState(log?.recovery ?? 7)
   const [enjoyment, setEnjoyment] = React.useState(log?.enjoyment ?? 7)
   const [performance, setPerformance] = React.useState<Performance | null>(
     log?.performance ?? null,
@@ -111,13 +109,11 @@ export function ReadinessSheet({
     log?.hit_rir_override ?? null,
   )
   const [notes, setNotes] = React.useState(log?.notes ?? '')
-  const [applyToAll, setApplyToAll] = React.useState(true)
 
   const hasReadiness =
     log != null &&
     (log.pump != null ||
       log.soreness != null ||
-      log.recovery != null ||
       log.enjoyment != null ||
       log.performance != null ||
       log.notes != null)
@@ -130,20 +126,13 @@ export function ReadinessSheet({
         week,
         pump,
         soreness,
-        recovery,
         enjoyment,
         performance,
         hitRirOverride: rirOverride,
         notes: notes.trim() === '' ? null : notes.trim(),
-        applyToAll,
-        allSlotIds,
       })
       if (res.ok) {
-        toast.success(
-          applyToAll
-            ? 'Readiness saved — recovery & performance applied to all.'
-            : 'Readiness saved.',
-        )
+        toast.success('Readiness saved.')
         setOpen(false)
       } else {
         toast.error(res.error)
@@ -184,7 +173,8 @@ export function ReadinessSheet({
             {exerciseName}
           </SheetTitle>
           <SheetDescription>
-            Rate how it felt — the engine uses this to make the call.
+            How this lift went — the engine uses it to make the call. Systemic
+            recovery is up top (one rating for the whole session).
           </SheetDescription>
         </SheetHeader>
 
@@ -193,23 +183,16 @@ export function ReadinessSheet({
             <RatingSlider
               id={`pump-${slotId}`}
               label="Pump"
-              hint="How full / worked the muscle felt (exercise-specific)."
+              hint="How full / worked this muscle felt on this exercise."
               value={pump}
               onChange={setPump}
             />
             <RatingSlider
               id={`soreness-${slotId}`}
               label="Soreness"
-              hint="Lingering soreness coming into this exercise."
+              hint="How sore this muscle was coming in (from when you last trained it)."
               value={soreness}
               onChange={setSoreness}
-            />
-            <RatingSlider
-              id={`recovery-${slotId}`}
-              label="Recovery"
-              hint="Systemic — overall readiness today."
-              value={recovery}
-              onChange={setRecovery}
             />
             <RatingSlider
               id={`enjoyment-${slotId}`}
@@ -289,26 +272,6 @@ export function ReadinessSheet({
               className="min-h-16"
             />
           </div>
-
-          {/* Apply systemic ratings to all */}
-          <label
-            htmlFor={`apply-all-${slotId}`}
-            className="flex items-center justify-between gap-4 rounded-md border border-border bg-background p-3"
-          >
-            <span className="space-y-0.5">
-              <span className="block text-sm font-medium">
-                Apply to every exercise
-              </span>
-              <span className="block text-[11px] leading-tight text-muted">
-                Recovery &amp; performance are systemic — copy them to all slots.
-              </span>
-            </span>
-            <Switch
-              id={`apply-all-${slotId}`}
-              checked={applyToAll}
-              onCheckedChange={setApplyToAll}
-            />
-          </label>
 
           <Button
             type="button"
