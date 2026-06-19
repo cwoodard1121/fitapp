@@ -41,7 +41,7 @@ export default function LoginPage() {
     e.preventDefault()
     const token = code.replace(/\D/g, '')
     if (token.length < 6) {
-      toast.error('Enter the 6-digit code from the email.')
+      toast.error('Enter the full code from the email.')
       return
     }
 
@@ -93,7 +93,7 @@ export default function LoginPage() {
                       {email.trim()}
                     </span>
                     . Tap the link — or if you installed the app, enter the
-                    6-digit code below.
+                    code below.
                   </p>
                 </div>
               </div>
@@ -106,7 +106,7 @@ export default function LoginPage() {
                     htmlFor="code"
                     className="block text-sm font-medium text-foreground"
                   >
-                    6-digit code
+                    Code from the email
                   </label>
                   <input
                     id="code"
@@ -115,14 +115,14 @@ export default function LoginPage() {
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     pattern="[0-9]*"
-                    maxLength={6}
+                    maxLength={10}
                     value={code}
                     onChange={(e) =>
-                      setCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                      setCode(e.target.value.replace(/\D/g, '').slice(0, 10))
                     }
-                    placeholder="123456"
+                    placeholder="12345678"
                     disabled={verifying}
-                    className="h-12 w-full rounded-md border border-border bg-background px-3 text-center font-mono text-lg tracking-[0.4em] text-foreground placeholder:tracking-normal placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
+                    className="h-12 w-full rounded-md border border-border bg-background px-3 text-center font-mono text-lg tracking-[0.3em] text-foreground placeholder:tracking-normal placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
                   />
                 </div>
                 <button
