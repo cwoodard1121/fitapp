@@ -3,7 +3,7 @@ import { CalendarDays } from 'lucide-react'
 
 import {
   getProfile,
-  getActiveProgram,
+  getPrograms,
   getProgramFull,
   getSessionForDay,
   getSetLogsForSession,
@@ -13,7 +13,11 @@ import {
   mesocycleNumber,
 } from '@/lib/data'
 import type { Session, SessionStatus } from '@/lib/types'
+import { getAnalysisAccess } from '@/lib/ai/allowlist'
+import { getLatestAnalysis } from '@/lib/ai/analysis'
 import { Badge } from '@/components/ui/badge'
+import { AnalysisFocus } from '@/components/analysis/analysis-focus'
+import { ActiveProgramSelect } from '@/components/program/active-program-select'
 import { DaySelector } from '@/components/today/day-selector'
 import { SessionReadiness } from '@/components/today/session-readiness'
 import { SlotRow } from '@/components/today/slot-row'
@@ -29,10 +33,11 @@ export default async function TodayPage({
 }) {
   const { day: dayParam } = await searchParams
 
-  const [profile, program] = await Promise.all([
+  const [profile, programs] = await Promise.all([
     getProfile(),
-    getActiveProgram(),
+    getPrograms(),
   ])
+  const program = programs.find((p) => p.is_active) ?? null
 
   const unit = profile?.unit ?? 'lb'
 
@@ -56,8 +61,10 @@ export default async function TodayPage({
     )
   }
 
-  const week = weekForDate(profile?.start_date ?? null, program.length_weeks)
-  const meso = mesocycleNumber(profile?.start_date ?? null, program.length_weeks)
+  // Each program owns its mesocycle anchor; a null start_date means Week 1.
+  const startDate = program.start_date
+  const week = weekForDate(startDate, program.length_weeks)
+  const meso = mesocycleNumber(startDate, program.length_weeks)
   const isDeload = week === program.deload_week
 
   // Sessions for the whole week so the day selector can show progress and we
@@ -111,6 +118,11 @@ export default async function TodayPage({
     )
   }).length
 
+  // Cheap AI "focus today" nudge, gated to allowed accounts. Skips the analysis
+  // query entirely when the account is not allowed; renders nothing when empty.
+  const { allowed } = await getAnalysisAccess()
+  const focus = allowed ? (await getLatestAnalysis())?.payload.focus ?? [] : []
+
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pb-4 pt-4">
       <Header unit={unit}>
@@ -127,7 +139,13 @@ export default async function TodayPage({
         </div>
       </Header>
 
-      <p className="mt-1 truncate text-sm text-muted">{program.name}</p>
+      <ActiveProgramSelect programs={programs} activeId={program.id} />
+
+      {focus.length > 0 ? (
+        <div className="mt-4">
+          <AnalysisFocus focus={focus} />
+        </div>
+      ) : null}
 
       <div className="mt-4">
         <DaySelector

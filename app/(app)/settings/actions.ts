@@ -15,7 +15,6 @@ export type ActionResult = { ok: true } | { ok: false; error: string }
 export interface ProfileInput {
   display_name: string | null
   unit: 'lb' | 'kg'
-  start_date: string | null
   deload_week: number
 }
 
@@ -32,13 +31,11 @@ export async function updateProfile(input: ProfileInput): Promise<ActionResult> 
 
     const display_name = input.display_name?.trim() ? input.display_name.trim() : null
     const unit: 'lb' | 'kg' = input.unit === 'kg' ? 'kg' : 'lb'
-    // Empty string -> null; otherwise keep the ISO yyyy-mm-dd date string.
-    const start_date = input.start_date && input.start_date.length >= 8 ? input.start_date : null
     const deload_week = clampInt(input.deload_week, 0, 52, 0)
 
     const { error } = await supabase
       .from('profiles')
-      .update({ display_name, unit, start_date, deload_week })
+      .update({ display_name, unit, deload_week })
       .eq('id', userId)
 
     if (error) return { ok: false, error: error.message }

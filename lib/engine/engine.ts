@@ -78,6 +78,14 @@ export interface SlotConfig {
   baseSets: number
   loadIncrement: number
   seedLoad: number | null
+  /**
+   * Bodyweight movement (pull-up, dip, bodyweight squat). When true the engine
+   * progresses by REPS then SETS only and never returns an automatic "Add 5 lb"
+   * — load is the user's call (e.g. strapping on a belt), not something the app
+   * prescribes. Defaults to false; an unseeded barbell lift (seedLoad null) is
+   * NOT bodyweight, it just calibrates its load from the first session.
+   */
+  isBodyweight: boolean
 }
 
 export interface SetLogInput {
@@ -189,7 +197,8 @@ export function evaluateSlot(
   slot: SlotConfig,
   ctx: EngineContext,
 ): EngineResult {
-  const { progressBias, repLow, repHigh, targetRir, baseSets, loadIncrement } = slot
+  const { progressBias, repLow, repHigh, targetRir, baseSets, loadIncrement, isBodyweight } =
+    slot
   const { week, deloadWeek } = ctx
   const {
     actualLoad,
@@ -269,8 +278,9 @@ export function evaluateSlot(
 
   // Clearly more in the tank than the +2 "too easy" -> the load is too light.
   const veryeasy = actualRir != null && actualRir >= targetRir + 3
-  // Volume is for hypertrophy work, not heavy compounds (Load +5).
-  const canVolume = progressBias !== 'Load +5'
+  // Volume is for hypertrophy work, not heavy compounds (Load +5). Bodyweight
+  // movements always allow volume — sets are how they progress once reps cap.
+  const canVolume = progressBias !== 'Load +5' || isBodyweight
 
   // Stimulus-driven volume signal: a low pump (or low soreness) means the
   // muscle was under-stimulated, so it earns a SET — and this is checked
@@ -317,7 +327,26 @@ export function evaluateSlot(
       ? 'Low pump with recovery to spare — under-stimulated, so add a set (volume, not load).'
       : 'Low soreness with recovery to spare — room for more volume, add a set.'
   } else if (perfok && goodrecovery && !lowrir && (score >= PROGRESS_SCORE || tooeasy)) {
-    if (progressBias === 'Load +5') {
+    if (isBodyweight) {
+      // Bodyweight: reps then sets only — never an automatic load bump.
+      if (bestReps != null && bestReps + 1 > maxRep) {
+        if (actualSets == null || actualSets < SET_CAP) {
+          decision = 'Add 1 set'
+          reason =
+            'Topped the rep range on a bodyweight move — add a set for volume (or strap on some weight yourself).'
+        } else {
+          decision = 'Maintain'
+          reason =
+            'Maxed reps and sets at bodyweight — hold here, or add your own load to keep progressing.'
+        }
+      } else if (veryeasy && bestReps != null && bestReps + 2 <= maxRep) {
+        decision = 'Add 2 reps'
+        reason = 'Lots left in the tank — chase two reps this time, not one.'
+      } else {
+        decision = 'Add 1 rep'
+        reason = 'Strong bodyweight set inside the range — add a rep.'
+      }
+    } else if (progressBias === 'Load +5') {
       decision = 'Add 5 lb'
       bigJump = veryeasy
       reason = veryeasy
@@ -344,7 +373,7 @@ export function evaluateSlot(
       decision = 'Maintain'
       reason = 'On track — repeat and beat it next time.'
     }
-  } else if (tooeasy && perfok && progressBias === 'Load +5') {
+  } else if (tooeasy && perfok && progressBias === 'Load +5' && !isBodyweight) {
     decision = 'Add 5 lb'
     bigJump = veryeasy
     reason = veryeasy ? 'Too light — jump the load up harder.' : 'That was too light — add load.'
@@ -416,6 +445,7 @@ export function evaluateSlot(
     perfok,
     addSet,
     bigJump,
+    isBodyweight,
   }
 
   return {

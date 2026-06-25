@@ -3,10 +3,10 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
-import { createClient } from '@/lib/supabase/server'
-import { requireUserId, seedDefaultProgram } from '@/lib/data'
+import { seedDefaultProgram, setProgramStartDate } from '@/lib/data'
 
 const startDateSchema = z.object({
+  programId: z.string().uuid(),
   // Accept an empty string (clear the date) or a YYYY-MM-DD calendar date.
   startDate: z
     .string()
@@ -18,31 +18,28 @@ const startDateSchema = z.object({
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
 /**
- * Set (or clear) the program start date that drives the current-week math.
- * Writes profiles.start_date for the authenticated user.
+ * Set (or clear) the start date for a program — each program owns its own
+ * mesocycle anchor, so this drives the current-week math whenever that program
+ * is active. A null start_date means "unset / Week 1" for that program.
  */
 export async function setStartDate(input: {
+  programId: string
   startDate: string
 }): Promise<ActionResult> {
   const parsed = startDateSchema.safeParse(input)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid date.' }
   }
+  const date = parsed.data.startDate === '' ? null : parsed.data.startDate
 
   try {
-    const supabase = await createClient()
-    const userId = await requireUserId(supabase)
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({ start_date: parsed.data.startDate === '' ? null : parsed.data.startDate })
-      .eq('id', userId)
-    if (error) return { ok: false, error: error.message }
+    await setProgramStartDate(parsed.data.programId, date)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not save.' }
   }
 
   revalidatePath('/mesocycle')
+  revalidatePath('/today')
   return { ok: true }
 }
 

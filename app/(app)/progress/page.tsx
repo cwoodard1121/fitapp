@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import type { ReactNode } from "react"
 
-import type { ExerciseSlot, SetLog, Unit } from "@/lib/types"
+import type { BodyMetric, ExerciseSlot, Goal, SetLog, Unit } from "@/lib/types"
 import {
   getActiveProgram,
   getProfile,
@@ -13,11 +13,16 @@ import {
 } from "@/lib/data"
 import { evaluateSlot, detectStall } from "@/lib/engine/engine"
 import { createClient } from "@/lib/supabase/server"
+import { getAnalysisAccess } from "@/lib/ai/allowlist"
+import { getLatestAnalysis } from "@/lib/ai/analysis"
 
+import { AnalysisPanel } from "@/components/analysis/analysis-panel"
 import { ProgressView, ProgressEmpty } from "@/components/progress/progress-view"
 import type {
+  BodyTrendPoint,
   ExercisePoint,
   ExerciseSeries,
+  GoalProgressRow,
   ProgressData,
   VolumeWeekRow,
 } from "@/components/progress/types"
@@ -55,6 +60,19 @@ export default async function ProgressPage() {
     .order("created_at", { ascending: true })
   if (error) throw error
   const logs = (logRows as SetLog[]) ?? []
+
+  // Goals + body measurements feed the new progress sections. Both are
+  // RLS-scoped; we also pin user_id explicitly.
+  const [{ data: goalRows }, { data: bodyRows }] = await Promise.all([
+    supabase.from("goals").select("*").eq("user_id", userId),
+    supabase
+      .from("body_metrics")
+      .select("*")
+      .eq("user_id", userId)
+      .order("measured_on", { ascending: true }),
+  ])
+  const goalsRaw = (goalRows as Goal[]) ?? []
+  const bodyMetrics = (bodyRows as BodyMetric[]) ?? []
 
   const deloadWeek = program.deload_week
 
@@ -122,7 +140,77 @@ export default async function ProgressPage() {
     })
   }
 
-  if (exercises.length === 0) {
+  /* --- Body measurements, oldest -> newest. --- */
+  const body: BodyTrendPoint[] = bodyMetrics.map((m) => ({
+    date: m.measured_on,
+    bodyweight: m.bodyweight,
+    bodyfat: m.bodyfat_pct,
+  }))
+
+  /* --- Derive each goal's live "current" value where we can. --- */
+  const bestE1rmByName = new Map(exercises.map((e) => [e.name, e.bestE1rm]))
+  const latestBody = bodyMetrics.length ? bodyMetrics[bodyMetrics.length - 1] : null
+
+  // Recent weekly tonnage (last 7 days) for volume goals; null when no data.
+  const since = Date.now() - 7 * 24 * 60 * 60 * 1000
+  let recentTonnage: number | null = null
+  {
+    let sum = 0
+    let any = false
+    for (const log of logs) {
+      if (new Date(log.created_at).getTime() < since) continue
+      if (log.actual_load == null || log.best_reps == null || log.actual_sets == null) {
+        continue
+      }
+      sum += log.actual_load * log.best_reps * log.actual_sets
+      any = true
+    }
+    recentTonnage = any ? sum : null
+  }
+
+  const goals: GoalProgressRow[] = goalsRaw
+    .map((g): GoalProgressRow => {
+      let current: number | null = null
+      switch (g.metric_type) {
+        case "bodyweight":
+          current = latestBody?.bodyweight ?? null
+          break
+        case "bodyfat":
+          current = latestBody?.bodyfat_pct ?? null
+          break
+        case "e1rm":
+          current = g.exercise_name ? bestE1rmByName.get(g.exercise_name) ?? null : null
+          break
+        case "volume":
+          current = recentTonnage
+          break
+        default:
+          current = null
+      }
+      return {
+        id: g.id,
+        title: g.title,
+        metricType: g.metric_type,
+        exerciseName: g.exercise_name,
+        startValue: g.start_value,
+        current,
+        targetValue: g.target_value,
+        targetUnit: g.target_unit,
+        targetDate: g.target_date,
+        createdAt: g.created_at,
+        status: g.status,
+      }
+    })
+    // Active goals first, then newest-created.
+    .sort((a, b) => {
+      const aw = a.status === "active" ? 0 : 1
+      const bw = b.status === "active" ? 0 : 1
+      if (aw !== bw) return aw - bw
+      return b.createdAt.localeCompare(a.createdAt)
+    })
+
+  // Brand-new user with nothing to chart anywhere: keep the existing empty state.
+  if (exercises.length === 0 && goals.length === 0 && body.length === 0) {
     return (
       <PageShell>
         <ProgressEmpty reason="no-logs" />
@@ -168,11 +256,21 @@ export default async function ProgressPage() {
     muscleAreas,
     unit,
     defaultExercise,
+    goals,
+    body,
   }
+
+  // AI overview sits at the top of the page, gated to allowed accounts. The
+  // panel renders null itself when not allowed, so it is safe to always include.
+  const { allowed } = await getAnalysisAccess()
+  const analysis = allowed ? await getLatestAnalysis() : null
 
   return (
     <PageShell>
-      <ProgressView data={data} />
+      <div className="space-y-6">
+        <AnalysisPanel analysis={analysis} allowed={allowed} />
+        <ProgressView data={data} />
+      </div>
     </PageShell>
   )
 }

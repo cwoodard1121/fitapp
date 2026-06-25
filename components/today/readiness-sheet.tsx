@@ -173,8 +173,8 @@ export function ReadinessSheet({
             {exerciseName}
           </SheetTitle>
           <SheetDescription>
-            How this lift went — the engine uses it to make the call. Systemic
-            recovery is up top (one rating for the whole session).
+            How this lift went — the engine uses it to make the call. Your overall
+            readiness is up top (one gut-check for the whole session).
           </SheetDescription>
         </SheetHeader>
 

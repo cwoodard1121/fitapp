@@ -77,6 +77,7 @@ export function slotConfigFromRow(row: ExerciseSlot): SlotConfig {
     baseSets: row.base_sets,
     loadIncrement: row.load_increment,
     seedLoad: row.seed_load,
+    isBodyweight: row.is_bodyweight ?? false,
   }
 }
 

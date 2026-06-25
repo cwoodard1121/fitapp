@@ -23,7 +23,6 @@ import { updateProfile } from '@/app/(app)/settings/actions'
 export function ProfileForm({ profile }: { profile: Profile }) {
   const [displayName, setDisplayName] = useState(profile.display_name ?? '')
   const [unit, setUnit] = useState<Unit>(profile.unit)
-  const [startDate, setStartDate] = useState(profile.start_date ?? '')
   const [deloadWeek, setDeloadWeek] = useState(String(profile.deload_week ?? 0))
   const [pending, startTransition] = useTransition()
 
@@ -33,7 +32,6 @@ export function ProfileForm({ profile }: { profile: Profile }) {
       const res = await updateProfile({
         display_name: displayName,
         unit,
-        start_date: startDate || null,
         deload_week: Number(deloadWeek),
       })
       if (res.ok) toast.success('Saved your profile.')
@@ -109,20 +107,6 @@ export function ProfileForm({ profile }: { profile: Profile }) {
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <div className="grid gap-5 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="start_date">Start date</Label>
-              <Input
-                id="start_date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="font-mono tabular-nums"
-              />
-              <p className="text-xs text-muted">
-                Anchors the current week and mesocycle number.
-              </p>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="deload_week">Deload week</Label>
               <Input

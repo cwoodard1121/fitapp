@@ -11,7 +11,7 @@ import {
 import { Stat } from '@/components/ui/stat'
 import {
   ensureProfile,
-  getActiveProgram,
+  getPrograms,
   getProgramFull,
   mesocycleNumber,
   requireUserId,
@@ -22,12 +22,14 @@ import type { ProgramDay, Session, SessionStatus } from '@/lib/types'
 import { WeekGrid, type WeekRow } from '@/components/mesocycle/week-grid'
 import { StartDateForm } from '@/components/mesocycle/start-date-form'
 import { SeedProgramButton } from '@/components/mesocycle/seed-program-button'
+import { ActiveProgramSelect } from '@/components/program/active-program-select'
 
 export const dynamic = 'force-dynamic'
 
 export default async function MesocyclePage() {
   const profile = await ensureProfile()
-  const program = await getActiveProgram()
+  const programs = await getPrograms()
+  const program = programs.find((p) => p.is_active) ?? null
 
   if (!program) {
     return (
@@ -72,8 +74,10 @@ export default async function MesocyclePage() {
   }
 
   const lengthWeeks = Math.max(1, program.length_weeks)
-  const currentWeek = weekForDate(profile.start_date, lengthWeeks)
-  const mesoNumber = mesocycleNumber(profile.start_date, lengthWeeks)
+  // Each program owns its mesocycle anchor; a null start_date means Week 1.
+  const startDate = program.start_date
+  const currentWeek = weekForDate(startDate, lengthWeeks)
+  const mesoNumber = mesocycleNumber(startDate, lengthWeeks)
 
   const weeks: WeekRow[] = Array.from({ length: lengthWeeks }, (_, i) => {
     const week = i + 1
@@ -98,7 +102,10 @@ export default async function MesocyclePage() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
-      <Header programName={program.name} />
+      <div className="flex flex-col gap-2">
+        <Header programName={program.name} />
+        <ActiveProgramSelect programs={programs} activeId={program.id} />
+      </div>
 
       {/* Instrument readouts */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -121,8 +128,8 @@ export default async function MesocyclePage() {
           <Stat
             label="Started"
             value={
-              profile.start_date
-                ? format(new Date(`${profile.start_date.slice(0, 10)}T00:00:00`), 'MMM d')
+              startDate
+                ? format(new Date(`${startDate.slice(0, 10)}T00:00:00`), 'MMM d')
                 : 'Not set'
             }
           />
@@ -133,13 +140,13 @@ export default async function MesocyclePage() {
         <CardHeader>
           <CardTitle>Adjust start date</CardTitle>
           <CardDescription>
-            {profile.start_date
-              ? 'Change the date Week 1 begins to re-anchor the current week.'
+            {startDate
+              ? 'Change the date Week 1 begins to re-anchor this program’s current week.'
               : 'Set when Week 1 begins so today maps to the right week.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <StartDateForm initialStartDate={profile.start_date} />
+          <StartDateForm programId={program.id} initialStartDate={startDate} />
         </CardContent>
       </Card>
 

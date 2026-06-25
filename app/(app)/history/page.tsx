@@ -35,6 +35,7 @@ export default async function HistoryPage() {
   ])
   const unit = profile?.unit ?? "lb"
   const lengthWeeks = program?.length_weeks ?? 4
+  const anchorDate = program?.start_date ?? null
 
   const [sessionsRes, logsRes, slotsRes, daysRes] = await Promise.all([
     supabase.from("sessions").select("*").eq("user_id", userId),
@@ -94,7 +95,7 @@ export default async function HistoryPage() {
 
       const dateIso = s.performed_at ?? s.created_at
       const mesocycle =
-        mesocycleNumber(profile?.start_date, lengthWeeks, new Date(dateIso)) + 1
+        mesocycleNumber(anchorDate, lengthWeeks, new Date(dateIso)) + 1
 
       return {
         id: s.id,

@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -60,6 +61,7 @@ export function SlotEditor({
   const [sets, setSets] = useState(String(slot.base_sets))
   const [increment, setIncrement] = useState(String(slot.load_increment))
   const [seed, setSeed] = useState(slot.seed_load == null ? '' : String(slot.seed_load))
+  const [bodyweight, setBodyweight] = useState(slot.is_bodyweight)
   const [code, setCode] = useState(slot.slot_code)
   const [order, setOrder] = useState(String(slot.order_index))
   const [saving, setSaving] = useState(false)
@@ -77,6 +79,7 @@ export function SlotEditor({
     setSets(String(slot.base_sets))
     setIncrement(String(slot.load_increment))
     setSeed(slot.seed_load == null ? '' : String(slot.seed_load))
+    setBodyweight(slot.is_bodyweight)
     setCode(slot.slot_code)
     setOrder(String(slot.order_index))
   }, [open, slot])
@@ -111,6 +114,7 @@ export function SlotEditor({
       baseSets: Number(sets),
       loadIncrement: Number(increment),
       seedLoad: seed.trim() === '' ? null : Number(seed),
+      isBodyweight: bodyweight,
     })
     setSaving(false)
     if (ok) onOpenChange(false)
@@ -277,19 +281,39 @@ export function SlotEditor({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ex-seed">Seed load ({unit})</Label>
+              <Label htmlFor="ex-seed">
+                {bodyweight ? `Added load (${unit})` : `Seed load (${unit})`}
+              </Label>
               <Input
                 id="ex-seed"
                 type="number"
                 inputMode="decimal"
                 min={0}
-                placeholder="Bodyweight"
+                placeholder={bodyweight ? 'None (just bodyweight)' : 'Bodyweight'}
                 value={seed}
                 onChange={(e) => setSeed(e.target.value)}
                 onFocus={(e) => e.currentTarget.select()}
                 className="font-mono tabular-nums"
               />
             </div>
+          </div>
+
+          {/* Bodyweight toggle — reps/sets only, never an auto load bump */}
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-background/40 p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="ex-bodyweight" className="cursor-pointer">
+                Bodyweight movement
+              </Label>
+              <p className="text-xs text-muted">
+                Pull-ups, dips, etc. The engine progresses reps then sets and never
+                auto-adds weight — you log any added load (belt) yourself.
+              </p>
+            </div>
+            <Switch
+              id="ex-bodyweight"
+              checked={bodyweight}
+              onCheckedChange={setBodyweight}
+            />
           </div>
 
           <div className="space-y-1.5">

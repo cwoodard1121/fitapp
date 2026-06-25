@@ -163,6 +163,11 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
                 {slot.muscle_area}
               </span>
             ) : null}
+            {slot.is_bodyweight ? (
+              <Badge variant="muted" title="Bodyweight — progresses by reps & sets">
+                BW
+              </Badge>
+            ) : null}
           </div>
           <h3 className="truncate text-base font-semibold leading-tight">
             {slot.exercise_name}
@@ -184,7 +189,16 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
         <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
           Target
         </span>
-        <Stat size="sm" label="Load" value={targets.load} unit={unit} />
+        {slot.is_bodyweight ? (
+          <Stat
+            size="sm"
+            label="Load"
+            value={targets.load && targets.load > 0 ? `BW +${targets.load}` : 'BW'}
+            unit={targets.load && targets.load > 0 ? unit : undefined}
+          />
+        ) : (
+          <Stat size="sm" label="Load" value={targets.load} unit={unit} />
+        )}
         <Stat size="sm" label="Sets" value={targets.sets} />
         <Stat size="sm" label="Reps" value={targets.reps} placeholder="—" />
         <Stat size="sm" label="RIR" value={targets.rir} />

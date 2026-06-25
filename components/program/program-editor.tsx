@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
-import type { ExerciseSlot, ProgramDay, ProgramFull, Unit } from '@/lib/types'
+import type { ExerciseSlot, Program, ProgramDay, ProgramFull, Unit } from '@/lib/types'
 import type { ProgressBias } from '@/lib/engine/engine'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,6 +19,7 @@ import {
   type ActionResult,
 } from '@/app/(app)/program/actions'
 import { ProgramHeader } from './program-header'
+import { ProgramSwitcher } from './program-switcher'
 import { DayCard } from './day-card'
 
 /** Fields the slot editor sends back when saving a slot. */
@@ -35,6 +36,7 @@ export interface SlotEdit {
   baseSets: number
   loadIncrement: number
   seedLoad: number | null
+  isBodyweight: boolean
 }
 
 function byDayNumber(a: ProgramDay, b: ProgramDay) {
@@ -47,9 +49,13 @@ function byOrder(a: ExerciseSlot, b: ExerciseSlot) {
 export function ProgramEditor({
   initial,
   unit,
+  programs,
+  activeId,
 }: {
   initial: ProgramFull
   unit: Unit
+  programs: Program[]
+  activeId: string | null
 }) {
   const [program, setProgram] = useState(initial.program)
   const [days, setDays] = useState<ProgramDay[]>(
@@ -174,6 +180,7 @@ export function ProgramEditor({
                 base_sets: edit.baseSets,
                 load_increment: edit.loadIncrement,
                 seed_load: edit.seedLoad,
+                is_bodyweight: edit.isBodyweight,
               }
             : x,
         ),
@@ -253,6 +260,12 @@ export function ProgramEditor({
           as you go.
         </p>
       </header>
+
+      <ProgramSwitcher
+        programs={programs}
+        currentId={program.id}
+        activeId={activeId}
+      />
 
       <ProgramHeader
         program={program}

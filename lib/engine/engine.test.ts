@@ -25,6 +25,7 @@ function slot(overrides: Partial<SlotConfig> = {}): SlotConfig {
     baseSets: 2,
     loadIncrement: 5,
     seedLoad: 75,
+    isBodyweight: false,
     ...overrides,
   }
 }
@@ -462,6 +463,45 @@ describe('smart layer — configurable readiness weights', () => {
     const tuned = { ...DEFAULT_WEIGHTS, recoveryGood: 5 }
     expect(evaluateSlot(l, slot(), ctx({ weights: tuned })).score).toBe(5)
     expect(evaluateSlot(l, slot(), ctx()).score).toBe(2)
+  })
+})
+
+describe('bodyweight — reps/sets only, never an automatic load bump', () => {
+  it('adds a rep inside the range like any reps-first lift', () => {
+    const s = slot({ isBodyweight: true, progressBias: 'Reps first', repLow: 6, repHigh: 10 })
+    const res = evaluateSlot(strongLog({ actualLoad: 0, bestReps: 8 }), s, ctx())
+    expect(res.decision).toBe('Add 1 rep')
+    expect(res.nextReps).toBe(9)
+  })
+
+  it('at the rep cap, adds a SET instead of converting to load (room under cap)', () => {
+    const s = slot({ isBodyweight: true, progressBias: 'Reps first', repLow: 6, repHigh: 10 })
+    // bestReps 10, +1 = 11 > cap; a loaded reps-first lift would "Add 5 lb".
+    const res = evaluateSlot(strongLog({ actualLoad: 0, bestReps: 10, actualSets: 2 }), s, ctx())
+    expect(res.decision).toBe('Add 1 set')
+    expect(res.nextSets).toBe(3)
+    expect(res.nextLoad).toBe(0) // never auto-loaded
+  })
+
+  it('at rep cap AND set cap, holds (user can add their own weight)', () => {
+    const s = slot({ isBodyweight: true, progressBias: 'Reps first', repLow: 6, repHigh: 10 })
+    const res = evaluateSlot(strongLog({ actualLoad: 0, bestReps: 10, actualSets: 5 }), s, ctx())
+    expect(res.decision).toBe('Maintain')
+  })
+
+  it('never returns "Add 5 lb" even with a Load +5 bias + very easy session', () => {
+    const s = slot({ isBodyweight: true, progressBias: 'Load +5', repLow: 5, repHigh: 8, seedLoad: null })
+    const res = evaluateSlot(strongLog({ actualLoad: 0, bestReps: 6, actualRir: 6 }), s, ctx())
+    expect(res.decision).not.toBe('Add 5 lb')
+    expect(res.nextLoad).toBe(0)
+  })
+
+  it('respects the user-entered added load (carries it forward unchanged)', () => {
+    const s = slot({ isBodyweight: true, progressBias: 'Reps first', repLow: 6, repHigh: 10 })
+    // User strapped on 25 lb; strong session inside range -> add a rep, keep the 25.
+    const res = evaluateSlot(strongLog({ actualLoad: 25, bestReps: 8 }), s, ctx())
+    expect(res.decision).toBe('Add 1 rep')
+    expect(res.nextLoad).toBe(25)
   })
 })
 

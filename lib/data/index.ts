@@ -7,8 +7,13 @@ export { requireUserId } from '@/lib/data/auth'
 export { getProfile, ensureProfile } from '@/lib/data/profile'
 export {
   getActiveProgram,
+  getPrograms,
   getProgramFull,
   getSlotsForDay,
+  createProgram,
+  setActiveProgram,
+  deleteProgram,
+  setProgramStartDate,
 } from '@/lib/data/programs'
 export { seedDefaultProgram } from '@/lib/data/seed'
 export { weekForDate, mesocycleNumber } from '@/lib/data/week'

@@ -1,5 +1,6 @@
 import {
   getActiveProgram,
+  getPrograms,
   getProfile,
   getProgramFull,
   seedDefaultProgram,
@@ -11,20 +12,36 @@ export const metadata = {
 }
 
 /**
- * Program editor route. Loads the active program (seeding the default one on
- * first visit so the editor is never empty) and hands the full tree to a
- * client editor. All mutations flow through ./actions.ts.
+ * Program editor route. Loads every program the user owns plus the full tree of
+ * the one being edited (chosen by ?p=<id>, defaulting to the active program).
+ * Editing a program is independent of which one is active for training — the
+ * switcher in the editor handles "set active". All mutations flow through
+ * ./actions.ts.
  */
-export default async function ProgramPage() {
+export default async function ProgramPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ p?: string }>
+}) {
+  const { p: pParam } = await searchParams
   const profile = await getProfile()
   const unit = profile?.unit ?? 'lb'
 
-  let program = await getActiveProgram()
-  if (!program) {
-    program = await seedDefaultProgram()
+  let programs = await getPrograms()
+  if (programs.length === 0) {
+    // First visit — seed the default program so the editor is never empty.
+    await seedDefaultProgram()
+    programs = await getPrograms()
   }
 
-  const full = await getProgramFull(program.id)
+  const active = programs.find((p) => p.is_active) ?? null
+  // Pick the program to edit: explicit ?p= (if owned), else active, else first.
+  const selected =
+    (pParam && programs.find((p) => p.id === pParam)) ||
+    active ||
+    programs[0]
+
+  const full = selected ? await getProgramFull(selected.id) : null
 
   if (!full) {
     return (
@@ -37,5 +54,13 @@ export default async function ProgramPage() {
     )
   }
 
-  return <ProgramEditor initial={full} unit={unit} />
+  return (
+    <ProgramEditor
+      key={full.program.id}
+      initial={full}
+      unit={unit}
+      programs={programs}
+      activeId={active?.id ?? null}
+    />
+  )
 }

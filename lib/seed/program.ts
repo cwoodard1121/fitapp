@@ -4,7 +4,9 @@ import type { ProgressBias } from '@/lib/engine/engine'
  * The user's existing mesocycle (handoff §6), expressed as a typed constant.
  * Rep ranges parsed to repLow/repHigh; single values set both equal.
  * load_increment defaults to 5, 2.5 for small isolation lifts. Bodyweight
- * movements (pull-ups) have seedLoad null and increment 5.
+ * movements (pull-ups) have seedLoad null AND isBodyweight true so the engine
+ * progresses them by reps/sets only. An unseeded barbell lift also has seedLoad
+ * null but isBodyweight false — it calibrates its load from the first session.
  *
  * Stored in camelCase; lib/data/seed.ts maps to snake_case rows on insert.
  */
@@ -20,6 +22,8 @@ export interface SeedSlot {
   baseSets: number
   loadIncrement: number
   seedLoad: number | null
+  /** Optional; defaults to false. True only for genuine bodyweight movements. */
+  isBodyweight?: boolean
 }
 
 export interface SeedDay {
@@ -82,6 +86,7 @@ export const DEFAULT_PROGRAM: SeedProgram = {
           baseSets: 2,
           loadIncrement: 5,
           seedLoad: null,
+          isBodyweight: true,
         },
         {
           slotCode: 'D1A4',
@@ -379,6 +384,7 @@ export const DEFAULT_PROGRAM: SeedProgram = {
           baseSets: 2,
           loadIncrement: 5,
           seedLoad: null,
+          isBodyweight: true,
         },
         {
           slotCode: 'D5A4',

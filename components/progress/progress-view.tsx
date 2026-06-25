@@ -21,10 +21,12 @@ import {
 } from "@/components/ui"
 
 import { TrendChart, VolumeChart } from "./charts"
+import { GoalsProgress } from "./goals-progress"
+import { BodyTrend } from "./body-trend"
 import type { ProgressData, ExerciseSeries } from "./types"
 
 export function ProgressView({ data }: { data: ProgressData }) {
-  const { exercises, volume, muscleAreas, unit, defaultExercise } = data
+  const { exercises, volume, muscleAreas, unit, defaultExercise, goals, body } = data
 
   const [selected, setSelected] = React.useState<string>(
     defaultExercise ?? exercises[0]?.name ?? ""
@@ -35,12 +37,11 @@ export function ProgressView({ data }: { data: ProgressData }) {
     [exercises, selected]
   )
 
-  if (!current) {
-    return null
-  }
-
   return (
     <div className="space-y-4">
+      {/* Lift charts — only when there is at least one logged lift. */}
+      {current ? (
+        <>
       {/* Exercise picker — focus every chart on one lift. */}
       <div className="space-y-1.5">
         <label
@@ -184,6 +185,14 @@ export function ProgressView({ data }: { data: ProgressData }) {
           />
         </CardContent>
       </Card>
+        </>
+      ) : null}
+
+      {/* Goal progress — hidden when the user has no goals. */}
+      <GoalsProgress goals={goals} />
+
+      {/* Bodyweight + body-fat trend — hidden when no measurements logged. */}
+      <BodyTrend points={body} unit={unit} />
     </div>
   )
 }

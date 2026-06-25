@@ -1,4 +1,4 @@
-import type { Decision, Unit } from "@/lib/types"
+import type { Decision, GoalMetricType, GoalStatus, Unit } from "@/lib/types"
 
 /**
  * Plain, serialisable shapes the server component computes and hands to the
@@ -37,10 +37,42 @@ export interface ExerciseSeries {
 /** One week's tonnage broken out per muscle area (keys are muscle areas). */
 export type VolumeWeekRow = { week: number } & Record<string, number>
 
+/**
+ * A goal flattened for the progress page, with its automatically-derived
+ * "current" value attached. `current` is null when the metric can't be derived
+ * yet (custom goals, or no data). Shapes mirror the `goals` row so the shared
+ * helpers in components/goals/progress.ts apply directly.
+ */
+export interface GoalProgressRow {
+  id: string
+  title: string
+  metricType: GoalMetricType
+  exerciseName: string | null
+  startValue: number | null
+  current: number | null
+  targetValue: number | null
+  targetUnit: string | null
+  targetDate: string | null
+  createdAt: string
+  status: GoalStatus
+}
+
+/** One body measurement, plain and serialisable, for the body trend chart. */
+export interface BodyTrendPoint {
+  /** ISO date (measured_on). */
+  date: string
+  bodyweight: number | null
+  bodyfat: number | null
+}
+
 export interface ProgressData {
   exercises: ExerciseSeries[]
   volume: VolumeWeekRow[]
   muscleAreas: string[]
   unit: Unit
   defaultExercise: string | null
+  /** Active goals first; empty when the user has no goals. */
+  goals: GoalProgressRow[]
+  /** Body measurements oldest -> newest; empty when none logged. */
+  body: BodyTrendPoint[]
 }

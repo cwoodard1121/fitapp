@@ -9,8 +9,10 @@ import { Label } from '@/components/ui/label'
 import { setStartDate } from '@/app/(app)/mesocycle/actions'
 
 export function StartDateForm({
+  programId,
   initialStartDate,
 }: {
+  programId: string
   initialStartDate: string | null
 }) {
   const [value, setValue] = useState(initialStartDate ?? '')
@@ -19,7 +21,7 @@ export function StartDateForm({
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
-      const res = await setStartDate({ startDate: value })
+      const res = await setStartDate({ programId, startDate: value })
       if (res.ok) {
         toast.success(
           value ? 'Start date updated.' : 'Start date cleared.',

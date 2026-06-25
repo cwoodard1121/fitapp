@@ -15,10 +15,21 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
-import { requireUserId } from '@/lib/data'
-import type { ExerciseSlot, ProgramDay } from '@/lib/types'
+import {
+  requireUserId,
+  createProgram,
+  setActiveProgram,
+  deleteProgram,
+} from '@/lib/data'
+import type { ExerciseSlot, Program, ProgramDay } from '@/lib/types'
 
 const ROUTE = '/program'
+
+/** Routes whose server-rendered data depends on which program is active. */
+const ACTIVE_PROGRAM_ROUTES = ['/program', '/today', '/mesocycle', '/progress']
+function revalidateActiveProgram() {
+  for (const r of ACTIVE_PROGRAM_ROUTES) revalidatePath(r)
+}
 
 export type ActionResult<T = null> =
   | { ok: true; data: T }
@@ -105,6 +116,65 @@ export async function updateProgramMeta(
 
     revalidatePath(ROUTE)
     return { ok: true, data: null }
+  } catch (e) {
+    return fail(e)
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Program management — create / activate / delete                     */
+/* ------------------------------------------------------------------ */
+
+const createProgramSchema = z.object({
+  name: z.string().trim().min(1, 'Name your program.').max(80),
+  template: z.enum(['blank', 'starter']).default('blank'),
+})
+
+/**
+ * Create a new (inactive) program — blank or a copy of the starter template.
+ * Returns the new program so the client can navigate straight to editing it.
+ */
+export async function createProgramAction(
+  input: z.input<typeof createProgramSchema>,
+): Promise<ActionResult<Program>> {
+  try {
+    const { name, template } = createProgramSchema.parse(input)
+    const program = await createProgram({ name, template })
+    revalidateActiveProgram()
+    return { ok: true, data: program }
+  } catch (e) {
+    return fail(e)
+  }
+}
+
+const programIdSchema = z.object({ programId: z.string().uuid() })
+
+/** Make a program the user's single active program (atomic switch). */
+export async function setActiveProgramAction(
+  input: z.input<typeof programIdSchema>,
+): Promise<ActionResult> {
+  try {
+    const { programId } = programIdSchema.parse(input)
+    await setActiveProgram(programId)
+    revalidateActiveProgram()
+    return { ok: true, data: null }
+  } catch (e) {
+    return fail(e)
+  }
+}
+
+/**
+ * Delete a program (days, slots, sessions and logs cascade). If it was active
+ * and others remain, the most recent remaining program becomes active.
+ */
+export async function deleteProgramAction(
+  input: z.input<typeof programIdSchema>,
+): Promise<ActionResult<{ newActiveId: string | null }>> {
+  try {
+    const { programId } = programIdSchema.parse(input)
+    const res = await deleteProgram(programId)
+    revalidateActiveProgram()
+    return { ok: true, data: res }
   } catch (e) {
     return fail(e)
   }
@@ -293,6 +363,7 @@ const updateSlotSchema = z
       .union([z.coerce.number().min(0).max(2000), z.null()])
       .optional()
       .transform((v) => (v === undefined ? null : v)),
+    isBodyweight: z.boolean().optional().default(false),
   })
   .refine((v) => v.repHigh >= v.repLow, {
     message: 'Top of the rep range must be ≥ the bottom.',
@@ -319,6 +390,7 @@ export async function updateSlot(
         base_sets: v.baseSets,
         load_increment: v.loadIncrement,
         seed_load: v.seedLoad,
+        is_bodyweight: v.isBodyweight,
       })
       .eq('id', v.slotId)
       .eq('user_id', userId)

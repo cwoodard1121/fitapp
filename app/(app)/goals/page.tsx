@@ -1,9 +1,19 @@
 import { subDays } from 'date-fns'
+import { Sparkles, TrendingUp, AlertTriangle } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId, getProfile } from '@/lib/data'
 import { epley1RM } from '@/lib/engine/engine'
-import type { Goal } from '@/lib/types'
+import { getAnalysisAccess } from '@/lib/ai/allowlist'
+import { getLatestAnalysis } from '@/lib/ai/analysis'
+import type { AiAnalysis, Goal } from '@/lib/types'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui'
 import { GoalsBoard } from '@/components/goals/goals-board'
 import type { GoalWithCurrent } from '@/components/goals/types'
 
@@ -145,9 +155,70 @@ export default async function GoalsPage() {
 
   const unit = profile?.unit ?? 'lb'
 
+  // AI insight on goal pacing, gated to allowed accounts. Skips the query when
+  // not allowed; renders nothing when there is no goal-related content.
+  const { allowed } = await getAnalysisAccess()
+  const analysis = allowed ? await getLatestAnalysis() : null
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 sm:pb-10">
+      <GoalsInsight analysis={analysis} />
       <GoalsBoard goals={enriched} unit={unit} />
     </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* AI insight card — surfaces the cached overview's goal read          */
+/* ------------------------------------------------------------------ */
+
+function GoalsInsight({ analysis }: { analysis: AiAnalysis | null }) {
+  if (!analysis) return null
+  const g = analysis.payload.goals
+  const onTrack = g.on_track.filter((s) => s.trim().length > 0)
+  const atRisk = g.at_risk.filter((s) => s.trim().length > 0)
+  if (!g.summary && onTrack.length === 0 && atRisk.length === 0) return null
+
+  return (
+    <Card className="mb-5">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="size-4 text-signal" aria-hidden />
+          AI insight
+        </CardTitle>
+        <CardDescription>How your goals are pacing right now.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {g.summary ? (
+          <p className="text-sm leading-snug text-foreground">{g.summary}</p>
+        ) : null}
+        {onTrack.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {onTrack.map((item, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 rounded-md border border-gate-green/40 px-2 py-0.5 text-xs text-gate-green"
+              >
+                <TrendingUp className="size-3" aria-hidden />
+                {item}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {atRisk.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {atRisk.map((item, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 rounded-md border border-gate-red/40 px-2 py-0.5 text-xs text-gate-red"
+              >
+                <AlertTriangle className="size-3" aria-hidden />
+                {item}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   )
 }
