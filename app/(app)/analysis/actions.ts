@@ -47,7 +47,20 @@ export async function generateAnalysisAction(): Promise<AnalysisActionResult> {
     await generateAndStoreAnalysis()
   } catch (e) {
     console.error('generateAnalysisAction failed', e)
-    return { ok: false, error: 'Could not generate the overview. Please try again.' }
+    const msg = e instanceof Error ? e.message : ''
+    // Only allowlisted accounts reach here, so a specific reason is safe and
+    // makes config/runtime problems self-diagnosable instead of a dead end.
+    if (/OPENAI_API_KEY is not set/i.test(msg)) {
+      return {
+        ok: false,
+        error:
+          'AI isn’t configured on the server yet (OPENAI_API_KEY missing). If you just added it in Vercel, redeploy so the running build picks it up.',
+      }
+    }
+    return {
+      ok: false,
+      error: `Could not generate the overview: ${msg ? msg.slice(0, 240) : 'unknown error'}`,
+    }
   }
 
   revalidatePath('/progress')

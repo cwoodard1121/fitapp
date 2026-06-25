@@ -52,6 +52,17 @@ export async function callOpenAIJson({
 
   const data = (await res.json()) as OpenAIResponse
   const text = extractText(data)
+  if (!text || text.trim() === '') {
+    // The model produced no visible text. For a reasoning model this almost
+    // always means the reasoning ate the whole max_output_tokens budget
+    // (status 'incomplete', reason 'max_output_tokens') — raise the budget.
+    const status = data.status ?? 'unknown'
+    const reason = data.incomplete_details?.reason
+    throw new Error(
+      `OpenAI returned no text (status: ${status}${reason ? `, reason: ${reason}` : ''}). ` +
+        'Likely max_output_tokens was too low for the reasoning model.',
+    )
+  }
   return tolerantParseJson(text)
 }
 
@@ -64,6 +75,9 @@ interface OpenAIResponse {
   output?: Array<{
     content?: Array<{ type?: string; text?: string }>
   }>
+  /** 'completed' | 'incomplete' | ... — present on the Responses API. */
+  status?: string
+  incomplete_details?: { reason?: string }
 }
 
 /**

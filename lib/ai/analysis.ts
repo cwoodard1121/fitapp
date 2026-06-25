@@ -152,6 +152,28 @@ const MAX_INPUT_CHARS = 12000
 /** Default per-array caps — top-N most relevant rows kept for the LLM. */
 const DEFAULT_CAPS = { lifts: 12, goals: 12, volume: 12 }
 
+/* --- Adaptive output budget ----------------------------------------------- *
+ * gpt-5.4 reasoning tokens are billed against max_output_tokens, so a fixed cap
+ * can be eaten by reasoning and leave no room for the JSON (-> empty/truncated
+ * output -> failed parse). The model writes one advice block per lift and per
+ * goal, so we scale the budget: a fixed reasoning headroom + base scaffolding
+ * plus a per-lift and per-goal allowance, clamped to a sane band. */
+const OUT_BASE = 1500 // overview + pacing + priorities + body/nutrition + JSON scaffold
+const OUT_REASONING_HEADROOM = 2500 // medium reasoning is billed against the cap
+const OUT_PER_LIFT = 150
+const OUT_PER_GOAL = 150
+const OUT_MIN = 3000
+const OUT_MAX = 16000
+
+/** Tokens to allow the model, scaled by how many lifts/goals it must write up. */
+function outputBudget(analytics: TrainingAnalytics): number {
+  const nLifts = Math.min(analytics.lifts.length, DEFAULT_CAPS.lifts)
+  const nGoals = Math.min(analytics.goals.length, DEFAULT_CAPS.goals)
+  const want =
+    OUT_BASE + OUT_REASONING_HEADROOM + OUT_PER_LIFT * nLifts + OUT_PER_GOAL * nGoals
+  return Math.min(OUT_MAX, Math.max(OUT_MIN, want))
+}
+
 type ArrayCaps = { lifts: number; goals: number; volume: number }
 
 /** Round stray floats to 2dp; pass everything else through untouched. */
@@ -222,7 +244,7 @@ export async function generateAndStoreAnalysis(): Promise<AnalysisPayload> {
   const raw = await callOpenAIJson({
     system: SYSTEM_PROMPT,
     user: `Here are the computed analytics (JSON). Interpret them — do not change the numbers:\n\n${serializeAnalytics(analytics)}`,
-    maxOutputTokens: 3000,
+    maxOutputTokens: outputBudget(analytics),
   })
 
   const payload = analysisSchema.parse(raw)
