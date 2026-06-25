@@ -41,7 +41,7 @@ export async function callOpenAIJson({
         { role: 'user', content: user },
       ],
       reasoning: { effort: 'medium' },
-      max_output_tokens: maxOutputTokens ?? 1600,
+      max_output_tokens: maxOutputTokens ?? 3000,
     }),
   })
 

@@ -15,8 +15,10 @@ import { evaluateSlot, detectStall } from "@/lib/engine/engine"
 import { createClient } from "@/lib/supabase/server"
 import { getAnalysisAccess } from "@/lib/ai/allowlist"
 import { getLatestAnalysis } from "@/lib/ai/analysis"
+import { gatherAnalytics } from "@/lib/analytics"
 
 import { AnalysisPanel } from "@/components/analysis/analysis-panel"
+import { AnalyticsOverview } from "@/components/progress/analytics-overview"
 import { ProgressView, ProgressEmpty } from "@/components/progress/progress-view"
 import type {
   BodyTrendPoint,
@@ -209,11 +211,35 @@ export default async function ProgressPage() {
       return b.createdAt.localeCompare(a.createdAt)
     })
 
-  // Brand-new user with nothing to chart anywhere: keep the existing empty state.
+  // Deterministic analytics are ALWAYS computable (even in Week 1) and need no
+  // allowlist. The AI overview sits on top, gated to allowed accounts; the panel
+  // renders null itself when not allowed, so it is safe to always include.
+  const analytics = await gatherAnalytics()
+  const { allowed } = await getAnalysisAccess()
+  const analysis = allowed ? await getLatestAnalysis() : null
+
+  // Mirror the Goals page: the analytics overview shows ACTIVE goals only, not
+  // abandoned / achieved / no-data lifecycle goals. Build the active id set from
+  // the goals query (status is on each row) and filter the computed pacing.
+  const activeGoalIds = new Set(
+    goalsRaw.filter((g) => g.status === "active").map((g) => g.id),
+  )
+  const overviewAnalytics = {
+    ...analytics,
+    goals: analytics.goals.filter((g) => activeGoalIds.has(g.id)),
+  }
+
+  // Brand-new user with nothing to chart anywhere: still surface the analytics
+  // (mesocycle position, goal pacing, required rates) and the AI overview above
+  // the empty-state nudge — there is always something concrete to show.
   if (exercises.length === 0 && goals.length === 0 && body.length === 0) {
     return (
       <PageShell>
-        <ProgressEmpty reason="no-logs" />
+        <div className="space-y-6">
+          <AnalyticsOverview analytics={overviewAnalytics} unit={unit} />
+          <AnalysisPanel analysis={analysis} allowed={allowed} />
+          <ProgressEmpty reason="no-logs" />
+        </div>
       </PageShell>
     )
   }
@@ -260,14 +286,10 @@ export default async function ProgressPage() {
     body,
   }
 
-  // AI overview sits at the top of the page, gated to allowed accounts. The
-  // panel renders null itself when not allowed, so it is safe to always include.
-  const { allowed } = await getAnalysisAccess()
-  const analysis = allowed ? await getLatestAnalysis() : null
-
   return (
     <PageShell>
       <div className="space-y-6">
+        <AnalyticsOverview analytics={overviewAnalytics} unit={unit} />
         <AnalysisPanel analysis={analysis} allowed={allowed} />
         <ProgressView data={data} />
       </div>

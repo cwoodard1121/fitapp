@@ -15,8 +15,10 @@ import {
 import type { Session, SessionStatus } from '@/lib/types'
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getLatestAnalysis } from '@/lib/ai/analysis'
+import type { LiftAdvice } from '@/lib/types'
 import { Badge } from '@/components/ui/badge'
 import { AnalysisFocus } from '@/components/analysis/analysis-focus'
+import { ExerciseAdvice } from '@/components/today/exercise-advice'
 import { ActiveProgramSelect } from '@/components/program/active-program-select'
 import { DaySelector } from '@/components/today/day-selector'
 import { SessionReadiness } from '@/components/today/session-readiness'
@@ -118,10 +120,27 @@ export default async function TodayPage({
     )
   }).length
 
-  // Cheap AI "focus today" nudge, gated to allowed accounts. Skips the analysis
-  // query entirely when the account is not allowed; renders nothing when empty.
+  // Cheap AI coaching, gated to allowed accounts. Skips the analysis query
+  // entirely when the account is not allowed; renders nothing when empty.
   const { allowed } = await getAnalysisAccess()
-  const focus = allowed ? (await getLatestAnalysis())?.payload.focus ?? [] : []
+  const payload = allowed ? (await getLatestAnalysis())?.payload ?? null : null
+  const focus = payload?.focus ?? []
+
+  // Match the AI's per-lift advice to the exercises on the selected day so the
+  // log can show inline "coach notes" exactly where they're relevant.
+  const adviceByExercise = new Map<string, LiftAdvice>()
+  for (const a of payload?.training.lifts ?? []) {
+    adviceByExercise.set(a.exercise.trim().toLowerCase(), a)
+  }
+  const dayAdvice: LiftAdvice[] = []
+  const seen = new Set<string>()
+  for (const s of daySlots) {
+    const key = s.exercise_name.trim().toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    const a = adviceByExercise.get(key)
+    if (a) dayAdvice.push(a)
+  }
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pb-4 pt-4">
@@ -163,6 +182,12 @@ export default async function TodayPage({
             allSlotIds={allSlotIds}
             recovery={sessionRecovery}
           />
+        </div>
+      ) : null}
+
+      {daySlots.length > 0 && dayAdvice.length > 0 ? (
+        <div className="mt-4">
+          <ExerciseAdvice items={dayAdvice} />
         </div>
       ) : null}
 

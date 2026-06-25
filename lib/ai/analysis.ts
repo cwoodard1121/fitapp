@@ -1,360 +1,213 @@
 /**
- * AI training overview: gather a compact summary of the user's training, ask
- * the LLM for a structured overview, validate it, and cache it.
+ * AI training overview: compute deterministic analytics, ask the LLM to
+ * INTERPRET those numbers into grounded advice, validate it, and cache it.
  *
- * Server-only. The cached AnalysisPayload feeds several screens (Progress,
- * Goals, a Today focus nudge), so it is deliberately lightweight and structured
- * rather than a chat transcript.
+ * Server-only. The deterministic analytics are computed in code (lib/analytics)
+ * and are always available; the LLM never invents or recomputes numbers — it
+ * receives the analytics as JSON and writes analysis + advice + pacing keyed to
+ * the provided figures. The cached AnalysisPayload feeds several screens
+ * (Progress, Goals, a Today focus nudge), so it stays structured, not a chat.
  */
 import { z } from 'zod'
 
-import type {
-  AiAnalysis,
-  AnalysisPayload,
-  Block,
-  BodyMetric,
-  ExerciseSlot,
-  Goal,
-  NutritionLog,
-  SetLog,
-} from '@/lib/types'
-import {
-  getActiveProgram,
-  getProfile,
-  getProgramFull,
-  requireUserId,
-  slotConfigFromRow,
-  setLogInputFromRow,
-  derivePrevTargets,
-  weekForDate,
-} from '@/lib/data'
-import { evaluateSlot, detectStall, epley1RM } from '@/lib/engine/engine'
-import { computeProgress } from '@/components/goals/progress'
+import type { AiAnalysis, AnalysisPayload } from '@/lib/types'
+import { requireUserId } from '@/lib/data'
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
+import { gatherAnalytics } from '@/lib/analytics'
+import type { TrainingAnalytics } from '@/lib/analytics/types'
 import { createClient } from '@/lib/supabase/server'
 
 import { callOpenAIJson } from './openai'
 
 /* ------------------------------------------------------------------ */
-/* Schema — EXACTLY mirrors AnalysisPayload                            */
+/* Schema — EXACTLY mirrors the (richer) AnalysisPayload, tolerant      */
 /* ------------------------------------------------------------------ */
 
 /** Coerce anything to a string, defaulting to ''. */
 const str = z.preprocess((v) => (typeof v === 'string' ? v : ''), z.string())
 
-/** Coerce to a string array, dropping non-strings and clamping to <= 6 items. */
+/** Coerce to a string array, dropping non-strings and clamping to <= 8 items. */
 const strList = z.preprocess(
   (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []),
-  z.array(z.string()).transform((a) => a.slice(0, 6)),
+  z.array(z.string()).transform((a) => a.slice(0, 8)),
 )
+
+/** A tolerant enum: unknown / missing values fall back to `fallback`. */
+function enumish<T extends string>(values: readonly T[], fallback: T) {
+  return z.preprocess(
+    (v) => (typeof v === 'string' && (values as readonly string[]).includes(v) ? v : fallback),
+    z.enum(values as unknown as [T, ...T[]]),
+  )
+}
+
+/** Wrap an object so a missing / non-object value becomes {} (fields default). */
+function obj<T extends z.ZodRawShape>(shape: T) {
+  return z.preprocess(
+    (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {}),
+    z.object(shape),
+  )
+}
+
+/** Coerce to an array of objects, then parse+clamp to <= 8 items. */
+function objList<T extends z.ZodTypeAny>(item: T) {
+  return z.preprocess(
+    (v) => (Array.isArray(v) ? v.filter((x) => x && typeof x === 'object' && !Array.isArray(x)) : []),
+    z.array(item).transform((a) => a.slice(0, 8)),
+  )
+}
+
+const liftAdvice = z.object({
+  exercise: str,
+  status: enumish(
+    ['progressing', 'stalling', 'calibrating', 'regressing', 'maintaining'] as const,
+    'maintaining',
+  ),
+  note: str,
+  advice: str,
+})
+
+const goalAdvice = z.object({
+  title: str,
+  status: enumish(
+    ['achieved', 'ahead', 'on_track', 'behind', 'no_data'] as const,
+    'no_data',
+  ),
+  note: str,
+  recommendation: str,
+})
+
+const priority = z.object({ title: str, why: str })
 
 export const analysisSchema = z.object({
   headline: str,
   overview: str,
-  training: z.object({
+  pacing: str,
+  training: obj({
     summary: str,
-    strong_areas: strList,
-    lagging_areas: strList,
+    lifts: objList(liftAdvice),
+    laggingMuscles: strList,
+    strongAreas: strList,
   }),
-  goals: z.object({
+  goals: obj({
     summary: str,
-    on_track: strList,
-    at_risk: strList,
+    items: objList(goalAdvice),
   }),
-  body: z.object({ summary: str }),
-  nutrition: z.object({ summary: str }),
+  body: obj({ summary: str, trajectory: str }),
+  nutrition: obj({ summary: str, advice: str }),
+  priorities: objList(priority),
   focus: strList,
 })
 
 /* ------------------------------------------------------------------ */
-/* Input gathering — a compact plain-text training summary             */
+/* Prompt                                                              */
 /* ------------------------------------------------------------------ */
 
-const MAX_INPUT_CHARS = 4000
+const SYSTEM_PROMPT = `You are a sharp, concise strength & physique coach. You are GIVEN computed analytics as JSON — DO NOT invent or recompute numbers; reference ONLY the provided figures (e1RM rates, %complete, required vs actual weekly rates, projected ETAs, volume, adherence, mesocycle week). When a figure is null, say the data is thin rather than guessing.
 
-function round1(n: number): number {
-  return Math.round(n * 10) / 10
+Return ONLY a JSON object (no markdown, no prose outside the JSON) with EXACTLY this shape:
+{
+  "headline": string,            // one punchy line on where training stands now
+  "overview": string,            // 3-5 sentences citing real numbers from the analytics
+  "pacing": string,              // overall mesocycle/goal pacing read, with specifics (week X of Y, ahead/behind, ETAs)
+  "training": {
+    "summary": string,           // how the lifts are progressing overall
+    "lifts": [                   // one entry per ACTUAL lift in analytics.lifts (<= 8)
+      {
+        "exercise": string,                                                              // exact name from the analytics
+        "status": "progressing" | "stalling" | "calibrating" | "regressing" | "maintaining",
+        "note": string,          // cite its figures: e1RM change/%, weekly rate, last decision, stalled?
+        "advice": string         // one concrete next step for THIS lift
+      }
+    ],
+    "laggingMuscles": string[],  // muscle areas with low volume or stalled lifts (<= 8)
+    "strongAreas": string[]      // muscle areas / lifts moving well (<= 8)
+  },
+  "goals": {
+    "summary": string,           // overall goal progress in a sentence
+    "items": [                   // one entry per ACTUAL goal in analytics.goals (<= 8), mapped by title
+      {
+        "title": string,                                                  // exact goal title from the analytics
+        "status": "achieved" | "ahead" | "on_track" | "behind" | "no_data",
+        "note": string,          // cite %complete, required vs actual weekly rate, projected ETA
+        "recommendation": string // concrete action to hit or hold the goal
+      }
+    ]
+  },
+  "body": { "summary": string, "trajectory": string },   // weight/bodyfat now + direction, citing weeklyRate
+  "nutrition": { "summary": string, "advice": string },  // intake vs targets, adherence %, one adjustment
+  "priorities": [                // ranked, specific next actions (<= 8)
+    { "title": string, "why": string }
+  ],
+  "focus": string[]              // <= 3 short bullets for a Today nudge, derived from priorities
 }
 
-/**
- * Build a COMPACT plain-text summary of the user's training for the LLM. Mirrors
- * the Progress page: runs the engine over set_logs grouped by exercise in week
- * order to get each lift's latest e1RM, trend, last decision, and any stall.
- * Adds goals (with computed progress %), recent body metrics, and nutrition vs
- * the active diet block. Summarized — never raw rows — and capped in length.
- */
-export async function gatherAnalysisInput(): Promise<string> {
-  const supabase = await createClient()
-  const userId = await requireUserId(supabase)
-
-  const profile = await getProfile()
-  const unit = profile?.unit ?? 'lb'
-  const lines: string[] = []
-
-  /* --- Program + current week --- */
-  const program = await getActiveProgram()
-  if (!program) {
-    lines.push('No active program set up yet.')
-  } else {
-    const week = weekForDate(program.start_date, program.length_weeks)
-    lines.push(
-      `Program: ${program.name} (week ${week} of ${program.length_weeks}, deload week ${program.deload_week}).`,
-    )
-  }
-
-  /* --- Per-lift engine readout --- */
-  if (program) {
-    const full = await getProgramFull(program.id)
-    const slots = full?.slots ?? []
-    const slotById = new Map<string, ExerciseSlot>(slots.map((s) => [s.id, s]))
-
-    const { data: logRows } = await supabase
-      .from('set_logs')
-      .select('*')
-      .eq('user_id', userId)
-      .order('week', { ascending: true })
-      .order('created_at', { ascending: true })
-    const logs = (logRows as SetLog[]) ?? []
-    const deloadWeek = program.deload_week
-
-    // Group by exercise_name, run the engine in sequence (mirror Progress page).
-    const groups = new Map<string, { slot: ExerciseSlot; logs: SetLog[] }>()
-    for (const log of logs) {
-      const slot = slotById.get(log.slot_id)
-      if (!slot) continue
-      const g = groups.get(slot.exercise_name)
-      if (g) g.logs.push(log)
-      else groups.set(slot.exercise_name, { slot, logs: [log] })
-    }
-
-    type LiftRow = {
-      name: string
-      area: string | null
-      latestE1rm: number | null
-      firstE1rm: number | null
-      decision: string
-      stalled: boolean
-      logCount: number
-    }
-    const liftRows: LiftRow[] = []
-
-    for (const [name, { slot, logs: groupLogs }] of groups) {
-      const config = slotConfigFromRow(slot)
-      const e1rms: number[] = []
-      const samples: { e1rm: number | null; decision: ReturnType<typeof evaluateSlot>['decision'] }[] = []
-      let prevLog: SetLog | null = null
-      let lastDecision = '—'
-
-      for (const log of groupLogs) {
-        const prev = derivePrevTargets(config, prevLog, log.week - 1, deloadWeek)
-        const result = evaluateSlot(setLogInputFromRow(log), config, {
-          week: log.week,
-          deloadWeek,
-          prevNextLoad: prev.prevNextLoad,
-          prevNextSets: prev.prevNextSets,
-          prevNextReps: prev.prevNextReps,
-        })
-        if (result.e1rm != null) e1rms.push(result.e1rm)
-        samples.push({ e1rm: result.e1rm, decision: result.decision })
-        lastDecision = result.decisionLabel
-        prevLog = log
-      }
-
-      const { stalled } = detectStall(samples)
-      liftRows.push({
-        name,
-        area: slot.muscle_area,
-        latestE1rm: e1rms.length ? e1rms[e1rms.length - 1] : null,
-        firstE1rm: e1rms.length ? e1rms[0] : null,
-        decision: lastDecision,
-        stalled,
-        logCount: groupLogs.length,
-      })
-    }
-
-    if (liftRows.length === 0) {
-      lines.push('No sessions logged yet.')
-    } else {
-      liftRows.sort((a, b) => b.logCount - a.logCount || a.name.localeCompare(b.name))
-      lines.push('Lifts:')
-      for (const l of liftRows) {
-        const trend =
-          l.latestE1rm != null && l.firstE1rm != null
-            ? `e1RM ${round1(l.latestE1rm)}${unit} (${l.latestE1rm >= l.firstE1rm ? '+' : ''}${round1(l.latestE1rm - l.firstE1rm)} since start)`
-            : 'no e1RM yet'
-        const area = l.area ? ` [${l.area}]` : ''
-        const stall = l.stalled ? ', STALLED' : ''
-        lines.push(`- ${l.name}${area}: ${trend}, last call "${l.decision}"${stall}`)
-      }
-    }
-  }
-
-  /* --- Goals with computed progress % --- */
-  const { data: goalRows } = await supabase
-    .from('goals')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-  const goals = (goalRows as Goal[]) ?? []
-  if (goals.length > 0) {
-    lines.push('Goals:')
-    for (const g of goals) {
-      const current = await deriveGoalCurrent(supabase, userId, g)
-      const prog = computeProgress(g.start_value, current, g.target_value)
-      const pct = prog ? `${Math.round(prog.pct)}% there` : 'progress unknown'
-      const target =
-        g.target_value != null
-          ? ` (target ${g.target_value}${g.target_unit ? g.target_unit : ''}${g.target_date ? ` by ${g.target_date.slice(0, 10)}` : ''})`
-          : ''
-      lines.push(`- ${g.title}: ${pct}${target}`)
-    }
-  }
-
-  /* --- Recent body metrics (~6) --- */
-  const { data: bodyRows } = await supabase
-    .from('body_metrics')
-    .select('*')
-    .eq('user_id', userId)
-    .order('measured_on', { ascending: false })
-    .limit(6)
-  const body = (bodyRows as BodyMetric[]) ?? []
-  if (body.length > 0) {
-    const oldest = body[body.length - 1]
-    const newest = body[0]
-    const bw =
-      newest.bodyweight != null
-        ? `bodyweight ${newest.bodyweight}${unit}${
-            oldest.bodyweight != null && oldest !== newest
-              ? ` (${newest.bodyweight >= oldest.bodyweight ? '+' : ''}${round1(newest.bodyweight - oldest.bodyweight)} over last ${body.length} readings)`
-              : ''
-          }`
-        : null
-    const bf = newest.bodyfat_pct != null ? `bodyfat ${newest.bodyfat_pct}%` : null
-    const parts = [bw, bf].filter(Boolean)
-    if (parts.length) lines.push(`Body: ${parts.join(', ')} (latest ${newest.measured_on.slice(0, 10)}).`)
-  }
-
-  /* --- Recent nutrition vs active diet block --- */
-  const { data: blockRows } = await supabase
-    .from('blocks')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('kind', 'diet')
-    .eq('is_active', true)
-    .order('start_date', { ascending: false })
-    .limit(1)
-  const activeBlock = (blockRows?.[0] as Block | undefined) ?? null
-
-  const { data: nutritionRows } = await supabase
-    .from('nutrition_logs')
-    .select('*')
-    .eq('user_id', userId)
-    .order('logged_on', { ascending: false })
-    .limit(7)
-  const nutrition = (nutritionRows as NutritionLog[]) ?? []
-  if (nutrition.length > 0) {
-    const cals = nutrition.map((n) => n.calories).filter((v): v is number => v != null)
-    const protein = nutrition.map((n) => n.protein).filter((v): v is number => v != null)
-    const avgCals = cals.length ? Math.round(cals.reduce((a, b) => a + b, 0) / cals.length) : null
-    const avgProtein = protein.length ? Math.round(protein.reduce((a, b) => a + b, 0) / protein.length) : null
-    const parts: string[] = []
-    if (avgCals != null) {
-      parts.push(
-        `avg ${avgCals} kcal/day over last ${nutrition.length}` +
-          (activeBlock?.calorie_target != null ? ` (target ${activeBlock.calorie_target})` : ''),
-      )
-    }
-    if (avgProtein != null) {
-      parts.push(
-        `avg ${avgProtein}g protein` +
-          (activeBlock?.protein_target != null ? ` (target ${activeBlock.protein_target}g)` : ''),
-      )
-    }
-    if (activeBlock) parts.push(`diet block "${activeBlock.name}"${activeBlock.phase ? ` (${activeBlock.phase})` : ''}`)
-    if (parts.length) lines.push(`Nutrition: ${parts.join(', ')}.`)
-  } else if (activeBlock) {
-    lines.push(`Nutrition: diet block "${activeBlock.name}" active but no recent logs.`)
-  }
-
-  const text = lines.join('\n')
-  return text.length > MAX_INPUT_CHARS ? text.slice(0, MAX_INPUT_CHARS) : text
-}
-
-/** Live "current" value for a goal where derivable (mirrors the Goals page). */
-async function deriveGoalCurrent(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  goal: Goal,
-): Promise<number | null> {
-  switch (goal.metric_type) {
-    case 'bodyweight':
-    case 'bodyfat': {
-      const { data } = await supabase
-        .from('body_metrics')
-        .select('bodyweight, bodyfat_pct')
-        .eq('user_id', userId)
-        .order('measured_on', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      const row = data as { bodyweight: number | null; bodyfat_pct: number | null } | null
-      return goal.metric_type === 'bodyweight' ? row?.bodyweight ?? null : row?.bodyfat_pct ?? null
-    }
-    case 'e1rm': {
-      if (!goal.exercise_name) return null
-      const { data } = await supabase
-        .from('set_logs')
-        .select('actual_load, best_reps, slot:exercise_slots!inner(exercise_name)')
-        .eq('user_id', userId)
-        .eq('slot.exercise_name', goal.exercise_name)
-        .not('actual_load', 'is', null)
-        .not('best_reps', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(60)
-      let best: number | null = null
-      for (const row of (data ?? []) as Array<{ actual_load: number | null; best_reps: number | null }>) {
-        if (row.actual_load != null && row.best_reps != null) {
-          const e = epley1RM(row.actual_load, row.best_reps)
-          if (best == null || e > best) best = e
-        }
-      }
-      return best == null ? null : round1(best)
-    }
-    default:
-      return null
-  }
-}
+Be specific: name the lift or goal, cite the % or rate, and give a concrete next step. Keep every string scannable. Echo each lift's exact "exercise" name and each goal's exact "title" so the app can match them. Use the status values that the analytics imply. If a section has no data, say so briefly and use empty arrays. Never output a number that is not in the analytics.`
 
 /* ------------------------------------------------------------------ */
 /* Generation + storage                                               */
 /* ------------------------------------------------------------------ */
 
-const SYSTEM_PROMPT = `You are a concise, no-nonsense strength coach. You are given a compact summary of one lifter's training, goals, bodyweight, and nutrition. Produce a LIGHTWEIGHT structured overview — not a chat reply.
+const MAX_INPUT_CHARS = 12000
 
-Return ONLY a JSON object (no markdown, no prose outside the JSON) with EXACTLY this shape:
-{
-  "headline": string,            // one punchy line on where training stands now
-  "overview": string,            // 2-4 sentence plain-language summary
-  "training": {
-    "summary": string,           // how the lifts are progressing overall
-    "strong_areas": string[],    // lifts/muscle groups moving well (<= 6 short items)
-    "lagging_areas": string[]    // lifts that stalled or lag (<= 6 short items)
-  },
-  "goals": {
-    "summary": string,           // overall goal progress in a sentence
-    "on_track": string[],        // goals on pace (<= 6 short items)
-    "at_risk": string[]          // goals behind or stalled (<= 6 short items)
-  },
-  "body": { "summary": string },       // bodyweight / composition trend in a sentence
-  "nutrition": { "summary": string },  // intake vs targets in a sentence
-  "focus": string[]              // up to 3 concrete things to focus on next (short, actionable)
+/** Default per-array caps — top-N most relevant rows kept for the LLM. */
+const DEFAULT_CAPS = { lifts: 12, goals: 12, volume: 12 }
+
+type ArrayCaps = { lifts: number; goals: number; volume: number }
+
+/** Round stray floats to 2dp; pass everything else through untouched. */
+function roundFloats(_key: string, value: unknown): unknown {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.round(value * 100) / 100
+    : value
 }
 
-Keep every string short and scannable. If a section has no data, say so briefly and use empty arrays. Be specific to the numbers given; do not invent data.`
+/**
+ * Clamp the unbounded arrays to the top-N most relevant rows: lifts by session
+ * count, volume by tonnage, and goals in their existing active-first order. The
+ * other (bounded) sections pass through unchanged.
+ */
+function clampAnalytics(analytics: TrainingAnalytics, caps: ArrayCaps): TrainingAnalytics {
+  const lifts = [...analytics.lifts]
+    .sort((a, b) => b.sessions - a.sessions)
+    .slice(0, caps.lifts)
+  const goals = analytics.goals.slice(0, caps.goals)
+  const volume = [...analytics.volume]
+    .sort((a, b) => b.weeklyTonnage - a.weeklyTonnage)
+    .slice(0, caps.volume)
+  return { ...analytics, lifts, goals, volume }
+}
 
 /**
- * Gather input, ask the LLM for the structured overview, validate it, store it
- * in ai_analyses, and return the payload.
+ * Serialize analytics as compact JSON, rounding stray floats. Caps the size
+ * STRUCTURALLY (whole rows, ranked by relevance) so the payload is always
+ * well-formed JSON within budget — a raw `slice()` could truncate mid-object
+ * into invalid JSON for power users with many lifts/goals. The length check is
+ * only a backstop, applied by shedding more whole rows (never a mid-JSON cut).
+ */
+function serializeAnalytics(analytics: TrainingAnalytics): string {
+  let caps: ArrayCaps = { ...DEFAULT_CAPS }
+  let json = JSON.stringify(clampAnalytics(analytics, caps), roundFloats)
+
+  // Backstop on already-valid JSON: if the clamped payload still overruns (e.g.
+  // very long string fields), halve the caps and re-serialize whole rows until
+  // it fits or there is nothing left to drop.
+  while (
+    json.length > MAX_INPUT_CHARS &&
+    (caps.lifts > 1 || caps.goals > 1 || caps.volume > 1)
+  ) {
+    caps = {
+      lifts: Math.max(1, Math.floor(caps.lifts / 2)),
+      goals: Math.max(1, Math.floor(caps.goals / 2)),
+      volume: Math.max(1, Math.floor(caps.volume / 2)),
+    }
+    json = JSON.stringify(clampAnalytics(analytics, caps), roundFloats)
+  }
+  return json
+}
+
+/**
+ * Compute analytics, ask the LLM to interpret them into the structured overview,
+ * validate it, store it in ai_analyses, and return the payload.
  */
 export async function generateAndStoreAnalysis(): Promise<AnalysisPayload> {
   // Defense-in-depth: the gate travels with the paid OpenAI call, not just the
@@ -365,10 +218,11 @@ export async function generateAndStoreAnalysis(): Promise<AnalysisPayload> {
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
 
-  const input = await gatherAnalysisInput()
+  const analytics = await gatherAnalytics()
   const raw = await callOpenAIJson({
     system: SYSTEM_PROMPT,
-    user: `Here is the training summary:\n\n${input}`,
+    user: `Here are the computed analytics (JSON). Interpret them — do not change the numbers:\n\n${serializeAnalytics(analytics)}`,
+    maxOutputTokens: 3000,
   })
 
   const payload = analysisSchema.parse(raw)
@@ -398,8 +252,24 @@ export async function getLatestAnalysis(): Promise<AiAnalysis | null> {
   const row = (data as AiAnalysis | null) ?? null
   if (!row) return null
 
-  // A legacy/malformed cached payload must not crash the pages that read it.
+  // A legacy / malformed cached payload must not crash the pages that read it.
   const parsed = analysisSchema.safeParse(row.payload)
   if (!parsed.success) return null
   return { ...row, payload: parsed.data }
+}
+
+/**
+ * Convenience for the pages: ALWAYS compute the deterministic analytics, and
+ * return the cached LLM advice alongside (null when none / not generated). The
+ * analytics need no allowlist or LLM; only the analysis is gated + cached.
+ */
+export async function getAnalyticsAndAnalysis(): Promise<{
+  analytics: TrainingAnalytics
+  analysis: AiAnalysis | null
+}> {
+  const [analytics, analysis] = await Promise.all([
+    gatherAnalytics(),
+    getLatestAnalysis(),
+  ])
+  return { analytics, analysis }
 }
