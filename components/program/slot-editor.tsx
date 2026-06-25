@@ -1,10 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Save, Trash2 } from 'lucide-react'
+import { Library, Loader2, Save, Search, Trash2 } from 'lucide-react'
 import type { ExerciseSlot, Unit } from '@/lib/types'
 import type { ProgressBias } from '@/lib/engine/engine'
+import {
+  type CatalogExercise,
+  groupCatalogByMuscle,
+  searchCatalog,
+} from '@/lib/exercises/catalog'
 import {
   Sheet,
   SheetContent,
@@ -12,7 +17,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -66,10 +79,32 @@ export function SlotEditor({
   const [order, setOrder] = useState(String(slot.order_index))
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const pickerGroups = useMemo(
+    () => groupCatalogByMuscle(searchCatalog(query)),
+    [query],
+  )
+
+  // Fill the form from a library pick; the user can still tweak any field after.
+  function applyCatalog(ex: CatalogExercise) {
+    setName(ex.name)
+    setMuscle(ex.muscleArea)
+    setBias(ex.progressBias)
+    setRepLow(String(ex.repLow))
+    setRepHigh(String(ex.repHigh))
+    setIncrement(String(ex.loadIncrement))
+    setBodyweight(ex.isBodyweight)
+    setPickerOpen(false)
+    setQuery('')
+  }
 
   // Re-sync the form from the slot each time the sheet opens.
   useEffect(() => {
     if (!open) return
+    setPickerOpen(false)
+    setQuery('')
     setName(slot.exercise_name)
     setMuscle(slot.muscle_area ?? '')
     setBias(slot.progress_bias)
@@ -146,6 +181,16 @@ export function SlotEditor({
         </SheetHeader>
 
         <div className="space-y-4 px-5 pb-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full justify-start"
+            onClick={() => setPickerOpen(true)}
+          >
+            <Library aria-hidden />
+            Choose from library
+          </Button>
+
           <div className="space-y-1.5">
             <Label htmlFor="ex-name">Exercise</Label>
             <Input
@@ -363,6 +408,77 @@ export function SlotEditor({
           </Button>
         </div>
       </SheetContent>
+
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="flex max-h-[80vh] flex-col gap-0 p-0 sm:max-w-lg">
+          <DialogHeader className="space-y-1.5 px-5 pb-3 pt-5 text-left">
+            <DialogTitle>Exercise library</DialogTitle>
+            <DialogDescription>
+              Pick a movement to auto-fill its defaults — you can still edit
+              everything afterward.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-5 pb-3">
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+                aria-hidden
+              />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name or muscle"
+                aria-label="Search the exercise library"
+                autoFocus
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+            {pickerGroups.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted">
+                No exercises match “{query.trim()}”.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {pickerGroups.map((group) => (
+                  <div key={group.muscleArea} className="space-y-1.5">
+                    <h3 className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
+                      {group.muscleArea}
+                    </h3>
+                    <ul className="space-y-1">
+                      {group.exercises.map((ex) => (
+                        <li key={ex.name}>
+                          <button
+                            type="button"
+                            onClick={() => applyCatalog(ex)}
+                            className="flex w-full items-center gap-2 rounded-md border border-border bg-background/40 px-3 py-2 text-left transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium text-foreground">
+                                {ex.name}
+                              </span>
+                              <span className="block truncate text-xs text-muted">
+                                {ex.muscleArea} · {ex.repLow}–{ex.repHigh} reps ·{' '}
+                                {ex.progressBias}
+                              </span>
+                            </span>
+                            {ex.isBodyweight ? (
+                              <Badge variant="secondary">BW</Badge>
+                            ) : null}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   )
 }
