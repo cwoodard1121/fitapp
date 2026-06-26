@@ -12,21 +12,14 @@ import {
   ListChecks,
 } from 'lucide-react'
 
-import type {
-  AiAnalysis,
-  GoalAdvice,
-  LiftAdvice,
-  Priority,
-} from '@/lib/types'
+import type { AiAnalysis, Priority } from '@/lib/types'
 import {
-  Badge,
   Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-  Separator,
 } from '@/components/ui'
 import { generateAnalysisAction } from '@/app/(app)/analysis/actions'
 
@@ -96,10 +89,10 @@ export function AnalysisPanel({ analysis, allowed }: AnalysisPanelProps) {
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted">
-              Generate an AI read of where your training stands — per-lift and
-              per-goal pacing, body and nutrition trajectory, and a ranked list
-              of what to do next. It interprets the computed numbers; it never
-              invents them.
+              Generate a short read of where your training, goals, body, and
+              nutrition stand, plus the top things to do next. It interprets the
+              computed numbers; it never invents them. Per-lift and per-goal
+              detail shows up on Today and Goals.
             </p>
             <Button onClick={handleGenerate} disabled={pending}>
               <Sparkles className="size-4" aria-hidden />
@@ -119,57 +112,71 @@ export function AnalysisPanel({ analysis, allowed }: AnalysisPanelProps) {
 function AnalysisBody({ analysis }: { analysis: AiAnalysis }) {
   const p = analysis.payload
 
+  // One-line reads per area. The lift-by-lift and goal-by-goal detail lives on
+  // Today (coach notes) and Goals (pacing board) — here we stay high-level.
+  const reads: { label: string; text: string }[] = [
+    { label: 'Training', text: p.training.summary },
+    { label: 'Goals', text: p.goals.summary },
+    { label: 'Body', text: [p.body.summary, p.body.trajectory].filter(Boolean).join(' ') },
+    {
+      label: 'Nutrition',
+      text: [p.nutrition.summary, p.nutrition.advice].filter(Boolean).join(' '),
+    },
+  ].filter((r) => r.text.trim() !== '')
+
+  const hasTags =
+    p.training.strongAreas.length > 0 || p.training.laggingMuscles.length > 0
+
   return (
-    <div className="space-y-5">
-      {/* Headline + overview + pacing. */}
+    <div className="space-y-4">
+      {/* Headline + overview + pacing — the gist in three short beats. */}
       <div className="space-y-2">
         {p.headline ? (
-          <p className="text-sm font-semibold text-foreground">{p.headline}</p>
+          <p className="text-sm font-semibold leading-snug text-foreground">
+            {p.headline}
+          </p>
         ) : null}
         {p.overview ? (
           <p className="text-sm leading-snug text-muted">{p.overview}</p>
         ) : null}
         {p.pacing ? (
-          <p className="rounded-md border border-border bg-surface p-3 text-sm leading-snug text-foreground">
+          <p className="rounded-md border border-border bg-surface p-2.5 text-sm leading-snug text-foreground">
             {p.pacing}
           </p>
         ) : null}
       </div>
 
-      {/* Ranked priorities. */}
+      {/* Top 3 actions — the actionable core. */}
       {p.priorities.length > 0 ? (
         <div className="space-y-2">
           <SectionLabel icon={<ListChecks className="size-3.5" aria-hidden />}>
-            Priorities
+            Do next
           </SectionLabel>
           <ol className="space-y-2">
-            {p.priorities.slice(0, 8).map((pri, i) => (
+            {p.priorities.slice(0, 3).map((pri, i) => (
               <PriorityRow key={i} index={i + 1} priority={pri} />
             ))}
           </ol>
         </div>
       ) : null}
 
-      <Separator />
+      {/* Compact one-line reads. */}
+      {reads.length > 0 ? (
+        <div className="space-y-2 border-t border-border pt-3">
+          {reads.map((r) => (
+            <div key={r.label} className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
+              <span className="shrink-0 text-[11px] font-medium uppercase tracking-wider text-muted sm:w-20 sm:pt-0.5">
+                {r.label}
+              </span>
+              <p className="text-sm leading-snug text-foreground">{r.text}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
-      {/* Training. */}
-      <div className="space-y-3">
-        <SectionLabel>Training</SectionLabel>
-        {p.training.summary ? (
-          <p className="text-sm leading-snug text-foreground">
-            {p.training.summary}
-          </p>
-        ) : null}
-
-        {p.training.lifts.length > 0 ? (
-          <ul className="divide-y divide-border">
-            {p.training.lifts.map((l, i) => (
-              <LiftAdviceRow key={`${l.exercise}-${i}`} lift={l} />
-            ))}
-          </ul>
-        ) : null}
-
-        <div className="space-y-1.5">
+      {/* Strong / lagging at a glance. */}
+      {hasTags ? (
+        <div className="space-y-1.5 border-t border-border pt-3">
           <TagRow
             label="Strong"
             tone="green"
@@ -182,87 +189,6 @@ function AnalysisBody({ analysis }: { analysis: AiAnalysis }) {
             icon={<TrendingDown className="size-3" aria-hidden />}
             items={p.training.laggingMuscles}
           />
-        </div>
-      </div>
-
-      {/* Goals. */}
-      {p.goals.summary || p.goals.items.length > 0 ? (
-        <>
-          <Separator />
-          <div className="space-y-3">
-            <SectionLabel>Goals</SectionLabel>
-            {p.goals.summary ? (
-              <p className="text-sm leading-snug text-foreground">
-                {p.goals.summary}
-              </p>
-            ) : null}
-            {p.goals.items.length > 0 ? (
-              <ul className="divide-y divide-border">
-                {p.goals.items.map((g, i) => (
-                  <GoalAdviceRow key={`${g.title}-${i}`} goal={g} />
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
-      {/* Body + nutrition. */}
-      {p.body.summary || p.body.trajectory ? (
-        <>
-          <Separator />
-          <div className="space-y-1.5">
-            <SectionLabel>Body</SectionLabel>
-            {p.body.summary ? (
-              <p className="text-sm leading-snug text-foreground">
-                {p.body.summary}
-              </p>
-            ) : null}
-            {p.body.trajectory ? (
-              <p className="text-sm leading-snug text-muted">
-                {p.body.trajectory}
-              </p>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
-      {p.nutrition.summary || p.nutrition.advice ? (
-        <>
-          <Separator />
-          <div className="space-y-1.5">
-            <SectionLabel>Nutrition</SectionLabel>
-            {p.nutrition.summary ? (
-              <p className="text-sm leading-snug text-foreground">
-                {p.nutrition.summary}
-              </p>
-            ) : null}
-            {p.nutrition.advice ? (
-              <p className="text-sm leading-snug text-muted">
-                {p.nutrition.advice}
-              </p>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
-      {/* Today focus nudge. */}
-      {p.focus.length > 0 ? (
-        <div className="space-y-1.5 rounded-md border border-signal/30 bg-signal/5 p-3">
-          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-signal">
-            <Sparkles className="size-3.5" aria-hidden />
-            Focus next
-          </p>
-          <ul className="space-y-1">
-            {p.focus.slice(0, 3).map((f, i) => (
-              <li key={i} className="flex gap-2 text-sm text-foreground">
-                <span className="text-signal" aria-hidden>
-                  •
-                </span>
-                <span>{f}</span>
-              </li>
-            ))}
-          </ul>
         </div>
       ) : null}
 
@@ -301,52 +227,6 @@ function PriorityRow({
   )
 }
 
-function LiftAdviceRow({ lift }: { lift: LiftAdvice }) {
-  return (
-    <li className="space-y-1 py-3 first:pt-0 last:pb-0">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium text-foreground">
-          {lift.exercise}
-        </span>
-        <LiftStatusBadge status={lift.status} />
-      </div>
-      {lift.note ? (
-        <p className="text-xs leading-snug text-muted">{lift.note}</p>
-      ) : null}
-      {lift.advice ? (
-        <p className="text-sm leading-snug text-foreground">
-          <span className="text-signal" aria-hidden>
-            →{' '}
-          </span>
-          {lift.advice}
-        </p>
-      ) : null}
-    </li>
-  )
-}
-
-function GoalAdviceRow({ goal }: { goal: GoalAdvice }) {
-  return (
-    <li className="space-y-1 py-3 first:pt-0 last:pb-0">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium text-foreground">{goal.title}</span>
-        <GoalStatusBadge status={goal.status} />
-      </div>
-      {goal.note ? (
-        <p className="text-xs leading-snug text-muted">{goal.note}</p>
-      ) : null}
-      {goal.recommendation ? (
-        <p className="text-sm leading-snug text-foreground">
-          <span className="text-signal" aria-hidden>
-            →{' '}
-          </span>
-          {goal.recommendation}
-        </p>
-      ) : null}
-    </li>
-  )
-}
-
 /* ------------------------------------------------------------------ */
 /* Bits                                                                */
 /* ------------------------------------------------------------------ */
@@ -364,36 +244,6 @@ function SectionLabel({
       {children}
     </p>
   )
-}
-
-function LiftStatusBadge({ status }: { status: LiftAdvice['status'] }) {
-  switch (status) {
-    case 'progressing':
-      return <Badge variant="success">Progressing</Badge>
-    case 'stalling':
-      return <Badge variant="warning">Stalling</Badge>
-    case 'regressing':
-      return <Badge variant="danger">Regressing</Badge>
-    case 'calibrating':
-      return <Badge variant="signal">Calibrating</Badge>
-    default:
-      return <Badge variant="muted">Maintaining</Badge>
-  }
-}
-
-function GoalStatusBadge({ status }: { status: GoalAdvice['status'] }) {
-  switch (status) {
-    case 'achieved':
-      return <Badge variant="success">Achieved</Badge>
-    case 'ahead':
-      return <Badge variant="success">Ahead</Badge>
-    case 'on_track':
-      return <Badge variant="signal">On track</Badge>
-    case 'behind':
-      return <Badge variant="warning">Behind</Badge>
-    default:
-      return <Badge variant="muted">No data</Badge>
-  }
 }
 
 function TagRow({

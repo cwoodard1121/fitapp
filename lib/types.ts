@@ -254,7 +254,7 @@ export interface Priority {
 export interface AnalysisPayload {
   /** One-line headline summarizing where training stands right now. */
   headline: string;
-  /** 3-5 sentence overview that references real numbers from the analytics. */
+  /** 1-2 sentence big-picture overview that references real numbers. */
   overview: string;
   /** Overall mesocycle / goal pacing read, with specifics. */
   pacing: string;

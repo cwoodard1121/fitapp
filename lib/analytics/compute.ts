@@ -52,14 +52,19 @@ const PACE_BUFFER = 0.1
 const MIN_E1RM_RATE_DAYS = 7
 
 /**
- * Water-weight de-noising. The first ~week+ of a diet phase is mostly
+ * Water-weight de-noising. The first several days of a diet phase are mostly
  * glycogen + water flux ("whoosh" on a cut, the inverse on a bulk), not fat or
  * lean mass — so it must NOT drive rate-of-change / ETA math. We drop readings
  * within SETTLE_DAYS of the diet block start from the SLOPE fit, and require at
  * least MIN_CLEAN_DAYS of post-settle span before we trust a rate.
+ *
+ * Kept deliberately lenient: the 7-day centered smoothing (smooth7) already
+ * damps day-to-day water noise, so a long blackout before showing ANY rate is
+ * unnecessarily strict. One week of settle + ~10 days of clean span surfaces a
+ * trustworthy trend in ~2.5 weeks instead of nearly a month.
  */
-const SETTLE_DAYS = 10
-const MIN_CLEAN_DAYS = 14
+const SETTLE_DAYS = 7
+const MIN_CLEAN_DAYS = 10
 
 /* ------------------------------------------------------------------ */
 /* Small numeric helpers (all null-guarded)                            */

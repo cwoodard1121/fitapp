@@ -23,14 +23,45 @@ import { callOpenAIJson } from './openai'
 /* Schema — EXACTLY mirrors the (richer) AnalysisPayload, tolerant      */
 /* ------------------------------------------------------------------ */
 
-/** Coerce anything to a string, defaulting to ''. */
+/** Coerce anything to a string, defaulting to '' (used for exact-match keys). */
 const str = z.preprocess((v) => (typeof v === 'string' ? v : ''), z.string())
 
-/** Coerce to a string array, dropping non-strings and clamping to <= 8 items. */
-const strList = z.preprocess(
-  (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []),
-  z.array(z.string()).transform((a) => a.slice(0, 8)),
+/**
+ * Humanize identifiers the model may echo straight from the analytics JSON keys
+ * (e.g. "weeklyRate" -> "weekly rate", "weeklyE1rmRate" -> "weekly e1rm rate",
+ * "no_data" -> "no data") so internal field names never reach the UI.
+ * Conservative by design: it only rewrites snake_case and lower-camelCase tokens,
+ * which don't occur in normal coaching prose. The camel pass keys off a
+ * lowercase-LETTER -> uppercase transition, so display terms whose only humps are
+ * digit/upper (e1RM, 1RM, 5RM) plus RIR, 5x5, lb/wk and proper nouns stay intact.
+ */
+function humanizeIdentifiers(s: string): string {
+  return s
+    // snake_case (and ALLCAPS_SNAKE via the i flag): foo_bar -> foo bar
+    .replace(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/gi, (m) => m.replace(/_/g, ' '))
+    // lower-camelCase, including digit-glued humps like weeklyE1rmRate. Requires a
+    // lowercase letter immediately before the first capital so "e1RM" is untouched.
+    .replace(/\b[a-z][a-z0-9]*[a-z][A-Z][A-Za-z0-9]*\b/g, (m) =>
+      m.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase(),
+    )
+}
+
+/** A free-text field: coerced to string, with any leaked identifiers humanized. */
+const prose = z.preprocess(
+  (v) => (typeof v === 'string' ? humanizeIdentifiers(v) : ''),
+  z.string(),
 )
+
+/** Coerce to a human-tag array (identifiers humanized), clamped to <= `max`. */
+function proseList(max: number) {
+  return z.preprocess(
+    (v) =>
+      Array.isArray(v)
+        ? v.filter((x) => typeof x === 'string').map(humanizeIdentifiers)
+        : [],
+    z.array(z.string()).transform((a) => a.slice(0, max)),
+  )
+}
 
 /** A tolerant enum: unknown / missing values fall back to `fallback`. */
 function enumish<T extends string>(values: readonly T[], fallback: T) {
@@ -48,11 +79,11 @@ function obj<T extends z.ZodRawShape>(shape: T) {
   )
 }
 
-/** Coerce to an array of objects, then parse+clamp to <= 8 items. */
-function objList<T extends z.ZodTypeAny>(item: T) {
+/** Coerce to an array of objects, then parse+clamp to <= `max` items. */
+function objList<T extends z.ZodTypeAny>(item: T, max = 8) {
   return z.preprocess(
     (v) => (Array.isArray(v) ? v.filter((x) => x && typeof x === 'object' && !Array.isArray(x)) : []),
-    z.array(item).transform((a) => a.slice(0, 8)),
+    z.array(item).transform((a) => a.slice(0, max)),
   )
 }
 
@@ -62,8 +93,8 @@ const liftAdvice = z.object({
     ['progressing', 'stalling', 'calibrating', 'regressing', 'maintaining'] as const,
     'maintaining',
   ),
-  note: str,
-  advice: str,
+  note: prose,
+  advice: prose,
 })
 
 const goalAdvice = z.object({
@@ -72,76 +103,80 @@ const goalAdvice = z.object({
     ['achieved', 'ahead', 'on_track', 'behind', 'no_data'] as const,
     'no_data',
   ),
-  note: str,
-  recommendation: str,
+  note: prose,
+  recommendation: prose,
 })
 
-const priority = z.object({ title: str, why: str })
+const priority = z.object({ title: prose, why: prose })
 
 export const analysisSchema = z.object({
-  headline: str,
-  overview: str,
-  pacing: str,
+  headline: prose,
+  overview: prose,
+  pacing: prose,
   training: obj({
-    summary: str,
+    summary: prose,
     lifts: objList(liftAdvice),
-    laggingMuscles: strList,
-    strongAreas: strList,
+    laggingMuscles: proseList(6),
+    strongAreas: proseList(6),
   }),
   goals: obj({
-    summary: str,
+    summary: prose,
     items: objList(goalAdvice),
   }),
-  body: obj({ summary: str, trajectory: str }),
-  nutrition: obj({ summary: str, advice: str }),
-  priorities: objList(priority),
-  focus: strList,
+  body: obj({ summary: prose, trajectory: prose }),
+  nutrition: obj({ summary: prose, advice: prose }),
+  priorities: objList(priority, 3),
+  focus: proseList(3),
 })
 
 /* ------------------------------------------------------------------ */
 /* Prompt                                                              */
 /* ------------------------------------------------------------------ */
 
-const SYSTEM_PROMPT = `You are a sharp, concise strength & physique coach. You are GIVEN computed analytics as JSON — DO NOT invent or recompute numbers; reference ONLY the provided figures (e1RM rates, %complete, required vs actual weekly rates, projected ETAs, volume, adherence, mesocycle week). When a figure is null, say the data is thin rather than guessing.
+const SYSTEM_PROMPT = `You are a sharp strength & physique coach writing a SHORT overview for an athlete. You are GIVEN computed analytics as JSON — never invent or recompute numbers; reference ONLY the provided figures (e1RM rates, % complete, required vs current weekly rates, projected arrival dates, volume, adherence, mesocycle week). When a figure is null/missing, say the data is thin rather than guessing.
+
+Write like a coach talking, NOT like a data export:
+- Plain, natural language only. NEVER put JSON field names or code-style identifiers in any text — no camelCase, no snake_case. Write "trending about +0.4 lb/week", not "weeklyRate 0.4"; write "not enough data yet", not "no_data". The status values are the ONLY exception and belong solely in "status" fields.
+- Be brief and scannable. Lead with the signal; cut filler. Round numbers. Don't repeat the same point across sections.
 
 Return ONLY a JSON object (no markdown, no prose outside the JSON) with EXACTLY this shape:
 {
-  "headline": string,            // one punchy line on where training stands now
-  "overview": string,            // 3-5 sentences citing real numbers from the analytics
-  "pacing": string,              // overall mesocycle/goal pacing read, with specifics (week X of Y, ahead/behind, ETAs)
+  "headline": string,            // ONE short line: the single most important read right now
+  "overview": string,            // 1-2 sentences — the big picture with a couple of real numbers
+  "pacing": string,              // ONE sentence on mesocycle/goal pacing (week X of Y, ahead/behind, an arrival date)
   "training": {
-    "summary": string,           // how the lifts are progressing overall
-    "lifts": [                   // one entry per ACTUAL lift in analytics.lifts (<= 8)
+    "summary": string,           // ONE sentence on how the lifts are trending overall
+    "lifts": [                   // one entry per lift in analytics.lifts (<= 8)
       {
-        "exercise": string,                                                              // exact name from the analytics
+        "exercise": string,      // exact name from the analytics
         "status": "progressing" | "stalling" | "calibrating" | "regressing" | "maintaining",
-        "note": string,          // cite its figures: e1RM change/%, weekly rate, last decision, stalled?
-        "advice": string         // one concrete next step for THIS lift
+        "note": string,          // ONE short clause citing its key figure (e1RM change, trend, stalled?)
+        "advice": string         // ONE concrete next step for this lift — a few words
       }
     ],
-    "laggingMuscles": string[],  // muscle areas with low volume or stalled lifts (<= 8)
-    "strongAreas": string[]      // muscle areas / lifts moving well (<= 8)
+    "laggingMuscles": string[],  // muscle areas low on volume or stalled — names only (<= 6)
+    "strongAreas": string[]      // muscle areas / lifts moving well — names only (<= 6)
   },
   "goals": {
-    "summary": string,           // overall goal progress in a sentence
-    "items": [                   // one entry per ACTUAL goal in analytics.goals (<= 8), mapped by title
+    "summary": string,           // ONE sentence on overall goal progress
+    "items": [                   // one entry per goal in analytics.goals (<= 8), matched by title
       {
-        "title": string,                                                  // exact goal title from the analytics
+        "title": string,         // exact goal title from the analytics
         "status": "achieved" | "ahead" | "on_track" | "behind" | "no_data",
-        "note": string,          // cite %complete, required vs actual weekly rate, projected ETA
-        "recommendation": string // concrete action to hit or hold the goal
+        "note": string,          // ONE short clause: % done, needed vs current pace, or arrival date
+        "recommendation": string // ONE concrete action — a few words
       }
     ]
   },
-  "body": { "summary": string, "trajectory": string },   // weight/bodyfat now + direction, citing weeklyRate
-  "nutrition": { "summary": string, "advice": string },  // intake vs targets, adherence %, one adjustment
-  "priorities": [                // ranked, specific next actions (<= 8)
-    { "title": string, "why": string }
+  "body": { "summary": string, "trajectory": string },   // ONE line each: weight/bodyfat now, then the direction
+  "nutrition": { "summary": string, "advice": string },  // ONE line each: intake vs targets, then one adjustment
+  "priorities": [                // the TOP 3 next actions, most important first (<= 3)
+    { "title": string, "why": string }   // title: a few words; why: one short clause
   ],
-  "focus": string[]              // <= 3 short bullets for a Today nudge, derived from priorities
+  "focus": string[]              // <= 3 very short bullets for a Today nudge, drawn from priorities
 }
 
-Be specific: name the lift or goal, cite the % or rate, and give a concrete next step. Keep every string scannable. Echo each lift's exact "exercise" name and each goal's exact "title" so the app can match them. Use the status values that the analytics imply. If a section has no data, say so briefly and use empty arrays. Never output a number that is not in the analytics.`
+Echo each lift's exact "exercise" and each goal's exact "title" so the app can match them. Pick the status the figures imply. If a section has no data, keep its strings empty/brief and use empty arrays. Never output a number that is not in the analytics.`
 
 /* ------------------------------------------------------------------ */
 /* Generation + storage                                               */
