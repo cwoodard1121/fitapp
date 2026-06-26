@@ -61,8 +61,12 @@ export default async function AppLayout({
           email={user?.email ?? null}
         />
         {/* Pages own their own horizontal padding + max-width; the shell only
-            guarantees vertical rhythm and mobile bottom-nav clearance. */}
-        <main className="flex-1 pb-20 pt-4 md:pb-2 md:pt-6">{children}</main>
+            guarantees vertical rhythm and mobile bottom-nav clearance. The
+            bottom pad tracks the tab bar height *and* the home indicator so
+            nothing tucks under the blurred bar on phones. */}
+        <main className="flex-1 pb-nav-room pt-4 md:pb-2 md:pt-6">
+          {children}
+        </main>
       </div>
 
       {/* Mobile bottom tab bar + More sheet (hidden at md+) */}

@@ -61,7 +61,16 @@ const SheetContent = React.forwardRef<
     <SheetOverlay />
     <SheetPrimitive.Content
       ref={ref}
-      className={cn(sheetVariants({ side }), "p-6", className)}
+      className={cn(
+        sheetVariants({ side }),
+        "p-6",
+        // Bottom sheets sit on the home indicator — pad the trailing edge so
+        // their last control never tucks under it. Components that take over
+        // padding (p-0) opt out and handle the inset on their own footer.
+        side === "bottom" &&
+          "pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
+        className,
+      )}
       {...props}
     >
       {children}

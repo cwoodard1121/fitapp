@@ -165,7 +165,7 @@ export function ReadinessSheet({
 
       <SheetContent
         side="bottom"
-        className="max-h-[88svh] overflow-y-auto pb-8"
+        className="max-h-[88svh] overflow-y-auto pb-[calc(2rem+env(safe-area-inset-bottom))]"
       >
         <SheetHeader className="text-left">
           <SheetTitle>

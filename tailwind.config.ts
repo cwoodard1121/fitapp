@@ -10,6 +10,19 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // Safe-area + chrome-clearance tokens. Centralizing the env() math here
+      // keeps every fixed/sticky surface honest about the iOS notch, the home
+      // indicator, the top header, and the mobile tab bar.
+      spacing: {
+        "safe-t": "env(safe-area-inset-top)",
+        "safe-b": "env(safe-area-inset-bottom)",
+        // Sticky top header: 3.5rem row + whatever the notch steals.
+        header: "calc(3.5rem + env(safe-area-inset-top))",
+        // Mobile bottom tab bar footprint: 4rem row + home indicator.
+        nav: "calc(4rem + env(safe-area-inset-bottom))",
+        // Tab bar footprint + 0.5rem breathing room (page content / floating bars).
+        "nav-room": "calc(4.5rem + env(safe-area-inset-bottom))",
+      },
       colors: {
         background: "var(--bg)",
         surface: "var(--surface)",

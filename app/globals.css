@@ -61,6 +61,18 @@
   }
 }
 
+/* Keep toasts clear of the mobile bottom tab bar. Sonner's built-in
+   mobileOffset only covers <=600px, but our tab bar (md:hidden) stays up to
+   767px — so we own the bottom offset across the whole tab-bar range, keyed to
+   the same breakpoint as the nav. !important overrides Sonner's runtime-injected
+   styles regardless of source order. Above md the sidebar replaces the tab bar,
+   so Sonner's default offset is correct and this rule does not apply. */
+@media (max-width: 767.98px) {
+  [data-sonner-toaster][data-y-position="bottom"] {
+    bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
+  }
+}
+
 /* Honor users who ask for less motion. */
 @media (prefers-reduced-motion: reduce) {
   *,

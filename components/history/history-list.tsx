@@ -94,8 +94,9 @@ export function HistoryList({ sessions, exerciseNames, unit }: HistoryListData) 
 
   return (
     <div className="space-y-5">
-      {/* Filter — sticky on mobile so it stays in thumb reach while scrolling. */}
-      <div className="sticky top-0 z-10 -mx-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      {/* Filter — sticky on mobile so it stays in thumb reach while scrolling.
+          Parks just below the sticky app header instead of colliding with it. */}
+      <div className="sticky top-header z-10 -mx-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 shrink-0 text-muted" aria-hidden />
           <Select value={filter} onValueChange={setFilter}>

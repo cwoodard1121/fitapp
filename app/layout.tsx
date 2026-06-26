@@ -43,6 +43,9 @@ export default function RootLayout({
     >
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         {children}
+        {/* Toasts are lifted above the mobile tab bar in globals.css, keyed to
+            the same md breakpoint as the nav (Sonner's own mobileOffset only
+            covers <=600px, which would leave a gap up to 767px). */}
         <Toaster richColors theme="dark" />
         <ServiceWorker />
       </body>

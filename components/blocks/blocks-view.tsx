@@ -114,8 +114,8 @@ export function BlocksView({ blocks, activeProgram }: BlocksViewProps) {
         </TabsContent>
       </Tabs>
 
-      {/* Sticky mobile CTA */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-surface/80 sm:hidden">
+      {/* Sticky mobile CTA — parked above the bottom tab bar. */}
+      <div className="fixed inset-x-0 bottom-nav z-20 border-t border-border bg-surface/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-surface/80 sm:hidden">
         <Button className="w-full" size="touch" onClick={() => openCreate(tab)}>
           <Plus aria-hidden />
           New {tab === "diet" ? "diet" : "training"} block

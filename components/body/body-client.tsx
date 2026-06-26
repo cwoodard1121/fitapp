@@ -146,9 +146,9 @@ export function BodyClient({ entries, unit, today }: BodyClientProps) {
         </>
       )}
 
-      {/* Mobile sticky log bar */}
+      {/* Mobile sticky log bar — floats just above the bottom tab bar. */}
       {entries.length > 0 ? (
-        <div className="sticky bottom-4 z-30 sm:hidden">
+        <div className="sticky bottom-nav-room z-30 sm:hidden">
           <Button onClick={openLogToday} size="touch" className="shadow-lg">
             <Plus aria-hidden />
             {todayEntry ? "Update today's weight" : "Log today's weight"}

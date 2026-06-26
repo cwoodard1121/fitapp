@@ -379,8 +379,8 @@ export function SlotEditor({
           </div>
         </div>
 
-        {/* Sticky action bar */}
-        <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-surface px-5 py-3">
+        {/* Sticky action bar — trailing pad clears the home indicator. */}
+        <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-surface px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           <Button
             variant="ghost"
             onClick={handleRemove}

@@ -118,8 +118,8 @@ export function DailyIntakeForm({
             />
           </div>
 
-          {/* Sticky save bar on mobile; inline on desktop. */}
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-surface/80 sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+          {/* Sticky save bar on mobile (parked above the tab bar); inline on desktop. */}
+          <div className="fixed inset-x-0 bottom-nav z-20 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-surface/80 sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
             <div className="mx-auto w-full max-w-3xl sm:max-w-none">
               <Button
                 type="submit"

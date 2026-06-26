@@ -174,7 +174,10 @@ export function BlockForm({
             </SheetDescription>
           </SheetHeader>
 
-          <form onSubmit={onSubmit} className="space-y-5 px-5 pb-28">
+          <form
+            onSubmit={onSubmit}
+            className="space-y-5 px-5 pb-[calc(7rem+env(safe-area-inset-bottom))]"
+          >
             {/* Name */}
             <div className="space-y-2">
               <Label htmlFor="block-name">Name</Label>
@@ -388,8 +391,8 @@ export function BlockForm({
               />
             </div>
 
-            {/* Sticky action bar */}
-            <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface/95 p-4 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
+            {/* Sticky action bar — trailing pad clears the home indicator. */}
+            <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface/95 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-surface/80">
               <div className="mx-auto flex w-full max-w-xl gap-3">
                 <Button
                   type="button"

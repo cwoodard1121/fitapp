@@ -105,8 +105,8 @@ export function GoalsBoard({ goals, unit }: GoalsBoardProps) {
         </Tabs>
       )}
 
-      {/* Sticky mobile create bar */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 p-3 backdrop-blur sm:hidden">
+      {/* Sticky mobile create bar — parked above the bottom tab bar. */}
+      <div className="fixed inset-x-0 bottom-nav z-30 border-t border-border bg-background/95 p-3 backdrop-blur sm:hidden">
         <Button size="touch" onClick={openCreate}>
           <Plus aria-hidden />
           New goal

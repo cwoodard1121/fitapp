@@ -42,7 +42,7 @@ export function Header({
   const name = displayName?.trim() || email || "Athlete"
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:px-6">
+    <header className="sticky top-0 z-30 flex h-header items-center justify-between border-b border-border bg-background/95 px-4 pt-safe-t backdrop-blur supports-[backdrop-filter]:bg-background/80 md:px-6">
       <Link
         href="/today"
         aria-label="simplegym home"
