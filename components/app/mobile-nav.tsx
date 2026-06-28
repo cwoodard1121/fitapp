@@ -42,7 +42,7 @@ export function MobileNav() {
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal motion-reduce:transition-none",
+                    "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal active:bg-border/40 motion-reduce:transition-none",
                     active ? "text-signal" : "text-muted hover:text-foreground",
                   )}
                 >
@@ -61,7 +61,7 @@ export function MobileNav() {
               aria-expanded={open}
               aria-current={moreActive ? "page" : undefined}
               className={cn(
-                "flex h-16 w-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal motion-reduce:transition-none",
+                "flex h-16 w-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal active:bg-border/40 motion-reduce:transition-none",
                 moreActive ? "text-signal" : "text-muted hover:text-foreground",
               )}
             >

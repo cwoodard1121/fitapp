@@ -1,6 +1,16 @@
 "use client"
 
-import { Dumbbell, Salad, Link2, Pencil, CalendarRange } from "lucide-react"
+import { useTransition } from "react"
+import {
+  Dumbbell,
+  Salad,
+  Link2,
+  Pencil,
+  CalendarRange,
+  MoreVertical,
+  Trash2,
+} from "lucide-react"
+import { toast } from "sonner"
 
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +18,13 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Stat } from "@/components/ui/stat"
 import { Separator } from "@/components/ui/separator"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import type { Block, BlockKind } from "@/lib/types"
 import {
   computeProgress,
@@ -15,6 +32,7 @@ import {
   formatRange,
   phaseLabel,
 } from "@/components/blocks/utils"
+import { deleteBlock } from "@/app/(app)/blocks/actions"
 
 interface ActiveBlockCardProps {
   kind: BlockKind
@@ -31,9 +49,18 @@ export function ActiveBlockCard({
   onEdit,
   onCreate,
 }: ActiveBlockCardProps) {
+  const [pending, startTransition] = useTransition()
   const isDiet = kind === "diet"
   const Icon = isDiet ? Salad : Dumbbell
   const kindName = isDiet ? "diet" : "training"
+
+  function onDelete(target: Block) {
+    startTransition(async () => {
+      const res = await deleteBlock(target.id)
+      if (res.ok) toast.success("Block deleted")
+      else toast.error(res.error)
+    })
+  }
 
   if (!block) {
     return (
@@ -59,7 +86,11 @@ export function ActiveBlockCard({
   const phase = phaseLabel(kind, block.phase)
 
   return (
-    <Card className="relative overflow-hidden p-5">
+    <Card
+      className={`relative overflow-hidden p-5 transition-opacity ${
+        pending ? "opacity-60" : ""
+      }`}
+    >
       {/* accent edge */}
       <span
         aria-hidden
@@ -81,14 +112,32 @@ export function ActiveBlockCard({
             <p className="truncate text-sm text-muted">{block.goal}</p>
           ) : null}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Edit active block"
-          onClick={() => onEdit(block)}
-        >
-          <Pencil aria-hidden />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Active block actions"
+              disabled={pending}
+            >
+              <MoreVertical aria-hidden />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => onEdit(block)}>
+              <Pencil aria-hidden />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => onDelete(block)}
+              className="text-gate-red focus:text-gate-red"
+            >
+              <Trash2 aria-hidden />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* meta badges */}

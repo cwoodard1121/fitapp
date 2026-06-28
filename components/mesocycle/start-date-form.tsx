@@ -53,7 +53,7 @@ export function StartDateForm({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             disabled={pending}
-            className="h-12 w-full rounded-md border border-border bg-background pl-9 pr-3 font-mono text-sm text-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
+            className="h-12 w-full rounded-md border border-border bg-background pl-9 pr-3 font-mono text-base sm:text-sm text-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
           />
         </div>
         <p className="text-xs text-muted">

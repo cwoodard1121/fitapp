@@ -29,12 +29,19 @@
 
   html {
     -webkit-text-size-adjust: 100%;
+    /* Stop iOS from auto-resizing text on orientation change and keep the
+       app feeling native: no rubber-band overscroll, no double-tap zoom. */
+    overscroll-behavior-y: none;
+    touch-action: manipulation;
   }
 
   body {
     background: var(--bg);
     color: var(--text);
     @apply min-h-screen font-sans antialiased;
+    /* No grey tap flash on touch; let the app's own active/focus states show. */
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
   }
 
   /* Visible focus ring — chartreuse halo with a background gap. */
@@ -43,6 +50,32 @@
     box-shadow:
       0 0 0 2px var(--bg),
       0 0 0 4px var(--signal);
+  }
+
+  /* Interactive chrome should feel like native controls on touch: no iOS
+     long-press callout menu and no text-selection magnifier when tapping or
+     holding a button/link/tab. Content surfaces (inputs, notes, stat readouts)
+     stay fully selectable — only the controls opt out. */
+  button,
+  a,
+  label,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Form controls and their values must always stay selectable/editable even
+     though some are nested under the rule above. */
+  input,
+  textarea,
+  select,
+  [contenteditable] {
+    -webkit-user-select: auto;
+    user-select: auto;
   }
 }
 
