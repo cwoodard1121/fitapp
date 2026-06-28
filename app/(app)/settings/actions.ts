@@ -3,7 +3,13 @@
 import { revalidatePath } from 'next/cache'
 
 import { createClient } from '@/lib/supabase/server'
-import { requireUserId, seedDefaultProgram } from '@/lib/data'
+import {
+  requireUserId,
+  seedDefaultProgram,
+  createProgram,
+  setActiveProgram,
+} from '@/lib/data'
+import { DEFAULT_PROGRAM } from '@/lib/seed/program'
 import { DEFAULT_WEIGHTS, type ReadinessWeights } from '@/lib/engine/engine'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -125,66 +131,29 @@ export async function reseedDefaultProgram(): Promise<ActionResult> {
 }
 
 /* ------------------------------------------------------------------ */
-/* Reset account — wipe all of the user's data back to a fresh start   */
+/* Set program to default (non-destructive — keeps ALL history)        */
 /* ------------------------------------------------------------------ */
 
-// Child tables before parents so the wipe is complete even if an ON DELETE
-// cascade is ever misconfigured. Deleting `programs` already cascades
-// program_days/exercise_slots/sessions/set_logs/set_entries, but we clear them
-// explicitly too. blocks.program_id is ON DELETE SET NULL, so blocks are
-// removed on their own. Profiles is intentionally NOT deleted (1:1 with the
-// auth user) — it is reset to defaults below.
-const USER_TABLES = [
-  'set_entries',
-  'set_logs',
-  'sessions',
-  'exercise_slots',
-  'program_days',
-  'programs',
-  'blocks',
-  'goals',
-  'body_metrics',
-  'nutrition_logs',
-  'ai_analyses',
-] as const
-
-export async function resetAccount(): Promise<ActionResult> {
+export async function resetToDefaultProgram(): Promise<ActionResult> {
   try {
-    const supabase = await createClient()
-    const userId = await requireUserId(supabase)
-
-    for (const table of USER_TABLES) {
-      const { error } = await supabase.from(table).delete().eq('user_id', userId)
-      if (error) {
-        return { ok: false, error: `Could not clear ${table}: ${error.message}` }
-      }
-    }
-
-    // Reset the profile to the column defaults from 0001_init.sql.
-    const { error: profileErr } = await supabase
-      .from('profiles')
-      .update({
-        display_name: null,
-        unit: 'lb',
-        start_date: null,
-        deload_week: 5,
-        readiness_weights: null,
-        maintenance_calories: null,
-      })
-      .eq('id', userId)
-    if (profileErr) return { ok: false, error: profileErr.message }
-
-    // Re-seed the default program so the user lands on a working setup, exactly
-    // like a brand-new account.
-    await seedDefaultProgram()
-
-    // Everything changed — revalidate every route under the root layout.
+    // Create a brand-new copy of the current built-in program and make it the
+    // active one. This NEVER touches sessions, set logs, set entries, body
+    // metrics, goals, nutrition or blocks — all history is preserved, and the
+    // previous program stays available in the program switcher.
+    const program = await createProgram({
+      name: DEFAULT_PROGRAM.name,
+      template: 'starter',
+    })
+    await setActiveProgram(program.id)
     revalidatePath('/', 'layout')
     return { ok: true }
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : 'Could not reset your account.',
+      error:
+        e instanceof Error
+          ? e.message
+          : 'Could not set your program to the default.',
     }
   }
 }

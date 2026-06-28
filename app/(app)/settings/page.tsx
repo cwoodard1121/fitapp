@@ -4,7 +4,7 @@ import { DEFAULT_WEIGHTS } from '@/lib/engine/engine'
 import { ProfileForm } from '@/components/settings/profile-form'
 import { ReadinessWeightsForm } from '@/components/settings/readiness-weights-form'
 import { ReseedProgram } from '@/components/settings/reseed-program'
-import { ResetAccount } from '@/components/settings/reset-account'
+import { ResetProgram } from '@/components/settings/reset-program'
 
 export const metadata = {
   title: 'Settings · simplegym',
@@ -41,7 +41,7 @@ export default async function SettingsPage() {
 
         <ReseedProgram hasProgram={activeProgram != null} />
 
-        <ResetAccount />
+        <ResetProgram />
       </div>
     </div>
   )
