@@ -31,12 +31,16 @@ Fitbit that's actually linked to the Google account you'll sign in with.
    name (`simplegym`), support email, developer contact → Save.
 4. **Audience / Test users** → add **your own Google account** as a Test user.
    (This is what lets you grant the restricted scopes on an unverified app.)
-5. **Data Access → Add or remove scopes** → search "Google Health API" → add:
+5. **Data Access → Add or remove scopes** → search "Google Health API" → add **all** of:
    - `.../auth/googlehealth.activity_and_fitness.readonly` — **steps**
    - `.../auth/googlehealth.sleep.readonly` — **sleep**
-   - `.../auth/googlehealth.health_metrics_and_measurements.readonly` — *(optional: resting HR + HRV)*
+   - `.../auth/googlehealth.health_metrics_and_measurements.readonly` — **weight, body fat, resting HR, HRV**
+   - `.../auth/googlehealth.nutrition.readonly` — **logged calories + macros (intake, not burned)**
 
-   They'll show as **Restricted** — that's expected.
+   They'll show as **Restricted** — that's expected. The app requests all of these,
+   and each is best-effort: a scope you don't grant simply doesn't import (steps/
+   sleep keep working). **Whenever you add a scope, you must come back to the app
+   and click "Reconnect" to actually grant it.**
 
 ## 3. Avoid the 7-day token death (important)
 

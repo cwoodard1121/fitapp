@@ -1,5 +1,6 @@
 import {
   Dumbbell,
+  LayoutDashboard,
   ClipboardList,
   History,
   TrendingUp,
@@ -21,6 +22,7 @@ export interface NavItem {
 
 // Define each destination once so the mobile + desktop navs stay in sync.
 const today: NavItem = { href: "/today", label: "Today", icon: Dumbbell }
+const overview: NavItem = { href: "/overview", label: "Overview", icon: LayoutDashboard }
 const program: NavItem = { href: "/program", label: "Program", icon: ClipboardList }
 const history: NavItem = { href: "/history", label: "History", icon: History }
 const progress: NavItem = { href: "/progress", label: "Progress", icon: TrendingUp }
@@ -34,6 +36,7 @@ const settings: NavItem = { href: "/settings", label: "Settings", icon: Settings
 /** Desktop sidebar: every destination, in logical training order. */
 export const allNav: NavItem[] = [
   today,
+  overview,
   program,
   history,
   progress,
@@ -46,10 +49,10 @@ export const allNav: NavItem[] = [
 ]
 
 /** Mobile bottom bar: the four primary destinations (plus a "More" button). */
-export const primaryNav: NavItem[] = [today, program, progress, body]
+export const primaryNav: NavItem[] = [today, overview, progress, body]
 
 /** Mobile "More" sheet: everything not on the bottom bar. */
-export const moreNav: NavItem[] = [history, mesocycle, blocks, goals, nutrition, settings]
+export const moreNav: NavItem[] = [program, history, mesocycle, blocks, goals, nutrition, settings]
 
 /** True when `pathname` is `href` or a nested route beneath it. */
 export function isActiveRoute(pathname: string, href: string): boolean {

@@ -22,11 +22,16 @@ const HEALTH_BASE = 'https://health.googleapis.com/v4'
 /** Short-lived CSRF cookie holding the OAuth `state` between connect + callback. */
 export const OAUTH_STATE_COOKIE = 'gh_oauth_state'
 
-/** Read scopes. Steps live under activity_and_fitness (no dedicated steps scope). */
+/**
+ * Read scopes. Steps live under activity_and_fitness (no dedicated steps scope);
+ * nutrition is logged INTAKE only (the nutrition-log data type), never the
+ * activity_and_fitness "calories burned" estimate.
+ */
 export const GOOGLE_HEALTH_SCOPES = [
   'https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly',
   'https://www.googleapis.com/auth/googlehealth.sleep.readonly',
   'https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly',
+  'https://www.googleapis.com/auth/googlehealth.nutrition.readonly',
   'openid',
   'email',
 ]
@@ -75,6 +80,23 @@ export interface DailyRecovery {
   sleepAwakeMin: number | null
   restingHr: number | null
   hrvMs: number | null
+}
+
+/** One day's imported nutrition INTAKE (logged food → Fitbit → Google Health). */
+export interface DailyNutrition {
+  date: string
+  /** Total energy consumed, kcal. */
+  calories: number | null
+  protein: number | null
+  carbs: number | null
+  fat: number | null
+}
+
+/** One day's imported body composition. Weight is in KILOGRAMS (convert later). */
+export interface DailyBody {
+  date: string
+  weightKg: number | null
+  bodyFatPct: number | null
 }
 
 /* ------------------------------------------------------------------ */
@@ -218,6 +240,21 @@ function pickInt(obj: unknown, keys: string[]): number | null {
   }
   for (const v of Object.values(rec)) {
     const n = toInt(v)
+    if (n != null) return n
+  }
+  return null
+}
+
+/** Like pickInt, but preserves decimals (weight, body-fat %). */
+function pickNum(obj: unknown, keys: string[]): number | null {
+  if (!obj || typeof obj !== 'object') return null
+  const rec = obj as Record<string, unknown>
+  for (const k of keys) {
+    const n = toNum(rec[k])
+    if (n != null) return n
+  }
+  for (const v of Object.values(rec)) {
+    const n = toNum(v)
     if (n != null) return n
   }
   return null
@@ -499,4 +536,143 @@ export async function fetchRecovery(
   }
   result.sort((a, b) => a.date.localeCompare(b.date))
   return result
+}
+
+/**
+ * Pull the last `days` calendar days of LOGGED nutrition intake (calories +
+ * macros) via the nutrition-log dailyRollUp. INTAKE only — never the
+ * activity_and_fitness "calories burned" estimate. Response field names are
+ * parsed tolerantly (camelCase REST / snake_case proto) since the docs are terse.
+ */
+export async function fetchNutrition(
+  accessToken: string,
+  days = 3,
+  now: Date = new Date(),
+): Promise<DailyNutrition[]> {
+  const win = lookbackWindow(now, days)
+  const body = {
+    range: { start: civilDateTime(win.start), end: civilDateTime(win.end) },
+    windowSizeDays: 1,
+  }
+  const data = (await authedJson(
+    `${HEALTH_BASE}/users/me/dataTypes/nutrition-log/dataPoints:dailyRollUp`,
+    accessToken,
+    { method: 'POST', body: JSON.stringify(body) },
+  )) as { rollupDataPoints?: Array<Record<string, unknown>> }
+
+  const out: DailyNutrition[] = []
+  for (const p of data.rollupDataPoints ?? []) {
+    const date = civilToDateStr(p.civilStartTime)
+    if (!date) continue
+    const nl = (p.nutritionLog ?? p.nutrition_log) as Record<string, unknown> | undefined
+    if (!nl) continue
+
+    const energy = (nl.energyQuantityRollup ?? nl.energy_quantity_rollup) as
+      | Record<string, unknown>
+      | undefined
+    const calories = pickInt(energy, [
+      'kilocaloriesSum',
+      'kilocalories_sum',
+      'kilocalories',
+      'sum',
+      'value',
+    ])
+
+    let protein: number | null = null
+    let carbs: number | null = null
+    let fat: number | null = null
+    const nutrients = (nl.nutrientQuantityRollups ?? nl.nutrient_quantity_rollups) as
+      | Array<Record<string, unknown>>
+      | undefined
+    for (const n of nutrients ?? []) {
+      const type = String(n.nutrient ?? '').toUpperCase()
+      const grams = toNum(n.quantityGrams ?? n.quantity_grams)
+      if (grams == null) continue
+      const g = Math.round(grams)
+      // Match the documented Nutrient enum exactly so SATURATED_FAT / etc. don't
+      // overwrite TOTAL_FAT.
+      if (type === 'PROTEIN') protein = g
+      else if (type === 'TOTAL_CARBOHYDRATE' || type === 'CARBOHYDRATE') carbs = g
+      else if (type === 'TOTAL_FAT') fat = g
+    }
+
+    out.push({ date, calories, protein, carbs, fat })
+  }
+  out.sort((a, b) => a.date.localeCompare(b.date))
+  return out
+}
+
+/** POST a dailyRollUp for one data type and return its rollup points. */
+async function rollupPoints(
+  accessToken: string,
+  dataType: string,
+  win: Window,
+): Promise<Array<Record<string, unknown>>> {
+  const body = {
+    range: { start: civilDateTime(win.start), end: civilDateTime(win.end) },
+    windowSizeDays: 1,
+  }
+  const data = (await authedJson(
+    `${HEALTH_BASE}/users/me/dataTypes/${dataType}/dataPoints:dailyRollUp`,
+    accessToken,
+    { method: 'POST', body: JSON.stringify(body) },
+  )) as { rollupDataPoints?: Array<Record<string, unknown>> }
+  return data.rollupDataPoints ?? []
+}
+
+/**
+ * Pull the last `days` of body composition — daily-average weight (kilograms)
+ * and body-fat %. Each data type is best-effort (a missing scope / no readings
+ * just yields nothing). Weight stays in KG here; the caller converts to the
+ * user's unit.
+ */
+export async function fetchBody(
+  accessToken: string,
+  days = 7,
+  now: Date = new Date(),
+): Promise<DailyBody[]> {
+  const win = lookbackWindow(now, days)
+  const safe = async (dt: string) => {
+    try {
+      return await rollupPoints(accessToken, dt, win)
+    } catch {
+      return [] as Array<Record<string, unknown>>
+    }
+  }
+  const [weightPts, bfPts] = await Promise.all([safe('weight'), safe('body-fat')])
+
+  const map = new Map<string, DailyBody>()
+  const ensure = (date: string) => {
+    const cur = map.get(date) ?? { date, weightKg: null, bodyFatPct: null }
+    map.set(date, cur)
+    return cur
+  }
+
+  for (const p of weightPts) {
+    const date = civilToDateStr(p.civilStartTime)
+    if (!date) continue
+    const kg = pickNum(p.weight ?? p['weight'], [
+      'kilogramsAvg',
+      'kilograms_avg',
+      'kilograms',
+      'avg',
+      'value',
+    ])
+    if (kg != null) ensure(date).weightKg = kg
+  }
+  for (const p of bfPts) {
+    const date = civilToDateStr(p.civilStartTime)
+    if (!date) continue
+    const pct = pickNum(p.bodyFat ?? p['body_fat'], [
+      'bodyFatPercentageAvg',
+      'body_fat_percentage_avg',
+      'percentageAvg',
+      'percentage',
+      'avg',
+      'value',
+    ])
+    if (pct != null) ensure(date).bodyFatPct = pct
+  }
+
+  return [...map.values()].sort((a, b) => a.date.localeCompare(b.date))
 }

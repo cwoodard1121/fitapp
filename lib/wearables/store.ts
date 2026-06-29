@@ -8,10 +8,24 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import type { RecoveryMetric, WearableConnection, WearableStatus } from '@/lib/types'
+import type {
+  BodyMetric,
+  NutritionLog,
+  RecoveryMetric,
+  Unit,
+  WearableConnection,
+  WearableStatus,
+} from '@/lib/types'
 
 import { decryptToken, encryptToken } from './crypto'
-import type { DailyRecovery, TokenSet } from './google-health'
+import type { DailyNutrition, DailyRecovery, TokenSet } from './google-health'
+
+/** One day of body composition in the USER's unit (already converted). */
+export interface DailyBodyRow {
+  date: string
+  bodyweight: number | null
+  bodyFatPct: number | null
+}
 
 const PROVIDER = 'google_health'
 
@@ -181,4 +195,116 @@ export async function getRecentRecovery(
     .limit(limit)
   if (error) throw new Error(error.message)
   return (data as RecoveryMetric[]) ?? []
+}
+
+/** Last `days` recovery rows, oldest -> newest (for charts/trends). */
+export async function getRecoveryRange(
+  supabase: SupabaseClient,
+  userId: string,
+  days = 30,
+): Promise<RecoveryMetric[]> {
+  const { data, error } = await supabase
+    .from('recovery_metrics')
+    .select('*')
+    .eq('user_id', userId)
+    .order('metric_date', { ascending: false })
+    .limit(days)
+  if (error) throw new Error(error.message)
+  return ((data as RecoveryMetric[]) ?? []).reverse()
+}
+
+/**
+ * Upsert wearable-sourced daily nutrition INTAKE into nutrition_logs, MERGING
+ * with existing rows: a wearable value wins when present (auto-fill), but never
+ * overwrites a stored field with null — so manual entries and `notes` survive.
+ * Only days carrying at least one value are written.
+ */
+export async function upsertNutritionDays(
+  supabase: SupabaseClient,
+  userId: string,
+  days: DailyNutrition[],
+): Promise<number> {
+  const present = days.filter(
+    (d) => d.calories != null || d.protein != null || d.carbs != null || d.fat != null,
+  )
+  if (present.length === 0) return 0
+
+  const { data: existingRows, error: readError } = await supabase
+    .from('nutrition_logs')
+    .select('*')
+    .eq('user_id', userId)
+    .in('logged_on', present.map((d) => d.date))
+  if (readError) throw new Error(readError.message)
+  const existing = new Map(
+    ((existingRows as NutritionLog[]) ?? []).map((r) => [r.logged_on, r]),
+  )
+
+  const rows = present.map((d) => {
+    const e = existing.get(d.date)
+    return {
+      user_id: userId,
+      logged_on: d.date,
+      calories: keepOrPrev(d.calories, e?.calories),
+      protein: keepOrPrev(d.protein, e?.protein),
+      carbs: keepOrPrev(d.carbs, e?.carbs),
+      fat: keepOrPrev(d.fat, e?.fat),
+    }
+  })
+  const { error } = await supabase
+    .from('nutrition_logs')
+    .upsert(rows, { onConflict: 'user_id,logged_on' })
+  if (error) throw new Error(error.message)
+  return rows.length
+}
+
+/** The user's weight unit ('lb' default). Works with session OR service client. */
+export async function getUserUnit(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<Unit> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('unit')
+    .eq('id', userId)
+    .maybeSingle()
+  return (data as { unit?: string } | null)?.unit === 'kg' ? 'kg' : 'lb'
+}
+
+/**
+ * Upsert wearable-sourced daily weight + body-fat into body_metrics, MERGING
+ * (wearable wins when present, never nulls out a stored value, preserves notes).
+ * `bodyweight` must already be in the user's unit. Only days with a value write.
+ */
+export async function upsertBodyDays(
+  supabase: SupabaseClient,
+  userId: string,
+  days: DailyBodyRow[],
+): Promise<number> {
+  const present = days.filter((d) => d.bodyweight != null || d.bodyFatPct != null)
+  if (present.length === 0) return 0
+
+  const { data: existingRows, error: readError } = await supabase
+    .from('body_metrics')
+    .select('*')
+    .eq('user_id', userId)
+    .in('measured_on', present.map((d) => d.date))
+  if (readError) throw new Error(readError.message)
+  const existing = new Map(
+    ((existingRows as BodyMetric[]) ?? []).map((r) => [r.measured_on, r]),
+  )
+
+  const rows = present.map((d) => {
+    const e = existing.get(d.date)
+    return {
+      user_id: userId,
+      measured_on: d.date,
+      bodyweight: keepOrPrev(d.bodyweight, e?.bodyweight),
+      bodyfat_pct: keepOrPrev(d.bodyFatPct, e?.bodyfat_pct),
+    }
+  })
+  const { error } = await supabase
+    .from('body_metrics')
+    .upsert(rows, { onConflict: 'user_id,measured_on' })
+  if (error) throw new Error(error.message)
+  return rows.length
 }

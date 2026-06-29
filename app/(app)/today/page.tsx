@@ -11,12 +11,16 @@ import {
   buildTodayView,
   weekForDate,
   mesocycleNumber,
+  requireUserId,
 } from '@/lib/data'
-import type { Session, SessionStatus } from '@/lib/types'
+import type { RecoveryMetric, Session, SessionStatus } from '@/lib/types'
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getLatestAnalysis } from '@/lib/ai/analysis'
+import { createClient } from '@/lib/supabase/server'
+import { getRecoveryRange } from '@/lib/wearables/store'
 import type { LiftAdvice } from '@/lib/types'
 import { Badge } from '@/components/ui/badge'
+import { RecoveryStrip } from '@/components/today/recovery-strip'
 import { AnalysisFocus } from '@/components/analysis/analysis-focus'
 import { ExerciseAdvice } from '@/components/today/exercise-advice'
 import { ActiveProgramSelect } from '@/components/program/active-program-select'
@@ -126,6 +130,20 @@ export default async function TodayPage({
   const payload = allowed ? (await getLatestAnalysis())?.payload ?? null : null
   const focus = payload?.focus ?? []
 
+  // Most recent wearable readout (steps + last night's sleep), gated like the AI.
+  let latestRecovery: RecoveryMetric | null = null
+  if (allowed) {
+    const sb = await createClient()
+    const uid = await requireUserId(sb)
+    const recent = await getRecoveryRange(sb, uid, 3)
+    for (let i = recent.length - 1; i >= 0; i--) {
+      if (recent[i].steps != null || recent[i].sleep_minutes_asleep != null) {
+        latestRecovery = recent[i]
+        break
+      }
+    }
+  }
+
   // Match the AI's per-lift advice to the exercises on the selected day so the
   // log can show inline "coach notes" exactly where they're relevant.
   const adviceByExercise = new Map<string, LiftAdvice>()
@@ -159,6 +177,12 @@ export default async function TodayPage({
       </Header>
 
       <ActiveProgramSelect programs={programs} activeId={program.id} />
+
+      {latestRecovery ? (
+        <div className="mt-4">
+          <RecoveryStrip metric={latestRecovery} />
+        </div>
+      ) : null}
 
       {focus.length > 0 ? (
         <div className="mt-4">
