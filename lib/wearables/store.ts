@@ -239,17 +239,22 @@ export async function upsertNutritionDays(
     ((existingRows as NutritionLog[]) ?? []).map((r) => [r.logged_on, r]),
   )
 
-  const rows = present.map((d) => {
-    const e = existing.get(d.date)
-    return {
-      user_id: userId,
-      logged_on: d.date,
-      calories: keepOrPrev(d.calories, e?.calories),
-      protein: keepOrPrev(d.protein, e?.protein),
-      carbs: keepOrPrev(d.carbs, e?.carbs),
-      fat: keepOrPrev(d.fat, e?.fat),
-    }
-  })
+  const rows = present
+    // Never overwrite a manually-entered day — manual always wins.
+    .filter((d) => existing.get(d.date)?.source !== 'manual')
+    .map((d) => {
+      const e = existing.get(d.date)
+      return {
+        user_id: userId,
+        logged_on: d.date,
+        calories: keepOrPrev(d.calories, e?.calories),
+        protein: keepOrPrev(d.protein, e?.protein),
+        carbs: keepOrPrev(d.carbs, e?.carbs),
+        fat: keepOrPrev(d.fat, e?.fat),
+        source: 'wearable',
+      }
+    })
+  if (rows.length === 0) return 0
   const { error } = await supabase
     .from('nutrition_logs')
     .upsert(rows, { onConflict: 'user_id,logged_on' })
@@ -296,15 +301,20 @@ export async function upsertBodyDays(
     ((existingRows as BodyMetric[]) ?? []).map((r) => [r.measured_on, r]),
   )
 
-  const rows = present.map((d) => {
-    const e = existing.get(d.date)
-    return {
-      user_id: userId,
-      measured_on: d.date,
-      bodyweight: keepOrPrev(d.bodyweight, e?.bodyweight),
-      bodyfat_pct: keepOrPrev(d.bodyFatPct, e?.bodyfat_pct),
-    }
-  })
+  const rows = present
+    // Never overwrite a manual weigh-in — app inputs win over the wearable.
+    .filter((d) => existing.get(d.date)?.source !== 'manual')
+    .map((d) => {
+      const e = existing.get(d.date)
+      return {
+        user_id: userId,
+        measured_on: d.date,
+        bodyweight: keepOrPrev(d.bodyweight, e?.bodyweight),
+        bodyfat_pct: keepOrPrev(d.bodyFatPct, e?.bodyfat_pct),
+        source: 'wearable',
+      }
+    })
+  if (rows.length === 0) return 0
   const { error } = await supabase
     .from('body_metrics')
     .upsert(rows, { onConflict: 'user_id,measured_on' })

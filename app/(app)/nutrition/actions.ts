@@ -75,6 +75,8 @@ export async function upsertNutritionLog(
         carbs: parsed.data.carbs,
         fat: parsed.data.fat,
         notes: parsed.data.notes,
+        // A manual entry always wins over the wearable sync.
+        source: 'manual',
       },
       { onConflict: 'user_id,logged_on' }
     )

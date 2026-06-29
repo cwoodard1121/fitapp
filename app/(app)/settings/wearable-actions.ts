@@ -45,3 +45,24 @@ export async function syncWearableNow(): Promise<WearableActionResult> {
     reauthRequired: res.reauthRequired,
   }
 }
+
+/** Days of history a manual backfill pulls (covers data from ~June 20 on). */
+const BACKFILL_DAYS = 60
+
+/** Pull a wider window of history (steps/sleep/nutrition/weight/body-fat). */
+export async function backfillWearableNow(): Promise<WearableActionResult> {
+  const { allowed } = await getAnalysisAccess()
+  if (!allowed) return { ok: false, error: 'Wearable sync is not enabled for your account.' }
+
+  const supabase = await createClient()
+  const userId = await requireUserId(supabase)
+  const res = await syncUserWearable(supabase, userId, { lookbackDays: BACKFILL_DAYS })
+  revalidatePath('/settings')
+
+  if (res.ok) return { ok: true, daysWritten: res.daysWritten ?? 0 }
+  return {
+    ok: false,
+    error: res.error ?? 'Import failed.',
+    reauthRequired: res.reauthRequired,
+  }
+}

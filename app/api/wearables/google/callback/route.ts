@@ -55,8 +55,9 @@ export async function GET(req: Request): Promise<Response> {
       scopes: tokens.scope ? tokens.scope.split(' ') : null,
     })
 
-    // Best-effort immediate backfill so the UI shows data right away.
-    await syncUserWearable(supabase, userId).catch(() => {})
+    // Best-effort immediate history backfill (wider window) so past data shows
+    // right away on first connect.
+    await syncUserWearable(supabase, userId, { lookbackDays: 60 }).catch(() => {})
 
     return settings('connected')
   } catch (e) {

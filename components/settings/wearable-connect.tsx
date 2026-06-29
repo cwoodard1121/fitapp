@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
-import { Activity, RefreshCw, Plug, Unplug, AlertTriangle } from 'lucide-react'
+import { Activity, RefreshCw, Plug, Unplug, AlertTriangle, History } from 'lucide-react'
 
 import type { RecoveryMetric, WearableStatus } from '@/lib/types'
 import {
@@ -15,7 +15,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui'
-import { disconnectWearable, syncWearableNow } from '@/app/(app)/settings/wearable-actions'
+import {
+  backfillWearableNow,
+  disconnectWearable,
+  syncWearableNow,
+} from '@/app/(app)/settings/wearable-actions'
 
 export interface WearableConnectData {
   connected: boolean
@@ -55,6 +59,19 @@ export function WearableConnect({ data }: { data: WearableConnectData }) {
       const res = await syncWearableNow()
       if (res.ok) {
         toast.success(`Synced — ${res.daysWritten ?? 0} day${res.daysWritten === 1 ? '' : 's'} updated.`)
+        router.refresh()
+      } else {
+        toast.error(res.error)
+        if (res.reauthRequired) router.refresh()
+      }
+    })
+  }
+
+  function handleBackfill() {
+    startTransition(async () => {
+      const res = await backfillWearableNow()
+      if (res.ok) {
+        toast.success(`History imported — ${res.daysWritten ?? 0} day${res.daysWritten === 1 ? '' : 's'} of steps/sleep updated.`)
         router.refresh()
       } else {
         toast.error(res.error)
@@ -127,6 +144,10 @@ export function WearableConnect({ data }: { data: WearableConnectData }) {
               <Button variant="outline" size="sm" onClick={handleSync} disabled={pending}>
                 <RefreshCw className={`size-3.5 ${pending ? 'animate-spin' : ''}`} aria-hidden />
                 Sync now
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleBackfill} disabled={pending}>
+                <History className="size-3.5" aria-hidden />
+                Import history
               </Button>
               <Button asChild variant="outline" size="sm">
                 <a href={CONNECT_HREF}>

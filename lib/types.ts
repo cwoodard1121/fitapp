@@ -165,6 +165,8 @@ export interface BodyMetric {
   bodyweight: number | null;
   bodyfat_pct: number | null;
   notes: string | null;
+  /** 'manual' (app entry) | 'wearable' (imported). Manual is never overwritten. */
+  source: string;
   created_at: string;
 }
 
@@ -215,6 +217,8 @@ export interface NutritionLog {
   carbs: number | null;
   fat: number | null;
   notes: string | null;
+  /** 'manual' (app entry) | 'wearable' (imported). Manual is never overwritten. */
+  source: string;
   created_at: string;
 }
 

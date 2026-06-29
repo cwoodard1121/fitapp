@@ -49,11 +49,18 @@ export interface SyncResult {
   reauthRequired?: boolean
 }
 
-/** Sync one user's wearable. Never throws — returns a structured result. */
+/**
+ * Sync one user's wearable. Never throws — returns a structured result.
+ * Pass `opts.lookbackDays` to widen the window for a one-time history backfill
+ * (steps/nutrition/weight/body-fat use daily rollups, fine over a long range;
+ * sleep is a list capped at the most recent ~25 nights without pagination).
+ */
 export async function syncUserWearable(
   supabase: SupabaseClient,
   userId: string,
+  opts?: { lookbackDays?: number },
 ): Promise<SyncResult> {
+  const back = opts?.lookbackDays
   const conn = await getConnection(supabase, userId).catch(() => null)
   if (!conn) return { ok: false, error: 'No wearable connected.' }
 
@@ -73,14 +80,14 @@ export async function syncUserWearable(
       token = refreshed.accessToken
     }
 
-    const days = await fetchRecovery(token, LOOKBACK_DAYS)
+    const days = await fetchRecovery(token, back ?? LOOKBACK_DAYS)
     const written = await upsertRecoveryDays(supabase, userId, days)
 
     // Best-effort extras — a failure here (e.g. a scope not yet granted, or no
     // readings) must NOT fail the core steps/sleep sync.
     let nutritionDaysWritten = 0
     try {
-      const nutrition = await fetchNutrition(token, NUTRITION_LOOKBACK_DAYS)
+      const nutrition = await fetchNutrition(token, back ?? NUTRITION_LOOKBACK_DAYS)
       nutritionDaysWritten = await upsertNutritionDays(supabase, userId, nutrition)
     } catch (e) {
       console.error('nutrition import skipped:', e instanceof Error ? e.message : e)
@@ -89,7 +96,7 @@ export async function syncUserWearable(
     let bodyDaysWritten = 0
     try {
       const unit = await getUserUnit(supabase, userId)
-      const body = await fetchBody(token, BODY_LOOKBACK_DAYS)
+      const body = await fetchBody(token, back ?? BODY_LOOKBACK_DAYS)
       const converted: DailyBodyRow[] = body.map((d) => ({
         date: d.date,
         bodyweight:

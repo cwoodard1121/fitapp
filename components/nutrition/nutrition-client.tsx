@@ -13,7 +13,7 @@ import {
 
 import { DailyIntakeForm, type IntakeFormValues } from './daily-intake-form'
 import { TargetsProgress } from './targets-progress'
-import { WeeklyDeficit } from './weekly-deficit'
+import { DeficitTracker } from './weekly-deficit'
 import { RecentDays } from './recent-days'
 import { CaloriesTrend } from './calories-trend'
 
@@ -43,10 +43,18 @@ function formFromLog(log: NutritionLog): IntakeFormValues {
 interface NutritionClientProps {
   today: string
   activeBlock: Block | null
+  /** Wide window (used in full by the deficit tracker; sliced for the list/trend). */
   logs: NutritionLog[]
   maintenance: number | null
   unit: Unit
+  /** metric_date -> steps, for the activity-adjusted deficit. */
+  stepsByDate: Record<string, number>
+  /** Latest bodyweight in kg, for the step formula. */
+  weightKg: number | null
 }
+
+/** Recent days kept on screen for the list + trend (the deficit tracker uses all). */
+const RECENT_DAYS = 21
 
 export function NutritionClient({
   today,
@@ -54,9 +62,13 @@ export function NutritionClient({
   logs,
   maintenance,
   unit,
+  stepsByDate,
+  weightKg,
 }: NutritionClientProps) {
   const router = useRouter()
   const [pending, startTransition] = React.useTransition()
+
+  const recentLogs = React.useMemo(() => logs.slice(0, RECENT_DAYS), [logs])
 
   const todayLog = React.useMemo(
     () => logs.find((l) => l.logged_on === today) ?? null,
@@ -125,12 +137,15 @@ export function NutritionClient({
     <div className="flex flex-col gap-5">
       <TargetsProgress activeBlock={activeBlock} todayLog={todayLog} />
 
-      <WeeklyDeficit
+      <DeficitTracker
         logs={logs}
         today={today}
         maintenance={maintenance}
         calorieTarget={activeBlock?.calorie_target ?? null}
         unit={unit}
+        stepsByDate={stepsByDate}
+        weightKg={weightKg}
+        blockStart={activeBlock?.start_date ?? null}
       />
 
       <DailyIntakeForm
@@ -142,13 +157,13 @@ export function NutritionClient({
       />
 
       <CaloriesTrend
-        logs={logs}
+        logs={recentLogs}
         today={today}
         calorieTarget={activeBlock?.calorie_target ?? null}
       />
 
       <RecentDays
-        logs={logs}
+        logs={recentLogs}
         today={today}
         pending={pending}
         onEdit={handleEdit}

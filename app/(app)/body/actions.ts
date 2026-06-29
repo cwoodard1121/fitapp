@@ -62,6 +62,8 @@ export async function upsertBodyMetric(
           bodyweight,
           bodyfat_pct: bodyfat_pct ?? null,
           notes: notes && notes.length > 0 ? notes : null,
+          // A manual weigh-in always wins over the wearable sync.
+          source: 'manual',
         },
         { onConflict: 'user_id,measured_on' },
       )
