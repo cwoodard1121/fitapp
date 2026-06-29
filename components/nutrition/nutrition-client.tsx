@@ -153,6 +153,7 @@ export function NutritionClient({
         weightKg={weightKg}
         stepBaseline={stepBaseline}
         minCalories={minCalories}
+        phase={activeBlock?.phase ?? null}
         blockStart={activeBlock?.start_date ?? null}
       />
 

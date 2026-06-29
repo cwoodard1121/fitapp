@@ -26,6 +26,16 @@ import {
 
 type Win = 'week' | 'month' | 'block' | 'all'
 
+/** Goal framing — derived from the active diet block's phase (default cut). */
+type Mode = 'cut' | 'surplus' | 'maintain'
+function deriveMode(phase: string | null | undefined): Mode {
+  if (phase === 'bulk') return 'surplus'
+  if (phase === 'maintain' || phase === 'recomp') return 'maintain'
+  return 'cut'
+}
+/** kcal/day within maintenance still counts as "holding" in maintain mode. */
+const MAINTAIN_BAND = 150
+
 interface DeficitTrackerProps {
   logs: NutritionLog[]
   today: string
@@ -41,6 +51,8 @@ interface DeficitTrackerProps {
   stepBaseline: number | null
   /** Outlier filter: ignore completed days under this many kcal. null = off. */
   minCalories: number | null
+  /** Active diet block phase ('cut' | 'bulk' | 'maintain' | 'recomp' | null) → goal mode. */
+  phase: string | null
   /** Active diet block start date (YYYY-MM-DD), for the "Block" window. */
   blockStart: string | null
 }
@@ -131,8 +143,12 @@ export function DeficitTracker({
   weightKg,
   stepBaseline,
   minCalories,
+  phase,
   blockStart,
 }: DeficitTrackerProps) {
+  const mode = deriveMode(phase)
+  const cardTitle =
+    mode === 'surplus' ? 'Calorie surplus' : mode === 'maintain' ? 'Energy balance' : 'Calorie deficit'
   const router = useRouter()
   const [editing, setEditing] = React.useState(false)
   const [draft, setDraft] = React.useState(maintenance != null ? String(maintenance) : '')
@@ -179,15 +195,14 @@ export function DeficitTracker({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted">
-            <Flame className="size-4" aria-hidden /> Calorie deficit
+            <Flame className="size-4" aria-hidden /> {cardTitle}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted">
-            Enter your maintenance calories and this tracks your real deficit — adjusted
-            for how much you actually moved (steps from your watch) — so a low-step day
-            shows a smaller loss, and a day over target is fine if the window still nets a
-            loss.
+            Enter your maintenance calories and this tracks your real balance vs
+            maintenance — adjusted for how much you actually moved (steps from your watch),
+            so a low-step day counts for less.
           </p>
           <div className="mt-3">
             <Button variant="outline" onClick={() => setEditing(true)}>
@@ -278,6 +293,16 @@ export function DeficitTracker({
   const estChange = r.deficit / kcalPerUnit
   // Signed vs maintenance: negative = under maintenance (a deficit), shown as -X.
   const avgDaily = r.daysLogged ? Math.round(-r.deficit / r.daysLogged) : 0
+  const surplus = -r.deficit // total intake − adjusted maintenance over the window
+  const losing = r.deficit > 0 // tissue direction (down = losing)
+  // "On track" toward the mode's goal — drives the colors. For cut this is the
+  // old `inDeficit`, so cut behavior is unchanged.
+  const onTrack =
+    mode === 'cut'
+      ? r.deficit > 0
+      : mode === 'surplus'
+        ? surplus > 0
+        : Math.abs(avgDaily) <= MAINTAIN_BAND
 
   const rangeLabel =
     active === 'all'
@@ -288,10 +313,30 @@ export function DeficitTracker({
           ? `since ${format(r.start, 'MMM d')}`
           : `week of ${format(r.start, 'MMM d')}`
 
-  // Cut-target comparison — the reassurance the user asked for (window-aware).
+  // Window note — framed by the goal mode (cut keeps the cut-target logic).
   let targetNote: { text: string; tone: string } | null = null
   if (r.daysLogged > 0) {
-    if (calorieTarget != null) {
+    if (mode === 'surplus') {
+      targetNote = onTrack
+        ? {
+            text: `Building — about +${Math.abs(estChange).toFixed(2)} ${unit} on a ${fmtSigned(avgDaily)} kcal/day surplus.`,
+            tone: 'text-gate-green',
+          }
+        : {
+            text: `Only ${fmtSigned(avgDaily)} kcal/day vs maintenance — not a surplus yet. Eat a bit more.`,
+            tone: 'text-gate-yellow',
+          }
+    } else if (mode === 'maintain') {
+      targetNote = onTrack
+        ? {
+            text: `Holding steady — averaging ${fmtSigned(avgDaily)} kcal/day vs maintenance.`,
+            tone: 'text-gate-green',
+          }
+        : {
+            text: `Drifting ${avgDaily < 0 ? 'under' : 'over'} — averaging ${fmtSigned(avgDaily)} kcal/day vs maintenance.`,
+            tone: 'text-gate-yellow',
+          }
+    } else if (calorieTarget != null) {
       const targetForLogged = calorieTarget * r.daysLogged
       const overTarget = r.sumCalories - targetForLogged
       if (overTarget > 0 && inDeficit) {
@@ -327,7 +372,7 @@ export function DeficitTracker({
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted">
-          <Flame className="size-4" aria-hidden /> Calorie deficit
+          <Flame className="size-4" aria-hidden /> {cardTitle}
         </CardTitle>
         <button
           type="button"
@@ -386,32 +431,32 @@ export function DeficitTracker({
 
         {r.daysLogged === 0 ? (
           <p className="text-sm text-muted">
-            No days logged in this window yet. Log your intake to see your running deficit.
+            No days logged in this window yet. Log your intake to see your running numbers.
           </p>
         ) : (
           <>
             <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
               <Stat
-                label="Deficit"
-                value={fmtSigned(r.deficit)}
+                label={mode === 'surplus' ? 'Surplus' : mode === 'maintain' ? 'Net vs maint' : 'Deficit'}
+                value={fmtSigned(mode === 'cut' ? r.deficit : surplus)}
                 unit="kcal"
                 size="lg"
-                tone={inDeficit ? 'green' : 'red'}
+                tone={onTrack ? 'green' : 'red'}
               />
               <Stat
-                label={inDeficit ? 'Est. tissue loss' : 'Est. tissue gain'}
+                label={losing ? 'Est. tissue loss' : 'Est. tissue gain'}
                 value={Math.abs(estChange)}
                 unit={unit}
                 precision={2}
                 size="lg"
-                tone={inDeficit ? 'signal' : 'red'}
+                tone={onTrack ? 'signal' : 'red'}
               />
               <Stat
                 label="Avg/day vs maint"
                 value={fmtSigned(avgDaily)}
                 unit="kcal"
                 size="default"
-                tone={inDeficit ? 'green' : 'red'}
+                tone={onTrack ? 'green' : 'red'}
               />
             </div>
 
