@@ -30,7 +30,9 @@ import {
 const REFRESH_SKEW_MS = 5 * 60 * 1000
 /** Re-pull this many trailing days each run (late sleep / missed runs self-heal). */
 const LOOKBACK_DAYS = 3
-/** Body readings can lag; pull a slightly wider window. */
+/** Nutrition + body readings can lag (and the food log fills in all day), so
+ *  pull a wider window each sync to keep recent days fresh. */
+const NUTRITION_LOOKBACK_DAYS = 7
 const BODY_LOOKBACK_DAYS = 7
 const KG_TO_LB = 2.2046226218
 
@@ -78,7 +80,7 @@ export async function syncUserWearable(
     // readings) must NOT fail the core steps/sleep sync.
     let nutritionDaysWritten = 0
     try {
-      const nutrition = await fetchNutrition(token, LOOKBACK_DAYS)
+      const nutrition = await fetchNutrition(token, NUTRITION_LOOKBACK_DAYS)
       nutritionDaysWritten = await upsertNutritionDays(supabase, userId, nutrition)
     } catch (e) {
       console.error('nutrition import skipped:', e instanceof Error ? e.message : e)
