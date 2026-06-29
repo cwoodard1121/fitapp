@@ -21,6 +21,7 @@ import {
   DEFAULT_WEIGHT_KG,
   KCAL_PER_KG,
   KCAL_PER_LB,
+  TRACKING_START,
 } from '@/lib/nutrition/deficit'
 
 type Win = 'week' | 'month' | 'block' | 'all'
@@ -95,6 +96,8 @@ function computeWindow(
     const bs = parseISO(blockStart)
     if (start < bs) start = bs
   }
+  // ...and never before the tracking start (pre-cut data is noise for averages).
+  if (start < TRACKING_START) start = TRACKING_START
 
   const r = accumulateDeficit({
     logs,

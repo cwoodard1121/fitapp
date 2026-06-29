@@ -14,6 +14,14 @@ import type { NutritionLog } from '@/lib/types'
 export const KCAL_PER_LB = 3500
 export const KCAL_PER_KG = 7700
 
+/**
+ * Hard floor for COMPUTED STATS — deficit averages + maintenance calibration. The
+ * user's tracking start: pre-cut data is noise and shouldn't feed the numbers. It
+ * still imports and still shows in the charts/history — this only gates the math.
+ * UTC; month 0-based.
+ */
+export const TRACKING_START = new Date(Date.UTC(2026, 5, 20)) // 2026-06-20
+
 /** Step-based activity adjustment defaults. */
 export const DEFAULT_STEP_BASELINE = 10000
 export const KCAL_PER_STEP = 0.04

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ensureProfile, requireUserId } from '@/lib/data'
 import type { BodyMetric, NutritionLog } from '@/lib/types'
 import { computeCalibration, type Calibration } from '@/lib/nutrition/calibration'
-import { DEFAULT_STEP_BASELINE } from '@/lib/nutrition/deficit'
+import { DEFAULT_STEP_BASELINE, TRACKING_START } from '@/lib/nutrition/deficit'
 import { BodyClient } from '@/components/body/body-client'
 
 export const metadata = {
@@ -47,7 +47,10 @@ export default async function BodyPage() {
   const fallback = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 56),
   )
-  const windowStart = blockStart ? parseISO(blockStart) : fallback
+  // The calibration only feeds on data since the tracking start (pre-cut noise
+  // is excluded from the averages); the trend chart still shows all of it.
+  let windowStart = blockStart ? parseISO(blockStart) : fallback
+  if (windowStart < TRACKING_START) windowStart = TRACKING_START
   const windowStartStr = format(windowStart, 'yyyy-MM-dd')
 
   const [{ data: nutRows }, { data: recRows }] = await Promise.all([
