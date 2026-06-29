@@ -66,10 +66,10 @@ function slope(points: { x: number; y: number }[]): number | null {
   return (n * sxy - sx * sy) / denom
 }
 
-// Thresholds for a trustworthy calibration ("over a long time").
-const MIN_WINDOW_DAYS = 21
-const MIN_BODY_READINGS = 6
-const MIN_DAYS_LOGGED = 12
+// Thresholds for a trustworthy calibration (~2 weeks of consistent data).
+const MIN_WINDOW_DAYS = 14
+const MIN_BODY_READINGS = 5
+const MIN_DAYS_LOGGED = 10
 // A suggestion fires only on a tangible AND proportional gap.
 const MIN_DAILY_KCAL_GAP = 100
 const MIN_PROPORTIONAL_GAP = 0.25

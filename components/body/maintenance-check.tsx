@@ -70,53 +70,57 @@ export function MaintenanceCheck({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Predicted vs actual — the two rates, side by side. */}
-        <div className="grid grid-cols-2 gap-3">
-          <RateTile label="Predicted" sub="from your intake" weeklyLoss={c.predictedWeeklyLoss} unit={unit} />
-          <RateTile label="Actual" sub="from the scale" weeklyLoss={c.actualWeeklyLoss} unit={unit} />
-        </div>
-
         {c.status === 'insufficient' ? (
           <Note tone="muted" icon={<FlaskConical className="size-4 shrink-0" aria-hidden />}>
-            Calibrating — give it ~3 weeks of weigh-ins and logged intake for a reliable read.
+            Calibrating — give it ~2 weeks of weigh-ins and logged intake for a reliable read.
             So far: {c.bodyReadings} weigh-in{c.bodyReadings === 1 ? '' : 's'}, {c.daysLogged} day
             {c.daysLogged === 1 ? '' : 's'} logged.
           </Note>
-        ) : c.suggestion ? (
-          <div className="space-y-3 rounded-md border border-gate-yellow/40 bg-gate-yellow/10 p-3">
-            <p className="flex items-start gap-2 text-sm leading-snug text-foreground">
-              {c.suggestion.direction === 'lower' ? (
-                <ArrowDown className="mt-0.5 size-4 shrink-0 text-gate-yellow" aria-hidden />
-              ) : (
-                <ArrowUp className="mt-0.5 size-4 shrink-0 text-gate-yellow" aria-hidden />
-              )}
-              <span>
-                The scale is moving{' '}
-                <strong>{c.suggestion.direction === 'lower' ? 'slower' : 'faster'}</strong> than your
-                intake predicts. Your maintenance may be ~
-                <strong>{c.suggestion.kcal.toLocaleString()} kcal</strong> too{' '}
-                {c.suggestion.direction === 'lower' ? 'high' : 'low'}
-                {currentMaintenance != null ? (
-                  <>
-                    {' '}
-                    — try{' '}
-                    <strong>{c.suggestion.newMaintenance.toLocaleString()}</strong> instead of{' '}
-                    {currentMaintenance.toLocaleString()}.
-                  </>
-                ) : (
-                  '.'
-                )}
-              </span>
-            </p>
-            <Button onClick={applySuggestion} disabled={pending} size="touch" className="sm:w-auto sm:px-5">
-              <Check className="size-4" aria-hidden />
-              {pending ? 'Saving…' : `Use ${c.suggestion.newMaintenance.toLocaleString()} kcal`}
-            </Button>
-          </div>
         ) : (
-          <Note tone="green" icon={<Check className="size-4 shrink-0" aria-hidden />}>
-            Your intake and the scale line up — maintenance looks dialed in.
-          </Note>
+          <>
+            {/* Predicted vs actual — the two rates, side by side. */}
+            <div className="grid grid-cols-2 gap-3">
+              <RateTile label="Predicted" sub="from your intake" weeklyLoss={c.predictedWeeklyLoss} unit={unit} />
+              <RateTile label="Actual" sub="from the scale" weeklyLoss={c.actualWeeklyLoss} unit={unit} />
+            </div>
+
+            {c.suggestion ? (
+              <div className="space-y-3 rounded-md border border-gate-yellow/40 bg-gate-yellow/10 p-3">
+                <p className="flex items-start gap-2 text-sm leading-snug text-foreground">
+                  {c.suggestion.direction === 'lower' ? (
+                    <ArrowDown className="mt-0.5 size-4 shrink-0 text-gate-yellow" aria-hidden />
+                  ) : (
+                    <ArrowUp className="mt-0.5 size-4 shrink-0 text-gate-yellow" aria-hidden />
+                  )}
+                  <span>
+                    The scale is moving{' '}
+                    <strong>{c.suggestion.direction === 'lower' ? 'slower' : 'faster'}</strong> than
+                    your intake predicts. Your maintenance may be ~
+                    <strong>{c.suggestion.kcal.toLocaleString()} kcal</strong> too{' '}
+                    {c.suggestion.direction === 'lower' ? 'high' : 'low'}
+                    {currentMaintenance != null ? (
+                      <>
+                        {' '}
+                        — try{' '}
+                        <strong>{c.suggestion.newMaintenance.toLocaleString()}</strong> instead of{' '}
+                        {currentMaintenance.toLocaleString()}.
+                      </>
+                    ) : (
+                      '.'
+                    )}
+                  </span>
+                </p>
+                <Button onClick={applySuggestion} disabled={pending} size="touch" className="sm:w-auto sm:px-5">
+                  <Check className="size-4" aria-hidden />
+                  {pending ? 'Saving…' : `Use ${c.suggestion.newMaintenance.toLocaleString()} kcal`}
+                </Button>
+              </div>
+            ) : (
+              <Note tone="green" icon={<Check className="size-4 shrink-0" aria-hidden />}>
+                Your intake and the scale line up — maintenance looks dialed in.
+              </Note>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

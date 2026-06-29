@@ -34,8 +34,8 @@ interface BodyClientProps {
   unit: Unit
   /** yyyy-MM-dd for "today" (computed server-side for stable SSR). */
   today: string
-  /** Predicted-vs-actual maintenance calibration (computed server-side). */
-  calibration: Calibration
+  /** Predicted-vs-actual maintenance calibration (server-side); null if no diet block. */
+  calibration: Calibration | null
   maintenance: number | null
   stepBaseline: number
 }
@@ -147,7 +147,7 @@ export function BodyClient({
             </Card>
           ) : null}
 
-          {calibration.status !== 'no_maintenance' && calibration.daysLogged > 0 ? (
+          {calibration && calibration.status !== 'no_maintenance' && calibration.daysLogged > 0 ? (
             <MaintenanceCheck
               calibration={calibration}
               unit={unit}
