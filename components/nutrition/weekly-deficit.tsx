@@ -154,6 +154,28 @@ export function DeficitTracker({
   const [ignoreLow, setIgnoreLow] = React.useState(true)
   const [minCal, setMinCal] = React.useState(1200)
 
+  // Persist the outlier filter per-browser so it sticks across reloads. Loaded
+  // after mount (not in the initializer) to avoid an SSR/hydration mismatch.
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem('sg-deficit-outlier')
+      if (!raw) return
+      const v = JSON.parse(raw) as { ignoreLow?: unknown; minCal?: unknown }
+      if (typeof v.ignoreLow === 'boolean') setIgnoreLow(v.ignoreLow)
+      if (typeof v.minCal === 'number' && Number.isFinite(v.minCal)) setMinCal(v.minCal)
+    } catch {
+      /* ignore unreadable storage */
+    }
+  }, [])
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('sg-deficit-outlier', JSON.stringify({ ignoreLow, minCal }))
+    } catch {
+      /* ignore */
+    }
+  }, [ignoreLow, minCal])
+
   function save() {
     const trimmed = draft.trim()
     const value = trimmed === '' ? null : Number(trimmed)
