@@ -53,6 +53,8 @@ interface NutritionClientProps {
   weightKg: number | null
   /** Steps/day the maintenance assumes (null -> 10000 default). */
   stepBaseline: number | null
+  /** Outlier filter from the profile: ignore days under this many kcal (null = off). */
+  minCalories: number | null
 }
 
 /** Recent days kept on screen for the list + trend (the deficit tracker uses all). */
@@ -67,6 +69,7 @@ export function NutritionClient({
   stepsByDate,
   weightKg,
   stepBaseline,
+  minCalories,
 }: NutritionClientProps) {
   const router = useRouter()
   const [pending, startTransition] = React.useTransition()
@@ -149,6 +152,7 @@ export function NutritionClient({
         stepsByDate={stepsByDate}
         weightKg={weightKg}
         stepBaseline={stepBaseline}
+        minCalories={minCalories}
         blockStart={activeBlock?.start_date ?? null}
       />
 

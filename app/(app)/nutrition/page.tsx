@@ -92,6 +92,7 @@ export default async function NutritionPage() {
         stepsByDate={stepsByDate}
         weightKg={weightKg}
         stepBaseline={profile?.maintenance_step_baseline ?? null}
+        minCalories={profile ? profile.nutrition_min_calories : 1200}
       />
     </div>
   )

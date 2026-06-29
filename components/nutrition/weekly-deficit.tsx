@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Stat } from '@/components/ui/stat'
 import { cn } from '@/lib/utils'
-import { setMaintenanceCalories } from '@/app/(app)/nutrition/actions'
+import { setMaintenanceCalories, setNutritionOutlier } from '@/app/(app)/nutrition/actions'
 
 // kcal per unit of bodyfat (approx): 3500/lb, 7700/kg.
 const KCAL_PER_LB = 3500
@@ -43,6 +43,8 @@ interface DeficitTrackerProps {
   weightKg: number | null
   /** Steps/day the maintenance assumes; null -> 10000 default. */
   stepBaseline: number | null
+  /** Outlier filter: ignore completed days under this many kcal. null = off. */
+  minCalories: number | null
   /** Active diet block start date (YYYY-MM-DD), for the "Block" window. */
   blockStart: string | null
 }
@@ -141,6 +143,7 @@ export function DeficitTracker({
   stepsByDate,
   weightKg,
   stepBaseline,
+  minCalories,
   blockStart,
 }: DeficitTrackerProps) {
   const router = useRouter()
@@ -151,30 +154,20 @@ export function DeficitTracker({
   )
   const [pending, startTransition] = React.useTransition()
   const [win, setWin] = React.useState<Win>('week')
-  const [ignoreLow, setIgnoreLow] = React.useState(true)
-  const [minCal, setMinCal] = React.useState(1200)
+  // Outlier filter, seeded from the profile (null = off) so it syncs across devices.
+  const [ignoreLow, setIgnoreLow] = React.useState(minCalories != null)
+  const [minCal, setMinCal] = React.useState(minCalories ?? 1200)
 
-  // Persist the outlier filter per-browser so it sticks across reloads. Loaded
-  // after mount (not in the initializer) to avoid an SSR/hydration mismatch.
-  React.useEffect(() => {
-    try {
-      const raw = localStorage.getItem('sg-deficit-outlier')
-      if (!raw) return
-      const v = JSON.parse(raw) as { ignoreLow?: unknown; minCal?: unknown }
-      if (typeof v.ignoreLow === 'boolean') setIgnoreLow(v.ignoreLow)
-      if (typeof v.minCal === 'number' && Number.isFinite(v.minCal)) setMinCal(v.minCal)
-    } catch {
-      /* ignore unreadable storage */
-    }
-  }, [])
-
-  React.useEffect(() => {
-    try {
-      localStorage.setItem('sg-deficit-outlier', JSON.stringify({ ignoreLow, minCal }))
-    } catch {
-      /* ignore */
-    }
-  }, [ignoreLow, minCal])
+  /** Persist the outlier filter to the profile (null = off). Fire-and-forget. */
+  function persistOutlier(min: number | null) {
+    void setNutritionOutlier({ min_calories: min }).then((res) => {
+      if (!res.ok) toast.error(res.error)
+    })
+  }
+  function toggleIgnore(checked: boolean) {
+    setIgnoreLow(checked)
+    persistOutlier(checked ? minCal : null)
+  }
 
   function save() {
     const trimmed = draft.trim()
@@ -382,7 +375,7 @@ export function DeficitTracker({
           <label className="flex items-center gap-2 text-xs text-muted">
             <Switch
               checked={ignoreLow}
-              onCheckedChange={setIgnoreLow}
+              onCheckedChange={toggleIgnore}
               aria-label="Ignore low-calorie days"
             />
             <span className="whitespace-nowrap">Ignore days under</span>
@@ -391,6 +384,9 @@ export function DeficitTracker({
               inputMode="numeric"
               value={String(minCal)}
               onChange={(e) => setMinCal(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+              onBlur={() => {
+                if (ignoreLow) persistOutlier(minCal)
+              }}
               disabled={!ignoreLow}
               aria-label="Minimum calories"
               className="h-7 w-16 px-2 py-1 text-center font-mono text-xs tabular-nums"

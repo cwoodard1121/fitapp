@@ -67,6 +67,8 @@ export interface Profile {
   maintenance_calories: number | null;
   /** Steps/day the maintenance figure assumes; days under it trim the burn. null = 10000. */
   maintenance_step_baseline: number | null;
+  /** Deficit outlier filter: ignore completed days under this many kcal. null = off. */
+  nutrition_min_calories: number | null;
   created_at: string;
 }
 

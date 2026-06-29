@@ -133,6 +133,40 @@ export async function setMaintenanceCalories(
   return { ok: true }
 }
 
+const outlierSchema = z.object({
+  // null = filter off; a value = ignore completed days under this many calories.
+  min_calories: z
+    .union([z.number(), z.null()])
+    .refine((v) => v === null || (v >= 0 && v <= 20000), {
+      message: 'Enter a realistic minimum (0–20000).',
+    }),
+})
+
+/** Persist the deficit outlier filter so it syncs across devices. */
+export async function setNutritionOutlier(
+  input: z.input<typeof outlierSchema>,
+): Promise<ActionResult> {
+  const parsed = outlierSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid value.' }
+  }
+
+  const supabase = await createClient()
+  let userId: string
+  try {
+    userId = await requireUserId(supabase)
+  } catch {
+    return { ok: false, error: 'Your session expired. Sign in again.' }
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ nutrition_min_calories: parsed.data.min_calories })
+    .eq('id', userId)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
 const deleteSchema = z.object({
   logged_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a valid date.'),
 })
