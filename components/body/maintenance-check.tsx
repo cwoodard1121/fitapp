@@ -70,21 +70,19 @@ export function MaintenanceCheck({
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* Predicted vs actual — always shown; the numbers are useful even mid-calibration. */}
+        <div className="grid grid-cols-2 gap-3">
+          <RateTile label="Predicted" sub="from your intake" weeklyLoss={c.predictedWeeklyLoss} unit={unit} />
+          <RateTile label="Actual" sub="from the scale" weeklyLoss={c.actualWeeklyLoss} unit={unit} />
+        </div>
+
         {c.status === 'insufficient' ? (
           <Note tone="muted" icon={<FlaskConical className="size-4 shrink-0" aria-hidden />}>
-            Calibrating — give it ~2 weeks of weigh-ins and logged intake for a reliable read.
-            So far: {c.bodyReadings} weigh-in{c.bodyReadings === 1 ? '' : 's'}, {c.daysLogged} day
+            A maintenance suggestion kicks in after ~2 weeks of weigh-ins + logged intake. So far:{' '}
+            {c.bodyReadings} weigh-in{c.bodyReadings === 1 ? '' : 's'}, {c.daysLogged} day
             {c.daysLogged === 1 ? '' : 's'} logged.
           </Note>
-        ) : (
-          <>
-            {/* Predicted vs actual — the two rates, side by side. */}
-            <div className="grid grid-cols-2 gap-3">
-              <RateTile label="Predicted" sub="from your intake" weeklyLoss={c.predictedWeeklyLoss} unit={unit} />
-              <RateTile label="Actual" sub="from the scale" weeklyLoss={c.actualWeeklyLoss} unit={unit} />
-            </div>
-
-            {c.suggestion ? (
+        ) : c.suggestion ? (
               <div className="space-y-3 rounded-md border border-gate-yellow/40 bg-gate-yellow/10 p-3">
                 <p className="flex items-start gap-2 text-sm leading-snug text-foreground">
                   {c.suggestion.direction === 'lower' ? (
@@ -120,8 +118,6 @@ export function MaintenanceCheck({
                 Your intake and the scale line up — maintenance looks dialed in.
               </Note>
             )}
-          </>
-        )}
       </CardContent>
     </Card>
   )
