@@ -106,7 +106,11 @@ export function RecoveryCharts({ rows }: { rows: RecoveryMetric[] }) {
     .map((r) => r.sleep_minutes_asleep)
     .filter((v): v is number => v != null)
   const avgSteps = stepsVals.length ? Math.round(avg(stepsVals)) : null
-  const avgSleep = sleepVals.length ? avg(sleepVals) : null
+  // Round to whole minutes ONCE, then split — avoids "7h 60m" from independent
+  // floor/round on a fractional average.
+  const avgSleepMin = sleepVals.length ? Math.round(avg(sleepVals)) : null
+  const avgSleepLabel =
+    avgSleepMin != null ? `${Math.floor(avgSleepMin / 60)}h ${avgSleepMin % 60}m` : '—'
 
   const axisProps = {
     stroke: COLORS.muted,
@@ -122,10 +126,7 @@ export function RecoveryCharts({ rows }: { rows: RecoveryMetric[] }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-4">
           <Summary label="Avg steps" value={avgSteps != null ? avgSteps.toLocaleString() : '—'} />
-          <Summary
-            label="Avg sleep"
-            value={avgSleep != null ? `${Math.floor(avgSleep / 60)}h ${Math.round(avgSleep % 60)}m` : '—'}
-          />
+          <Summary label="Avg sleep" value={avgSleepLabel} />
         </div>
         <Toggle view={view} onChange={setView} />
       </div>
@@ -164,14 +165,14 @@ function Summary({ label, value }: { label: string; value: string }) {
 
 function Toggle({ view, onChange }: { view: View; onChange: (v: View) => void }) {
   return (
-    <div className="inline-flex rounded-md border border-border p-0.5">
+    <div className="inline-flex shrink-0 rounded-md border border-border p-0.5">
       {(['daily', 'weekly'] as const).map((v) => (
         <button
           key={v}
           type="button"
           onClick={() => onChange(v)}
           className={cn(
-            'rounded px-3 py-1 text-xs font-medium capitalize transition-colors',
+            'rounded px-3.5 py-1.5 text-xs font-medium capitalize transition-colors',
             view === v ? 'bg-signal text-signal-foreground' : 'text-muted hover:text-foreground',
           )}
         >

@@ -262,11 +262,14 @@ export async function getUserUnit(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<Unit> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('unit')
     .eq('id', userId)
     .maybeSingle()
+  // Throw on a real read error so the caller's body-import try/catch SKIPS the
+  // day rather than silently guessing 'lb' and mis-converting a kg user's weight.
+  if (error) throw new Error(error.message)
   return (data as { unit?: string } | null)?.unit === 'kg' ? 'kg' : 'lb'
 }
 
