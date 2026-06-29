@@ -231,15 +231,34 @@ function dayStr(d: Date): string {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
 }
 
-function civil(d: Date) {
+/**
+ * A Google Health CivilDateTime. NESTED (date + optional time), NOT flat — the
+ * dailyRollUp `range` is a CivilTimeInterval of { start, end } CivilDateTimes,
+ * each `{ date: { year, month, day }, time? }`. We omit `time` (defaults to
+ * midnight). Sending a flat {year,...} or start/endTime is a 400.
+ */
+function civilDateTime(d: Date) {
   return {
-    year: d.getUTCFullYear(),
-    month: d.getUTCMonth() + 1,
-    day: d.getUTCDate(),
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
+    date: {
+      year: d.getUTCFullYear(),
+      month: d.getUTCMonth() + 1,
+      day: d.getUTCDate(),
+    },
   }
+}
+
+/** Parse a CivilDateTime (nested `{date:{...}}`, or a flat `{year,...}`) to YYYY-MM-DD. */
+function civilToDateStr(v: unknown): string | null {
+  if (!v || typeof v !== 'object') return null
+  const obj = v as Record<string, unknown>
+  const d = (
+    obj.date && typeof obj.date === 'object' ? obj.date : obj
+  ) as Record<string, unknown>
+  const y = toInt(d.year)
+  const m = toInt(d.month)
+  const day = toInt(d.day)
+  if (y == null || m == null || day == null) return null
+  return `${y}-${pad(m)}-${pad(day)}`
 }
 
 interface Window {
@@ -291,7 +310,7 @@ async function fetchSteps(
 ): Promise<Map<string, number>> {
   const out = new Map<string, number>()
   const body = {
-    range: { startTime: civil(win.start), endTime: civil(win.end) },
+    range: { start: civilDateTime(win.start), end: civilDateTime(win.end) },
     windowSizeDays: 1,
   }
   const data = (await authedJson(
@@ -301,9 +320,8 @@ async function fetchSteps(
   )) as { rollupDataPoints?: Array<Record<string, unknown>> }
 
   for (const p of data.rollupDataPoints ?? []) {
-    const cs = p.civilStartTime as { year?: number; month?: number; day?: number } | undefined
-    if (!cs?.year || !cs.month || !cs.day) continue
-    const date = `${cs.year}-${pad(cs.month)}-${pad(cs.day)}`
+    const date = civilToDateStr(p.civilStartTime)
+    if (!date) continue
     const steps = pickInt(p.steps, ['count_sum', 'countSum', 'count', 'sum', 'value'])
     if (steps != null) out.set(date, steps)
   }
