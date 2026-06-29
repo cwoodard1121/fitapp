@@ -15,18 +15,13 @@ import { Switch } from '@/components/ui/switch'
 import { Stat } from '@/components/ui/stat'
 import { cn } from '@/lib/utils'
 import { setMaintenanceCalories, setNutritionOutlier } from '@/app/(app)/nutrition/actions'
-
-// kcal per unit of bodyfat (approx): 3500/lb, 7700/kg.
-const KCAL_PER_LB = 3500
-const KCAL_PER_KG = 7700
-
-// Step-based activity adjustment: maintenance assumes a step baseline (user-set,
-// default below); each step under it trims the day's burn by ~0.04 kcal, scaled
-// by bodyweight.
-const DEFAULT_STEP_BASELINE = 10000
-const KCAL_PER_STEP = 0.04
-const REF_WEIGHT_KG = 70
-const DEFAULT_WEIGHT_KG = 70
+import {
+  accumulateDeficit,
+  DEFAULT_STEP_BASELINE,
+  DEFAULT_WEIGHT_KG,
+  KCAL_PER_KG,
+  KCAL_PER_LB,
+} from '@/lib/nutrition/deficit'
 
 type Win = 'week' | 'month' | 'block' | 'all'
 
@@ -94,37 +89,26 @@ function computeWindow(
       break
   }
 
-  let deficit = 0
-  let sumCalories = 0
-  let sumMaint = 0
-  let daysLogged = 0
-  let adjustedDays = 0
-  let totalAdjustment = 0
-
-  for (const l of logs) {
-    if (l.calories == null) continue
-    const d = parseISO(l.logged_on)
-    if (d < start || d > todayD) continue
-    // Drop completed days below the minimum (an under-logged day shouldn't skew
-    // the average). Today is in-progress, so it's always kept.
-    if (ignoreLow && l.logged_on !== today && l.calories < minCal) continue
-    const steps = stepsByDate[l.logged_on]
-    const adjustment =
-      steps != null
-        ? Math.max(0, stepBaseline - steps) * KCAL_PER_STEP * (weightKg / REF_WEIGHT_KG)
-        : 0
-    const dayMaint = baseMaint - adjustment
-    daysLogged += 1
-    sumCalories += l.calories
-    sumMaint += dayMaint
-    deficit += dayMaint - l.calories
-    if (adjustment > 0) {
-      adjustedDays += 1
-      totalAdjustment += adjustment
-    }
+  // The active diet block's start is a HARD floor — every window stays inside the
+  // block, so a week/month can't reach back before the block began.
+  if (blockStart) {
+    const bs = parseISO(blockStart)
+    if (start < bs) start = bs
   }
 
-  return { daysLogged, deficit, sumCalories, sumMaint, adjustedDays, totalAdjustment, start }
+  const r = accumulateDeficit({
+    logs,
+    stepsByDate,
+    baseMaint,
+    weightKg,
+    stepBaseline,
+    ignoreLow,
+    minCal,
+    start,
+    end: todayD,
+    today,
+  })
+  return { ...r, start }
 }
 
 const WIN_LABEL: Record<Win, string> = {
@@ -280,7 +264,9 @@ export function DeficitTracker({
   const maint = maintenance as number
   const wk = weightKg && weightKg > 0 ? weightKg : DEFAULT_WEIGHT_KG
   const baseline = stepBaseline && stepBaseline > 0 ? stepBaseline : DEFAULT_STEP_BASELINE
-  const windows: Win[] = blockStart ? ['week', 'month', 'block', 'all'] : ['week', 'month', 'all']
+  // With an active block, every window is clamped to its start, so a separate
+  // "All" would just equal "Block" — drop it.
+  const windows: Win[] = blockStart ? ['week', 'month', 'block'] : ['week', 'month', 'all']
   const active = windows.includes(win) ? win : 'week'
 
   const r = computeWindow(logs, stepsByDate, maint, wk, active, today, blockStart, ignoreLow, minCal, baseline)
