@@ -18,6 +18,7 @@ import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getLatestAnalysis } from '@/lib/ai/analysis'
 import { createClient } from '@/lib/supabase/server'
 import { getRecoveryRange } from '@/lib/wearables/store'
+import { computeRecoveryScore, type RecoveryScore } from '@/lib/recovery/score'
 import type { LiftAdvice } from '@/lib/types'
 import { Badge } from '@/components/ui/badge'
 import { RecoveryStrip } from '@/components/today/recovery-strip'
@@ -130,17 +131,22 @@ export default async function TodayPage({
   const payload = allowed ? (await getLatestAnalysis())?.payload ?? null : null
   const focus = payload?.focus ?? []
 
-  // Most recent wearable readout (steps + last night's sleep), gated like the AI.
+  // Most recent wearable readout + a baseline-relative recovery score, gated like
+  // the AI. Pull a month of history so the score has a baseline to compare against.
   let latestRecovery: RecoveryMetric | null = null
+  let recoveryScore: RecoveryScore | null = null
   if (allowed) {
     const sb = await createClient()
     const uid = await requireUserId(sb)
-    const recent = await getRecoveryRange(sb, uid, 3)
+    const recent = await getRecoveryRange(sb, uid, 35)
     for (let i = recent.length - 1; i >= 0; i--) {
       if (recent[i].steps != null || recent[i].sleep_minutes_asleep != null) {
         latestRecovery = recent[i]
         break
       }
+    }
+    if (latestRecovery) {
+      recoveryScore = computeRecoveryScore(recent, latestRecovery.metric_date)
     }
   }
 
@@ -180,7 +186,7 @@ export default async function TodayPage({
 
       {latestRecovery ? (
         <div className="mt-4">
-          <RecoveryStrip metric={latestRecovery} />
+          <RecoveryStrip metric={latestRecovery} score={recoveryScore} />
         </div>
       ) : null}
 

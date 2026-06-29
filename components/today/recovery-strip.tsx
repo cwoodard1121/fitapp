@@ -1,7 +1,8 @@
 import { format, parseISO } from 'date-fns'
-import { Footprints, Moon, HeartPulse, Activity } from 'lucide-react'
+import { Footprints, Moon, HeartPulse, Activity, Gauge } from 'lucide-react'
 
 import type { RecoveryMetric } from '@/lib/types'
+import { recoveryBand, type RecoveryScore } from '@/lib/recovery/score'
 
 /** Format minutes as "7h 32m" (or "—"). */
 function sleepLabel(minutes: number | null): string {
@@ -19,12 +20,27 @@ function dayLabel(date: string): string {
   }
 }
 
+const TONE = {
+  green: { box: 'border-gate-green/40 bg-gate-green/10', text: 'text-gate-green' },
+  neutral: { box: 'border-border bg-background', text: 'text-foreground' },
+  amber: { box: 'border-gate-yellow/40 bg-gate-yellow/10', text: 'text-gate-yellow' },
+  red: { box: 'border-gate-red/40 bg-gate-red/10', text: 'text-gate-red' },
+} as const
+
 /**
- * RecoveryStrip — a compact wearable readout for the Today screen: the most
- * recent day's steps + sleep (plus resting HR / HRV when present). Presentational;
- * the page passes the latest RecoveryMetric and gates on the allowlist.
+ * RecoveryStrip — a compact wearable readout for the Today screen: a baseline-
+ * relative recovery score (when there's enough history) plus the most recent
+ * day's steps + sleep (and resting HR / HRV when present). Presentational; the
+ * page passes the latest RecoveryMetric, the computed score, and gates on the
+ * allowlist.
  */
-export function RecoveryStrip({ metric }: { metric: RecoveryMetric }) {
+export function RecoveryStrip({
+  metric,
+  score,
+}: {
+  metric: RecoveryMetric
+  score?: RecoveryScore | null
+}) {
   const tiles: { icon: typeof Footprints; label: string; value: string; sub?: string }[] = [
     {
       icon: Footprints,
@@ -44,17 +60,42 @@ export function RecoveryStrip({ metric }: { metric: RecoveryMetric }) {
     tiles.push({ icon: Activity, label: 'HRV', value: `${Math.round(metric.hrv_ms)}`, sub: 'ms' })
   }
 
+  const ok = score && score.status === 'ok' ? score : null
+  const band = ok ? recoveryBand(ok.score) : null
+  const sub = ok ? (ok.drivers.length ? ok.drivers.slice(0, 2).join(' · ') : band!.fallback) : null
+
   return (
-    <section
-      aria-label="Recovery"
-      className="rounded-lg border border-border bg-surface p-3"
-    >
+    <section aria-label="Recovery" className="rounded-lg border border-border bg-surface p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
           Recovery
         </span>
         <span className="text-[11px] text-muted">{dayLabel(metric.metric_date)}</span>
       </div>
+
+      {ok && band ? (
+        <div className={`mb-3 flex items-center gap-3 rounded-md border p-3 ${TONE[band.tone].box}`}>
+          <div className="flex shrink-0 flex-col items-center leading-none">
+            <span className={`font-mono text-3xl font-bold tabular-nums ${TONE[band.tone].text}`}>
+              {ok.score}
+            </span>
+            <span className="mt-0.5 text-[10px] text-muted">/ 100</span>
+          </div>
+          <div className="min-w-0">
+            <p className={`text-sm font-semibold ${TONE[band.tone].text}`}>
+              Recovery score · {band.headline}
+            </p>
+            <p className="truncate text-xs text-muted">{sub}</p>
+          </div>
+        </div>
+      ) : score && score.status === 'building' ? (
+        <p className="mb-3 flex items-center gap-1.5 rounded-md border border-border bg-background p-2.5 text-xs text-muted">
+          <Gauge className="size-3.5 shrink-0 text-signal" aria-hidden />
+          Recovery score — building your baseline ({score.baselineDays} day
+          {score.baselineDays === 1 ? '' : 's'} of history so far).
+        </p>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {tiles.map((t) => {
           const Icon = t.icon
