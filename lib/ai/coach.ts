@@ -1,14 +1,19 @@
 /**
  * AI coach chat — a conversational layer on top of the SAME deterministic
  * analytics the structured overview uses. The model is GROUNDED in the user's
- * real computed numbers (lib/analytics) and streams its reply back token by
- * token. Chats are intentionally ephemeral (not persisted): every new chat is
- * re-seeded with the latest analytics, so a fresh thread already "knows" the
- * athlete's goals, lifts, body, and nutrition.
+ * real computed numbers (lib/analytics). Chats are intentionally ephemeral (not
+ * persisted): every new chat is re-seeded with the latest analytics, so a fresh
+ * thread already "knows" the athlete's goals, lifts, body, and nutrition.
  *
  * Server-only: reads process.env.OPENAI_API_KEY and must never be imported into
  * a client component. The /api/coach route handler owns auth + the allowlist
- * gate; this module only builds the prompt and the streaming transport.
+ * gate; this module only builds the prompt and makes the OpenAI call.
+ *
+ * Non-streaming by design. gpt-5.4 is a reasoning model: it emits NO output
+ * tokens until reasoning finishes, so token-by-token streaming would show
+ * nothing during the (dominant) thinking phase anyway — and a streamed response
+ * is fragile on Vercel (buffering / function-duration). A single request/reply,
+ * exactly like the AI overview, is reliable in the same deployment.
  */
 import type { Profile } from '@/lib/types'
 import { gatherAnalytics } from '@/lib/analytics'
@@ -84,24 +89,51 @@ ${serializeAnalytics(analytics)}`
 }
 
 /* ------------------------------------------------------------------ */
-/* Streaming transport — OpenAI Responses API (SSE -> text deltas)     */
+/* OpenAI Responses call (non-streaming)                               */
 /* ------------------------------------------------------------------ */
 
 /** Cap how much of the conversation we forward, to bound input tokens. */
 const MAX_TURNS = 24
 
+/** Reasoning effort for coach replies (product preference: medium). */
+const REASONING_EFFORT = 'medium'
+
 /**
- * Stream a coach reply for the given conversation. Returns a ReadableStream of
- * UTF-8 text chunks (the assistant's visible answer, delta by delta).
- *
- * Throws synchronously on missing key / non-200 upstream so the route can turn
- * it into a clean HTTP error BEFORE any streaming begins. Errors that occur
- * mid-stream are surfaced as a trailing text note (the stream has already
- * started, so we can't change the status code).
+ * Output-token budget. Medium reasoning is billed against max_output_tokens, so
+ * this must cover the (hidden) reasoning AND the visible answer — too low and
+ * the reasoning eats the budget and the reply comes back empty.
  */
-export async function streamCoachReply(
-  messages: CoachMessage[],
-): Promise<ReadableStream<Uint8Array>> {
+const MAX_OUTPUT_TOKENS = 4000
+
+interface OpenAIResponse {
+  output_text?: string
+  output?: Array<{ content?: Array<{ type?: string; text?: string }> }>
+  status?: string
+  incomplete_details?: { reason?: string }
+}
+
+/** Pull the visible text out of a Responses payload (convenience or parts). */
+function extractText(data: OpenAIResponse): string {
+  if (typeof data.output_text === 'string' && data.output_text.length > 0) {
+    return data.output_text
+  }
+  const parts: string[] = []
+  for (const item of data.output ?? []) {
+    for (const part of item.content ?? []) {
+      if (part.type === 'output_text' && typeof part.text === 'string') {
+        parts.push(part.text)
+      }
+    }
+  }
+  return parts.join('')
+}
+
+/**
+ * Ask the coach for a reply to the given conversation and return its text.
+ * Throws on missing key / non-200 / empty output so the route can map it to a
+ * clean HTTP error.
+ */
+export async function getCoachReply(messages: CoachMessage[]): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set')
 
@@ -121,150 +153,27 @@ export async function streamCoachReply(
     body: JSON.stringify({
       model,
       input: [{ role: 'system', content: system }, ...turns],
-      // Chat wants snappy replies; keep reasoning light.
-      reasoning: { effort: 'low' },
-      max_output_tokens: 2000,
-      stream: true,
+      reasoning: { effort: REASONING_EFFORT },
+      max_output_tokens: MAX_OUTPUT_TOKENS,
     }),
   })
 
-  if (!res.ok || !res.body) {
+  if (!res.ok) {
     const body = await res.text().catch(() => '')
     throw new Error(`OpenAI request failed (${res.status}): ${body.slice(0, 300)}`)
   }
 
-  return toTextStream(res.body)
-}
-
-/**
- * Adapt the OpenAI Responses SSE byte stream to a plain UTF-8 text stream of
- * just the visible answer. We parse `data:` frames and forward the text from
- * `response.output_text.delta` events; we surface `response.error` / refusals
- * as a short trailing note rather than silently truncating.
- */
-function toTextStream(
-  upstream: ReadableStream<Uint8Array>,
-): ReadableStream<Uint8Array> {
-  const reader = upstream.getReader()
-  const decoder = new TextDecoder()
-  const encoder = new TextEncoder()
-  let buffer = ''
-  let sawText = false
-
-  const EMPTY_REPLY = "I couldn't generate a reply just now — give it another try."
-
-  async function cancelUpstream(): Promise<void> {
-    try {
-      await reader.cancel()
-    } catch {
-      /* already closed */
-    }
+  const data = (await res.json()) as OpenAIResponse
+  const text = extractText(data).trim()
+  if (!text) {
+    // No visible text — for a reasoning model this usually means reasoning ate
+    // the whole max_output_tokens budget (status 'incomplete').
+    const reason = data.incomplete_details?.reason
+    throw new Error(
+      `OpenAI returned no text (status: ${data.status ?? 'unknown'}${
+        reason ? `, reason: ${reason}` : ''
+      }). Likely the reasoning used the whole token budget — raise max_output_tokens.`,
+    )
   }
-
-  /** Pull one `data:` JSON event's text contribution (or null). */
-  function handleEvent(json: string): {
-    text?: string
-    error?: string
-    done?: boolean
-    truncated?: boolean
-  } {
-    const trimmed = json.trim()
-    if (!trimmed || trimmed === '[DONE]') return {}
-    let evt: {
-      type?: string
-      delta?: string
-      refusal?: string
-      response?: { error?: { message?: string } }
-      error?: { message?: string }
-      message?: string
-    }
-    try {
-      evt = JSON.parse(trimmed)
-    } catch {
-      return {}
-    }
-    switch (evt.type) {
-      case 'response.output_text.delta':
-        return typeof evt.delta === 'string' ? { text: evt.delta } : {}
-      case 'response.refusal.delta':
-        return typeof evt.delta === 'string' ? { text: evt.delta } : {}
-      case 'response.completed':
-        return { done: true }
-      case 'response.incomplete':
-        // Hit max_output_tokens (or otherwise truncated): terminal like
-        // completed, but flag it so we can note the cut-off.
-        return { done: true, truncated: true }
-      case 'response.failed':
-      case 'error':
-      case 'response.error':
-        return {
-          error:
-            evt.response?.error?.message ||
-            evt.error?.message ||
-            evt.message ||
-            'the model stopped unexpectedly',
-        }
-      default:
-        return {}
-    }
-  }
-
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read()
-        if (done) {
-          // Upstream closed without a terminal event — backfill a note if the
-          // model produced nothing.
-          if (!sawText) controller.enqueue(encoder.encode(EMPTY_REPLY))
-          controller.close()
-          return
-        }
-
-        buffer += decoder.decode(value, { stream: true })
-        // SSE frames are separated by blank lines; process complete lines.
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-        for (const line of lines) {
-          if (!line.startsWith('data:')) continue
-          const { text, error, done: evtDone, truncated } = handleEvent(line.slice(5))
-          if (text) {
-            sawText = true
-            controller.enqueue(encoder.encode(text))
-          } else if (error) {
-            // Terminal: emit exactly ONE note and stop, so the reader-done
-            // fallback can't also fire and concatenate a second message.
-            controller.enqueue(
-              encoder.encode(sawText ? `\n\n[interrupted: ${error}]` : `⚠️ ${error}`),
-            )
-            controller.close()
-            await cancelUpstream()
-            return
-          } else if (evtDone) {
-            if (truncated && sawText) {
-              controller.enqueue(
-                encoder.encode('\n\n[cut off — ask a shorter follow-up]'),
-              )
-            } else if (!sawText) {
-              controller.enqueue(encoder.encode(EMPTY_REPLY))
-            }
-            controller.close()
-            await cancelUpstream()
-            return
-          }
-        }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'stream error'
-        controller.enqueue(encoder.encode(`\n\n[connection dropped: ${msg}]`))
-        controller.close()
-      }
-    },
-    async cancel() {
-      try {
-        await reader.cancel()
-      } catch {
-        /* noop */
-      }
-    },
-  })
+  return text
 }

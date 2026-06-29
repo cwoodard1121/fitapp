@@ -79,7 +79,7 @@ export function CoachWidget() {
       setError(null)
       setInput('')
       const next: ChatMessage[] = [...messages, { role: 'user', content }]
-      // Add an empty assistant turn we stream into.
+      // Add an empty assistant turn; the typing indicator shows while we wait.
       setMessages([...next, { role: 'assistant', content: '' }])
       setStreaming(true)
 
@@ -94,31 +94,27 @@ export function CoachWidget() {
           signal: controller.signal,
         })
 
-        if (!res.ok || !res.body) {
-          const data = (await res.json().catch(() => null)) as { error?: string } | null
+        const data = (await res.json().catch(() => null)) as
+          | { reply?: string; error?: string }
+          | null
+        if (!res.ok) {
           throw new Error(data?.error || `Request failed (${res.status}).`)
         }
 
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        for (;;) {
-          const { done, value } = await reader.read()
-          if (done) break
-          const chunk = decoder.decode(value, { stream: true })
-          if (!chunk) continue
-          setMessages((prev) => {
-            const copy = prev.slice()
-            const last = copy[copy.length - 1]
-            if (last && last.role === 'assistant') {
-              copy[copy.length - 1] = { ...last, content: last.content + chunk }
-            }
-            return copy
-          })
-        }
+        const reply = typeof data?.reply === 'string' ? data.reply.trim() : ''
+        if (!reply) throw new Error('The coach came back empty — try again.')
+
+        setMessages((prev) => {
+          const copy = prev.slice()
+          const last = copy[copy.length - 1]
+          if (last && last.role === 'assistant') {
+            copy[copy.length - 1] = { ...last, content: reply }
+          }
+          return copy
+        })
       } catch (e) {
         if (e instanceof DOMException && e.name === 'AbortError') {
-          // User stopped the stream — keep partial text, but drop a bubble
-          // that never received any tokens.
+          // User cancelled the request — drop the empty placeholder bubble.
           setMessages((prev) => {
             const last = prev[prev.length - 1]
             if (last && last.role === 'assistant' && last.content === '') {

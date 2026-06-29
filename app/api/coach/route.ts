@@ -1,19 +1,21 @@
 /**
- * POST /api/coach — stream a grounded coach reply for the current conversation.
+ * POST /api/coach — return a grounded coach reply for the current conversation.
  *
  * The chat is ephemeral: the client holds the whole thread and posts it each
  * turn; we re-seed the grounding analytics server-side every call (see
- * lib/ai/coach.ts) and stream the answer back as plain UTF-8 text. Nothing is
- * persisted. Gated to allowlisted accounts — the LLM call is paid — exactly
- * like the structured AI overview.
+ * lib/ai/coach.ts) and return the answer as JSON. Nothing is persisted. Gated to
+ * allowlisted accounts — the LLM call is paid — exactly like the AI overview.
  */
 import { z } from 'zod'
 
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
-import { streamCoachReply } from '@/lib/ai/coach'
+import { getCoachReply } from '@/lib/ai/coach'
 
-// Cookie session (Supabase SSR) + fetch streaming — run on the Node runtime.
+// Cookie session (Supabase SSR) — Node runtime. gpt-5.4 reasoning can take tens
+// of seconds, so raise the function budget well above Vercel's low default
+// (Hobby caps at 60s; Pro allows up to 300s).
 export const runtime = 'nodejs'
+export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
 const bodySchema = z.object({
@@ -29,10 +31,7 @@ const bodySchema = z.object({
 })
 
 function errorJson(status: number, error: string): Response {
-  return new Response(JSON.stringify({ error }), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return Response.json({ error }, { status })
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -56,11 +55,11 @@ export async function POST(req: Request): Promise<Response> {
     return errorJson(400, 'The last message must be from the user.')
   }
 
-  let stream: ReadableStream<Uint8Array>
   try {
-    stream = await streamCoachReply(messages)
+    const reply = await getCoachReply(messages)
+    return Response.json({ reply })
   } catch (e) {
-    console.error('coach stream failed', e)
+    console.error('coach reply failed', e)
     const msg = e instanceof Error ? e.message : ''
     // Only allowlisted accounts reach here, so a specific reason is safe and
     // makes config problems self-diagnosable instead of a dead end.
@@ -72,12 +71,4 @@ export async function POST(req: Request): Promise<Response> {
     }
     return errorJson(502, `Coach is unavailable: ${msg ? msg.slice(0, 240) : 'unknown error'}`)
   }
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-store',
-      'X-Accel-Buffering': 'no',
-    },
-  })
 }
