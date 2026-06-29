@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Gauge, ArrowDown, ArrowUp, Check, TrendingDown, FlaskConical } from 'lucide-react'
+import { Gauge, ArrowDown, ArrowUp, Check, Minus, FlaskConical } from 'lucide-react'
 
 import type { Calibration } from '@/lib/nutrition/calibration'
 import type { Unit } from '@/lib/types'
@@ -22,14 +22,6 @@ interface MaintenanceCheckProps {
   unit: Unit
   currentMaintenance: number | null
   stepBaseline: number
-}
-
-/** Weekly weight change (negative = losing); signed, 2dp, with a true minus sign. */
-function fmtChange(weeklyLoss: number): string {
-  const change = -weeklyLoss // loss -> weight goes down -> negative
-  const r = Math.round(change * 100) / 100
-  if (Math.abs(r) < 0.005) return '0.00'
-  return `${r > 0 ? '+' : '−'}${Math.abs(r).toFixed(2)}`
 }
 
 /**
@@ -80,18 +72,8 @@ export function MaintenanceCheck({
       <CardContent className="space-y-4">
         {/* Predicted vs actual — the two rates, side by side. */}
         <div className="grid grid-cols-2 gap-3">
-          <RateTile
-            label="Predicted"
-            sub="from your intake"
-            value={fmtChange(c.predictedWeeklyLoss)}
-            unit={`${unit}/wk`}
-          />
-          <RateTile
-            label="Actual"
-            sub="from the scale"
-            value={fmtChange(c.actualWeeklyLoss)}
-            unit={`${unit}/wk`}
-          />
+          <RateTile label="Predicted" sub="from your intake" weeklyLoss={c.predictedWeeklyLoss} unit={unit} />
+          <RateTile label="Actual" sub="from the scale" weeklyLoss={c.actualWeeklyLoss} unit={unit} />
         </div>
 
         {c.status === 'insufficient' ? (
@@ -144,25 +126,33 @@ export function MaintenanceCheck({
 function RateTile({
   label,
   sub,
-  value,
+  weeklyLoss,
   unit,
 }: {
   label: string
   sub: string
-  value: string
+  /** units/week, positive = losing. */
+  weeklyLoss: number
   unit: string
 }) {
+  const losing = weeklyLoss > 0.005
+  const gaining = weeklyLoss < -0.005
+  const Arrow = losing ? ArrowDown : gaining ? ArrowUp : Minus
+  const tone = losing ? 'text-signal' : gaining ? 'text-gate-yellow' : 'text-muted'
+  const word = losing ? 'losing' : gaining ? 'gaining' : 'holding'
   return (
     <div className="rounded-md border border-border bg-background p-3">
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted">
-        <TrendingDown className="size-3 text-signal" aria-hidden />
-        {label}
+      <div className="text-[11px] uppercase tracking-wider text-muted">{label}</div>
+      <div className="mt-1 flex items-baseline gap-1">
+        <Arrow className={`size-5 shrink-0 self-center ${tone}`} aria-hidden />
+        <span className="font-mono text-2xl font-semibold tabular-nums leading-none text-foreground">
+          {Math.abs(weeklyLoss).toFixed(2)}
+        </span>
+        <span className="text-xs font-normal text-muted">{unit}/wk</span>
       </div>
-      <div className="mt-1 font-mono text-2xl font-semibold tabular-nums leading-none text-foreground">
-        {value}
-        <span className="ml-1 text-xs font-normal text-muted">{unit}</span>
+      <div className="mt-1 text-[11px] text-muted">
+        {word} · {sub}
       </div>
-      <div className="mt-1 text-[11px] text-muted">{sub}</div>
     </div>
   )
 }

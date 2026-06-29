@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns'
+import { format } from 'date-fns'
 
 import { createClient } from '@/lib/supabase/server'
 import { ensureProfile, requireUserId } from '@/lib/data'
@@ -32,25 +32,11 @@ export default async function BodyPage() {
 
   const today = format(new Date(), 'yyyy-MM-dd')
 
-  // Calibration window = the active diet block, else the last 8 weeks.
-  const { data: blockRows } = await supabase
-    .from('blocks')
-    .select('start_date')
-    .eq('user_id', userId)
-    .eq('kind', 'diet')
-    .eq('is_active', true)
-    .order('start_date', { ascending: false })
-    .limit(1)
-  const blockStart = (blockRows?.[0]?.start_date as string | null | undefined) ?? null
-
-  const now = new Date()
-  const fallback = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 56),
-  )
-  // The calibration only feeds on data since the tracking start (pre-cut noise
-  // is excluded from the averages); the trend chart still shows all of it.
-  let windowStart = blockStart ? parseISO(blockStart) : fallback
-  if (windowStart < TRACKING_START) windowStart = TRACKING_START
+  // The calibration compares predicted vs actual loss since the TRACKING START
+  // (June 20) — a fixed recent window. NOT the diet block: a block that started
+  // after June 20 would shrink this to a noisy day-or-two and flip the sign. The
+  // trend chart still shows ALL data; only this calc is windowed.
+  const windowStart = TRACKING_START
   const windowStartStr = format(windowStart, 'yyyy-MM-dd')
 
   const [{ data: nutRows }, { data: recRows }] = await Promise.all([
