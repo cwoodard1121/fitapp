@@ -51,6 +51,8 @@ interface NutritionClientProps {
   stepsByDate: Record<string, number>
   /** Latest bodyweight in kg, for the step formula. */
   weightKg: number | null
+  /** Steps/day the maintenance assumes (null -> 10000 default). */
+  stepBaseline: number | null
 }
 
 /** Recent days kept on screen for the list + trend (the deficit tracker uses all). */
@@ -64,6 +66,7 @@ export function NutritionClient({
   unit,
   stepsByDate,
   weightKg,
+  stepBaseline,
 }: NutritionClientProps) {
   const router = useRouter()
   const [pending, startTransition] = React.useTransition()
@@ -145,6 +148,7 @@ export function NutritionClient({
         unit={unit}
         stepsByDate={stepsByDate}
         weightKg={weightKg}
+        stepBaseline={stepBaseline}
         blockStart={activeBlock?.start_date ?? null}
       />
 

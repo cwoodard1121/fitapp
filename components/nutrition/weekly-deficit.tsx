@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Stat } from '@/components/ui/stat'
 import { cn } from '@/lib/utils'
 import { setMaintenanceCalories } from '@/app/(app)/nutrition/actions'
@@ -19,9 +20,10 @@ import { setMaintenanceCalories } from '@/app/(app)/nutrition/actions'
 const KCAL_PER_LB = 3500
 const KCAL_PER_KG = 7700
 
-// Step-based activity adjustment: maintenance assumes a STEP_BASELINE-step day;
-// each step under that trims the day's burn by ~0.04 kcal, scaled by bodyweight.
-const STEP_BASELINE = 10000
+// Step-based activity adjustment: maintenance assumes a step baseline (user-set,
+// default below); each step under it trims the day's burn by ~0.04 kcal, scaled
+// by bodyweight.
+const DEFAULT_STEP_BASELINE = 10000
 const KCAL_PER_STEP = 0.04
 const REF_WEIGHT_KG = 70
 const DEFAULT_WEIGHT_KG = 70
@@ -39,6 +41,8 @@ interface DeficitTrackerProps {
   stepsByDate: Record<string, number>
   /** Latest bodyweight in KG (for the step formula); null -> a 70kg default. */
   weightKg: number | null
+  /** Steps/day the maintenance assumes; null -> 10000 default. */
+  stepBaseline: number | null
   /** Active diet block start date (YYYY-MM-DD), for the "Block" window. */
   blockStart: string | null
 }
@@ -67,6 +71,9 @@ function computeWindow(
   win: Win,
   today: string,
   blockStart: string | null,
+  ignoreLow: boolean,
+  minCal: number,
+  stepBaseline: number,
 ): WindowResult {
   const todayD = parseISO(today)
   let start: Date
@@ -96,10 +103,13 @@ function computeWindow(
     if (l.calories == null) continue
     const d = parseISO(l.logged_on)
     if (d < start || d > todayD) continue
+    // Drop completed days below the minimum (an under-logged day shouldn't skew
+    // the average). Today is in-progress, so it's always kept.
+    if (ignoreLow && l.logged_on !== today && l.calories < minCal) continue
     const steps = stepsByDate[l.logged_on]
     const adjustment =
       steps != null
-        ? Math.max(0, STEP_BASELINE - steps) * KCAL_PER_STEP * (weightKg / REF_WEIGHT_KG)
+        ? Math.max(0, stepBaseline - steps) * KCAL_PER_STEP * (weightKg / REF_WEIGHT_KG)
         : 0
     const dayMaint = baseMaint - adjustment
     daysLogged += 1
@@ -130,19 +140,27 @@ export function DeficitTracker({
   unit,
   stepsByDate,
   weightKg,
+  stepBaseline,
   blockStart,
 }: DeficitTrackerProps) {
   const router = useRouter()
   const [editing, setEditing] = React.useState(false)
   const [draft, setDraft] = React.useState(maintenance != null ? String(maintenance) : '')
+  const [stepDraft, setStepDraft] = React.useState(
+    stepBaseline != null ? String(stepBaseline) : String(DEFAULT_STEP_BASELINE),
+  )
   const [pending, startTransition] = React.useTransition()
   const [win, setWin] = React.useState<Win>('week')
+  const [ignoreLow, setIgnoreLow] = React.useState(true)
+  const [minCal, setMinCal] = React.useState(1200)
 
   function save() {
     const trimmed = draft.trim()
     const value = trimmed === '' ? null : Number(trimmed)
+    const stepTrimmed = stepDraft.trim()
+    const step = stepTrimmed === '' ? null : Number(stepTrimmed)
     startTransition(async () => {
-      const res = await setMaintenanceCalories({ maintenance_calories: value })
+      const res = await setMaintenanceCalories({ maintenance_calories: value, step_baseline: step })
       if (res.ok) {
         toast.success(value == null ? 'Maintenance cleared.' : 'Maintenance saved.')
         setEditing(false)
@@ -201,8 +219,23 @@ export function DeficitTracker({
               className="font-mono tabular-nums"
             />
             <p className="text-xs text-muted">
-              Your maintenance on a ~10k-step day. Days under 10k steps are trimmed
-              automatically from your watch data.
+              The intake that holds your weight steady on a typical day.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="step-baseline">…at about (steps/day)</Label>
+            <Input
+              id="step-baseline"
+              type="number"
+              inputMode="numeric"
+              value={stepDraft}
+              onChange={(e) => setStepDraft(e.target.value)}
+              placeholder="10000"
+              className="font-mono tabular-nums"
+            />
+            <p className="text-xs text-muted">
+              The activity your maintenance assumes. Days under this many steps get
+              trimmed automatically from your watch data.
             </p>
           </div>
           <div className="flex gap-2">
@@ -214,6 +247,9 @@ export function DeficitTracker({
               onClick={() => {
                 setEditing(false)
                 setDraft(maintenance != null ? String(maintenance) : '')
+                setStepDraft(
+                  stepBaseline != null ? String(stepBaseline) : String(DEFAULT_STEP_BASELINE),
+                )
               }}
               disabled={pending}
             >
@@ -228,14 +264,16 @@ export function DeficitTracker({
   // --- Maintenance known: compute the selected window's deficit. ---
   const maint = maintenance as number
   const wk = weightKg && weightKg > 0 ? weightKg : DEFAULT_WEIGHT_KG
+  const baseline = stepBaseline && stepBaseline > 0 ? stepBaseline : DEFAULT_STEP_BASELINE
   const windows: Win[] = blockStart ? ['week', 'month', 'block', 'all'] : ['week', 'month', 'all']
   const active = windows.includes(win) ? win : 'week'
 
-  const r = computeWindow(logs, stepsByDate, maint, wk, active, today, blockStart)
+  const r = computeWindow(logs, stepsByDate, maint, wk, active, today, blockStart, ignoreLow, minCal, baseline)
   const inDeficit = r.deficit > 0
   const kcalPerUnit = unit === 'kg' ? KCAL_PER_KG : KCAL_PER_LB
   const estChange = r.deficit / kcalPerUnit
-  const avgDaily = r.daysLogged ? Math.round(r.deficit / r.daysLogged) : 0
+  // Signed vs maintenance: negative = under maintenance (a deficit), shown as -X.
+  const avgDaily = r.daysLogged ? Math.round(-r.deficit / r.daysLogged) : 0
 
   const rangeLabel =
     active === 'all'
@@ -300,21 +338,43 @@ export function DeficitTracker({
         </button>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Window toggle */}
-        <div className="inline-flex rounded-md border border-border p-0.5">
-          {windows.map((w) => (
-            <button
-              key={w}
-              type="button"
-              onClick={() => setWin(w)}
-              className={cn(
-                'rounded px-3 py-1 text-xs font-medium transition-colors',
-                active === w ? 'bg-signal text-signal-foreground' : 'text-muted hover:text-foreground',
-              )}
-            >
-              {WIN_LABEL[w]}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          {/* Window toggle */}
+          <div className="inline-flex rounded-md border border-border p-0.5">
+            {windows.map((w) => (
+              <button
+                key={w}
+                type="button"
+                onClick={() => setWin(w)}
+                className={cn(
+                  'rounded px-3 py-1 text-xs font-medium transition-colors',
+                  active === w ? 'bg-signal text-signal-foreground' : 'text-muted hover:text-foreground',
+                )}
+              >
+                {WIN_LABEL[w]}
+              </button>
+            ))}
+          </div>
+
+          {/* Outlier filter — drop under-logged completed days from the stats. */}
+          <label className="flex items-center gap-2 text-xs text-muted">
+            <Switch
+              checked={ignoreLow}
+              onCheckedChange={setIgnoreLow}
+              aria-label="Ignore low-calorie days"
+            />
+            <span className="whitespace-nowrap">Ignore days under</span>
+            <Input
+              type="number"
+              inputMode="numeric"
+              value={String(minCal)}
+              onChange={(e) => setMinCal(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+              disabled={!ignoreLow}
+              aria-label="Minimum calories"
+              className="h-7 w-16 px-2 py-1 text-center font-mono text-xs tabular-nums"
+            />
+            <span>kcal</span>
+          </label>
         </div>
 
         {r.daysLogged === 0 ? (
@@ -332,7 +392,7 @@ export function DeficitTracker({
                 tone={inDeficit ? 'green' : 'red'}
               />
               <Stat
-                label={inDeficit ? 'Est. loss' : 'Est. gain'}
+                label={inDeficit ? 'Est. tissue loss' : 'Est. tissue gain'}
                 value={Math.abs(estChange)}
                 unit={unit}
                 precision={2}

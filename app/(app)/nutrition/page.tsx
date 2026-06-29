@@ -91,6 +91,7 @@ export default async function NutritionPage() {
         unit={unit}
         stepsByDate={stepsByDate}
         weightKg={weightKg}
+        stepBaseline={profile?.maintenance_step_baseline ?? null}
       />
     </div>
   )

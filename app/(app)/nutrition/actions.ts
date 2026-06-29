@@ -94,6 +94,9 @@ const maintenanceSchema = z.object({
     (v) => v === null || (v >= 800 && v <= 8000),
     { message: 'Enter a realistic maintenance figure (800–8000).' },
   ),
+  step_baseline: optionalNumber.refine((v) => v === null || (v >= 0 && v <= 60000), {
+    message: 'Enter a realistic step baseline (0–60000).',
+  }),
 })
 
 /** Set (or clear) the user's estimated maintenance calories. */
@@ -118,7 +121,10 @@ export async function setMaintenanceCalories(
 
   const { error } = await supabase
     .from('profiles')
-    .update({ maintenance_calories: parsed.data.maintenance_calories })
+    .update({
+      maintenance_calories: parsed.data.maintenance_calories,
+      maintenance_step_baseline: parsed.data.step_baseline,
+    })
     .eq('id', userId)
 
   if (error) return { ok: false, error: error.message }

@@ -1,12 +1,12 @@
 /**
  * GET /api/cron/wearable-sync — batch wearable sync for every connected user.
  *
- * OPTIONAL / not scheduled by default. Syncing is normally manual ("Sync now" in
- * Settings, which runs as the user's own session). This route exists for anyone
- * who wants hands-off syncing via an external scheduler (e.g. cron-job.org)
- * hitting it with `Authorization: Bearer $CRON_SECRET`. There is NO user session
- * here, so it authenticates via CRON_SECRET and uses the SERVICE-ROLE client,
- * scoping every query by user_id. Each user's sync is isolated.
+ * Scheduled by Vercel Cron every 6 hours (4x/day; see vercel.json); Vercel sends
+ * CRON_SECRET as a Bearer token. Also triggerable by any external scheduler with
+ * the same header. There is NO user session here, so it authenticates via
+ * CRON_SECRET and uses the SERVICE-ROLE client, scoping every query by user_id.
+ * Each user's sync is isolated. (Manual "Sync now" in Settings still runs as the
+ * user's own session.)
  */
 import { createServiceClient } from '@/lib/supabase/service'
 import { listConnectedUserIds } from '@/lib/wearables/store'
@@ -14,8 +14,7 @@ import { syncUserWearable } from '@/lib/wearables/sync'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-// 60 is the Vercel Hobby cap; plenty for a single user's daily sync.
-export const maxDuration = 60
+export const maxDuration = 300
 
 export async function GET(req: Request): Promise<Response> {
   const secret = process.env.CRON_SECRET

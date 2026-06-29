@@ -306,7 +306,7 @@ export function CoachWidget() {
               )}
             </div>
             <p className="mt-1.5 px-1 text-[10px] text-muted">
-              Coaching guidance from your numbers — not medical advice. Chats aren’t saved.
+              Chats aren’t saved.
             </p>
           </div>
         </div>

@@ -65,6 +65,8 @@ export interface Profile {
   readiness_weights: ReadinessWeights | null;
   /** Estimated maintenance calories; basis for the weekly deficit tracker. */
   maintenance_calories: number | null;
+  /** Steps/day the maintenance figure assumes; days under it trim the burn. null = 10000. */
+  maintenance_step_baseline: number | null;
   created_at: string;
 }
 
@@ -319,9 +321,9 @@ export interface WearableConnection {
 }
 
 /**
- * recovery_metrics — one row per user per day, sourced from a wearable. By
- * design there are NO calorie/energy columns: wearable calorie estimates are
- * intentionally never imported.
+ * recovery_metrics — one row per user per day, sourced from a wearable. No
+ * calorie/energy columns here: wearable BURNED-calorie estimates aren't imported
+ * (logged INTAKE calories sync into nutrition_logs instead).
  */
 export interface RecoveryMetric {
   id: string;

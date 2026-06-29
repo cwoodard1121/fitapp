@@ -100,8 +100,9 @@ export function WearableConnect({ data }: { data: WearableConnectData }) {
           Wearable sync
         </CardTitle>
         <CardDescription>
-          Pull your daily <strong>steps</strong> and <strong>sleep</strong> from Fitbit via
-          the Google Health API. Calories are never imported.
+          Sync your daily <strong>steps</strong>, <strong>sleep</strong>,{' '}
+          <strong>weight</strong> &amp; body fat, and logged <strong>calories</strong> + macros
+          from Fitbit via the Google Health API.
         </CardDescription>
       </CardHeader>
 
