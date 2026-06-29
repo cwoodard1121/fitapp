@@ -2,10 +2,12 @@ import type { ReactNode } from "react"
 import Link from "next/link"
 
 import { ensureProfile, seedDefaultProgram } from "@/lib/data"
+import { isEmailAllowed } from "@/lib/ai/allowlist"
 import { createClient } from "@/lib/supabase/server"
 import { Header } from "@/components/app/header"
 import { Nav } from "@/components/app/nav"
 import { MobileNav } from "@/components/app/mobile-nav"
+import { CoachWidget } from "@/components/coach/coach-widget"
 
 /**
  * Authenticated app shell. As a Server Component it first makes sure the user
@@ -71,6 +73,10 @@ export default async function AppLayout({
 
       {/* Mobile bottom tab bar + More sheet (hidden at md+) */}
       <MobileNav />
+
+      {/* Floating AI coach — grounded in the user's analytics, allowlisted only.
+          The /api/coach route enforces the same gate defensively. */}
+      {isEmailAllowed(user?.email) ? <CoachWidget /> : null}
     </div>
   )
 }
