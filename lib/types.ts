@@ -286,6 +286,57 @@ export interface AiAnalysis {
 }
 
 /* ------------------------------------------------------------------ */
+/* Wearable sync (steps + sleep via the Google Health API)             */
+/* ------------------------------------------------------------------ */
+
+export type WearableProvider = "google_health";
+export type WearableStatus = "active" | "reauth_required";
+
+/**
+ * wearable_connections — one row per connected provider per user. The OAuth
+ * access/refresh tokens are stored ENCRYPTED (AES-256-GCM) at rest; never expose
+ * them to the client. The daily cron reads/refreshes them with the service role.
+ */
+export interface WearableConnection {
+  id: string;
+  user_id: string;
+  provider: WearableProvider;
+  /** Stable Google Health user id (from /users/me/identity). */
+  google_health_user_id: string | null;
+  /** Encrypted; decrypt server-side only. */
+  access_token: string | null;
+  /** Encrypted; decrypt server-side only. */
+  refresh_token: string | null;
+  token_expires_at: string | null;
+  scopes: string[] | null;
+  status: WearableStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * recovery_metrics — one row per user per day, sourced from a wearable. By
+ * design there are NO calorie/energy columns: wearable calorie estimates are
+ * intentionally never imported.
+ */
+export interface RecoveryMetric {
+  id: string;
+  user_id: string;
+  metric_date: string;
+  steps: number | null;
+  sleep_minutes_asleep: number | null;
+  sleep_minutes_in_period: number | null;
+  sleep_light_min: number | null;
+  sleep_deep_min: number | null;
+  sleep_rem_min: number | null;
+  sleep_awake_min: number | null;
+  resting_hr: number | null;
+  hrv_ms: number | null;
+  source: string;
+  synced_at: string;
+}
+
+/* ------------------------------------------------------------------ */
 /* Shared UI / view-model types                                        */
 /* ------------------------------------------------------------------ */
 
