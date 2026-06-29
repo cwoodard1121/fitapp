@@ -37,10 +37,15 @@ interface GoogleHealthConfig {
   redirectUri: string
 }
 
+/** Trim whitespace + strip accidental wrapping quotes (common paste mistakes). */
+function clean(raw: string | undefined): string {
+  return (raw ?? '').trim().replace(/^['"]|['"]$/g, '')
+}
+
 function config(): GoogleHealthConfig {
-  const clientId = process.env.GOOGLE_HEALTH_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_HEALTH_CLIENT_SECRET
-  const redirectUri = process.env.GOOGLE_HEALTH_REDIRECT_URI
+  const clientId = clean(process.env.GOOGLE_HEALTH_CLIENT_ID)
+  const clientSecret = clean(process.env.GOOGLE_HEALTH_CLIENT_SECRET)
+  const redirectUri = clean(process.env.GOOGLE_HEALTH_REDIRECT_URI)
   if (!clientId || !clientSecret || !redirectUri) {
     throw new Error(
       'Google Health is not configured (GOOGLE_HEALTH_CLIENT_ID / GOOGLE_HEALTH_CLIENT_SECRET / GOOGLE_HEALTH_REDIRECT_URI).',
