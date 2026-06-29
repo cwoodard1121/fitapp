@@ -567,36 +567,35 @@ export async function fetchNutrition(
     const nl = (p.nutritionLog ?? p.nutrition_log) as Record<string, unknown> | undefined
     if (!nl) continue
 
-    const energy = (nl.energyQuantityRollup ?? nl.energy_quantity_rollup) as
-      | Record<string, unknown>
-      | undefined
-    const calories = pickInt(energy, [
-      'kilocaloriesSum',
-      'kilocalories_sum',
-      'kilocalories',
-      'sum',
-      'value',
-    ])
+    // Real REST shape: energy.kcalSum (kcal); carbs + fat are TOP-LEVEL totals
+    // (totalCarbohydrate/totalFat .gramsSum); protein lives in the nutrients[]
+    // array as { nutrient, quantity:{ gramsSum } }.
+    const calories = pickInt(nl.energy, ['kcalSum', 'kilocaloriesSum', 'kilocalories_sum', 'sum', 'value'])
 
-    let protein: number | null = null
-    let carbs: number | null = null
-    let fat: number | null = null
-    const nutrients = (nl.nutrientQuantityRollups ?? nl.nutrient_quantity_rollups) as
-      | Array<Record<string, unknown>>
-      | undefined
+    const gramKeys = ['gramsSum', 'grams', 'quantityGrams', 'sum', 'value']
+    let carbs = pickNum(nl.totalCarbohydrate ?? nl.total_carbohydrate, gramKeys)
+    let fat = pickNum(nl.totalFat ?? nl.total_fat, gramKeys)
+    let protein = pickNum(nl.totalProtein ?? nl.protein, gramKeys)
+
+    const nutrients = (nl.nutrients ??
+      nl.nutrientQuantityRollups ??
+      nl.nutrient_quantity_rollups) as Array<Record<string, unknown>> | undefined
     for (const n of nutrients ?? []) {
       const type = String(n.nutrient ?? '').toUpperCase()
-      const grams = toNum(n.quantityGrams ?? n.quantity_grams)
+      const grams = pickNum(n.quantity ?? n, gramKeys)
       if (grams == null) continue
-      const g = Math.round(grams)
-      // Match the documented Nutrient enum exactly so SATURATED_FAT / etc. don't
-      // overwrite TOTAL_FAT.
-      if (type === 'PROTEIN') protein = g
-      else if (type === 'TOTAL_CARBOHYDRATE' || type === 'CARBOHYDRATE') carbs = g
-      else if (type === 'TOTAL_FAT') fat = g
+      if (type === 'PROTEIN' && protein == null) protein = grams
+      else if ((type === 'TOTAL_CARBOHYDRATE' || type === 'CARBOHYDRATE') && carbs == null) carbs = grams
+      else if (type === 'TOTAL_FAT' && fat == null) fat = grams
     }
 
-    out.push({ date, calories, protein, carbs, fat })
+    out.push({
+      date,
+      calories,
+      protein: protein != null ? Math.round(protein) : null,
+      carbs: carbs != null ? Math.round(carbs) : null,
+      fat: fat != null ? Math.round(fat) : null,
+    })
   }
   out.sort((a, b) => a.date.localeCompare(b.date))
   return out
@@ -651,13 +650,12 @@ export async function fetchBody(
   for (const p of weightPts) {
     const date = civilToDateStr(p.civilStartTime)
     if (!date) continue
-    const kg = pickNum(p.weight ?? p['weight'], [
-      'kilogramsAvg',
-      'kilograms_avg',
-      'kilograms',
-      'avg',
-      'value',
-    ])
+    const wv = (p.weight ?? p['weight']) as Record<string, unknown> | undefined
+    // Google returns GRAMS (weightGramsAvg); fall back to kilogram variants. Do
+    // NOT use a generic numeric fallback here or grams get misread as kilograms.
+    const grams = pickNum(wv, ['weightGramsAvg', 'gramsAvg', 'grams_avg', 'grams'])
+    const kg =
+      grams != null ? grams / 1000 : pickNum(wv, ['kilogramsAvg', 'kilograms_avg', 'kilograms'])
     if (kg != null) ensure(date).weightKg = kg
   }
   for (const p of bfPts) {
