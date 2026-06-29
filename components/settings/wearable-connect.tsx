@@ -92,8 +92,9 @@ export function WearableConnect({ data }: { data: WearableConnectData }) {
         {!data.connected ? (
           <div className="space-y-3">
             <p className="text-sm text-muted">
-              Connect once and a daily sync keeps your steps and sleep up to date. You’ll
-              sign in with the Google account your Fitbit is linked to.
+              Connect once, then hit <strong>Sync</strong> whenever you want to pull your
+              latest steps and sleep. You’ll sign in with the Google account your Fitbit is
+              linked to.
             </p>
             <Button asChild>
               <a href={CONNECT_HREF}>

@@ -66,6 +66,8 @@ Fitbit that's actually linked to the Google account you'll sign in with.
 Set these locally (`.env.local`) and in **Vercel → Project Settings → Environment
 Variables** (Production):
 
+**Required** (the manual "Sync now" flow needs only these):
+
 ```
 GOOGLE_HEALTH_CLIENT_ID=...
 GOOGLE_HEALTH_CLIENT_SECRET=...
@@ -73,11 +75,16 @@ GOOGLE_HEALTH_REDIRECT_URI=https://<your-vercel-domain>/api/wearables/google/cal
 
 # 32-byte base64 — encrypts the stored OAuth tokens at rest:
 WEARABLE_TOKEN_ENC_KEY=<node -e "console.log(require('crypto').randomBytes(32).toString('base64'))">
+```
 
-# Protects the daily cron route (Vercel Cron sends it as a Bearer token):
+**Optional** — only if you later wire up the background sync route
+(`/api/cron/wearable-sync`) to an external scheduler. The in-app "Sync now"
+button does **not** need these:
+
+```
+# Protects the sync route (the scheduler sends it as Authorization: Bearer):
 CRON_SECRET=<node -e "console.log(require('crypto').randomBytes(32).toString('hex'))">
-
-# Lets the cron write without a user session (it bypasses RLS):
+# Lets that route write without a user session (it bypasses RLS):
 SUPABASE_SERVICE_ROLE_KEY=<from Supabase → Settings → API>
 ```
 
@@ -98,9 +105,14 @@ it into the Supabase SQL editor). It creates `wearable_connections` and
    warning and grant the scopes. The callback stores your (encrypted) tokens and
    runs a first sync.
 
-The **daily cron** (`vercel.json` → `/api/cron/wearable-sync`, 08:00 UTC) refreshes
-the token and re-pulls the last 3 days each morning. You can also hit **"Sync
-now"** in Settings anytime.
+Syncing is **manual**: hit **"Sync now"** in Settings whenever you want fresh
+data (it refreshes the token and re-pulls the last 3 days). That's the intended
+flow — sync after your watch has synced.
+
+> *Optional automation:* if you ever want it hands-off, set `CRON_SECRET` +
+> `SUPABASE_SERVICE_ROLE_KEY` and point an external scheduler (e.g. cron-job.org)
+> at `GET /api/cron/wearable-sync` with header `Authorization: Bearer $CRON_SECRET`
+> as often as you like. There's no built-in schedule.
 
 ---
 
@@ -111,8 +123,10 @@ now"** in Settings anytime.
 - **Tokens** — encrypted (AES-256-GCM) in `wearable_connections`. `lib/wearables/`.
 - **Sync** — `lib/wearables/sync.ts` refreshes the token, pulls steps
   (`steps/dataPoints:dailyRollUp`) + sleep (`sleep/dataPoints`), strips any
-  energy fields, and upserts `recovery_metrics`. Shared by the cron and "Sync now".
-- **Cron auth** — `CRON_SECRET` (Vercel sends it as `Authorization: Bearer`).
+  energy fields, and upserts `recovery_metrics`. Used by both the "Sync now"
+  button (your session) and the optional `/api/cron/wearable-sync` route.
+- **Optional sync route** — `/api/cron/wearable-sync`, protected by `CRON_SECRET`
+  (sent as `Authorization: Bearer`); not scheduled by default.
 
 ### Known unknowns to confirm on first real sync
 

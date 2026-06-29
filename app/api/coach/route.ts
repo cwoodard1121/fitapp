@@ -12,10 +12,10 @@ import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getCoachReply } from '@/lib/ai/coach'
 
 // Cookie session (Supabase SSR) — Node runtime. gpt-5.4 reasoning can take tens
-// of seconds, so raise the function budget well above Vercel's low default
-// (Hobby caps at 60s; Pro allows up to 300s).
+// of seconds, so raise the function budget. 60 is the Vercel Hobby cap; bump to
+// 300 if/when this project moves to Pro (medium reasoning can occasionally need it).
 export const runtime = 'nodejs'
-export const maxDuration = 300
+export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
 const bodySchema = z.object({
