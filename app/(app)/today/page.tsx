@@ -18,7 +18,7 @@ import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getLatestAnalysis } from '@/lib/ai/analysis'
 import { createClient } from '@/lib/supabase/server'
 import { getRecoveryRange } from '@/lib/wearables/store'
-import { computeRecoveryScore, type RecoveryScore } from '@/lib/recovery/score'
+import { computeRecoveryScore, suggestedReadiness, type RecoveryScore } from '@/lib/recovery/score'
 import type { LiftAdvice } from '@/lib/types'
 import { Badge } from '@/components/ui/badge'
 import { RecoveryStrip } from '@/components/today/recovery-strip'
@@ -211,6 +211,11 @@ export default async function TodayPage({
             week={week}
             allSlotIds={allSlotIds}
             recovery={sessionRecovery}
+            suggested={
+              recoveryScore && recoveryScore.status === 'ok'
+                ? suggestedReadiness(recoveryScore.score)
+                : null
+            }
           />
         </div>
       ) : null}

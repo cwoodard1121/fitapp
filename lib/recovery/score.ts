@@ -168,6 +168,17 @@ export function computeRecoveryScore(
   return { status: 'ok', score, vsBaseline: score - 50, components, drivers, baselineDays }
 }
 
+/**
+ * Map a recovery score (0–100) to a session-readiness PREFILL (1–10) — a gentle,
+ * low-biased nudge, not a strong driver. Your baseline (50) prefills 5 (below the
+ * old default of 7), it's capped at 7 even on great days, and it dips into the
+ * engine's conservative band (≤4) when you're under-recovered. The user can always
+ * override before starting.
+ */
+export function suggestedReadiness(score: number): number {
+  return clamp(Math.round(5 + (score - 50) / 25), 2, 7)
+}
+
 /** UI bucket for a score: headline, tone, and a fallback sub-line. */
 export function recoveryBand(score: number): {
   headline: string

@@ -16,6 +16,8 @@ interface SessionReadinessProps {
   allSlotIds: string[]
   /** Current session-level systemic recovery (fanned across the day's slots). */
   recovery: number | null
+  /** Low-biased prefill from today's wearable recovery score; used only until rated. */
+  suggested?: number | null
 }
 
 function Rating({
@@ -61,10 +63,12 @@ export function SessionReadiness({
   week,
   allSlotIds,
   recovery: initRecovery,
+  suggested,
 }: SessionReadinessProps) {
   const rated = initRecovery != null
   const [expanded, setExpanded] = React.useState(!rated)
-  const [recovery, setRecovery] = React.useState(initRecovery ?? 7)
+  // Default to the wearable-suggested readiness (low-biased) when un-rated, else 7.
+  const [recovery, setRecovery] = React.useState(initRecovery ?? suggested ?? 7)
   const [pending, startTransition] = React.useTransition()
 
   function onSave() {
@@ -137,6 +141,14 @@ export function SessionReadiness({
           value={recovery}
           onChange={setRecovery}
         />
+
+        {!rated && suggested != null ? (
+          <p className="flex items-start gap-1.5 text-[11px] leading-tight text-muted">
+            <BatteryCharging className="mt-px size-3.5 shrink-0 text-signal" aria-hidden />
+            Pre-filled to {suggested} from today&apos;s recovery score — nudge it if you feel
+            different.
+          </p>
+        ) : null}
 
         <Button type="button" onClick={onSave} disabled={pending} className="w-full">
           {pending ? (
