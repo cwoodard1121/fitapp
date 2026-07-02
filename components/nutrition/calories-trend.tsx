@@ -30,6 +30,7 @@ const COLORS = {
   signal: '#c7f24a',
   grid: '#2c313a',
   muted: '#8a92a0',
+  maintenance: '#e8c45a',
   surface: '#1e2228',
   border: '#2c313a',
   text: '#edeff2',
@@ -39,6 +40,7 @@ interface CaloriesTrendProps {
   logs: NutritionLog[]
   today: string
   calorieTarget: number | null
+  maintenance: number | null
 }
 
 interface Point {
@@ -67,20 +69,34 @@ function buildSeries(
   })
 }
 
+function fmtDelta(n: number): string {
+  return `${n > 0 ? '+' : ''}${n.toLocaleString()}`
+}
+
 function ChartTooltip({
   active,
   payload,
   target,
+  maintenance,
 }: {
   active?: boolean
   payload?: Array<{ payload: Point }>
   target: number | null
+  maintenance: number | null
 }) {
   if (!active || !payload || payload.length === 0) return null
   const p = payload[0].payload
   const kcal = p.calories
-  const delta =
+  const sameGuide =
+    target !== null &&
+    maintenance !== null &&
+    Math.round(target) === Math.round(maintenance)
+  const targetDelta =
     kcal !== null && target !== null ? Math.round(kcal - target) : null
+  const maintDelta =
+    kcal !== null && maintenance !== null && !sameGuide
+      ? Math.round(kcal - maintenance)
+      : null
   return (
     <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs shadow-md">
       <div className="mb-1 font-medium text-foreground">
@@ -89,15 +105,20 @@ function ChartTooltip({
       <div className="font-mono tabular-nums text-foreground">
         {kcal === null ? 'not logged' : `${Math.round(kcal)} kcal`}
       </div>
-      {delta !== null ? (
+      {targetDelta !== null ? (
         <div
           className={
-            delta > 0
+            targetDelta > 0
               ? 'font-mono tabular-nums text-gate-red'
               : 'font-mono tabular-nums text-gate-green'
           }
         >
-          {delta > 0 ? `+${delta}` : delta} vs target
+          {fmtDelta(targetDelta)} vs {sameGuide ? 'target/maint' : 'target'}
+        </div>
+      ) : null}
+      {maintDelta !== null ? (
+        <div className="font-mono tabular-nums text-gate-yellow">
+          {fmtDelta(maintDelta)} vs maint
         </div>
       ) : null}
     </div>
@@ -108,6 +129,7 @@ export function CaloriesTrend({
   logs,
   today,
   calorieTarget,
+  maintenance,
 }: CaloriesTrendProps) {
   const [range, setRange] = React.useState<'7' | '14'>('7')
   const days = range === '7' ? 7 : 14
@@ -119,15 +141,24 @@ export function CaloriesTrend({
 
   const hasAny = data.some((d) => d.calories !== null)
 
-  // Y domain: pad around logged values and the target.
+  // Y domain: pad around logged values plus guide lines.
   const values = data
     .map((d) => d.calories)
     .filter((v): v is number => v !== null)
   if (calorieTarget !== null) values.push(calorieTarget)
+  if (maintenance !== null) values.push(maintenance)
   const max = values.length ? Math.max(...values) : 2500
   const min = values.length ? Math.min(...values) : 0
   const yMax = Math.ceil((max * 1.1) / 100) * 100
   const yMin = Math.max(0, Math.floor((min * 0.9) / 100) * 100)
+  const sameGuide =
+    calorieTarget !== null &&
+    maintenance !== null &&
+    Math.round(calorieTarget) === Math.round(maintenance)
+  const targetLabel =
+    calorieTarget !== null
+      ? `${sameGuide ? 'target/maint' : 'target'} ${Math.round(calorieTarget)}`
+      : ''
 
   return (
     <Card>
@@ -135,9 +166,13 @@ export function CaloriesTrend({
         <div className="space-y-1.5">
           <CardTitle>Calories trend</CardTitle>
           <CardDescription>
-            {calorieTarget !== null
-              ? 'Daily calories against your block target.'
-              : 'Daily calories. Set a diet block for a target line.'}
+            {calorieTarget !== null && maintenance !== null
+              ? 'Daily calories against your block target and maintenance.'
+              : calorieTarget !== null
+                ? 'Daily calories against your block target.'
+                : maintenance !== null
+                  ? 'Daily calories against your estimated maintenance.'
+                  : 'Daily calories. Set a diet block or maintenance for guide lines.'}
           </CardDescription>
         </div>
         <Tabs value={range} onValueChange={(v) => setRange(v as '7' | '14')}>
@@ -186,7 +221,12 @@ export function CaloriesTrend({
                 />
                 <Tooltip
                   cursor={{ stroke: COLORS.border }}
-                  content={<ChartTooltip target={calorieTarget} />}
+                  content={
+                    <ChartTooltip
+                      target={calorieTarget}
+                      maintenance={maintenance}
+                    />
+                  }
                 />
                 {calorieTarget !== null ? (
                   <ReferenceLine
@@ -194,9 +234,22 @@ export function CaloriesTrend({
                     stroke={COLORS.muted}
                     strokeDasharray="4 4"
                     label={{
-                      value: `target ${Math.round(calorieTarget)}`,
+                      value: targetLabel,
                       position: 'insideTopRight',
                       fill: COLORS.muted,
+                      fontSize: 10,
+                    }}
+                  />
+                ) : null}
+                {maintenance !== null && !sameGuide ? (
+                  <ReferenceLine
+                    y={maintenance}
+                    stroke={COLORS.maintenance}
+                    strokeDasharray="2 4"
+                    label={{
+                      value: `maint ${Math.round(maintenance)}`,
+                      position: 'insideBottomRight',
+                      fill: COLORS.maintenance,
                       fontSize: 10,
                     }}
                   />

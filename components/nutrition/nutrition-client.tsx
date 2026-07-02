@@ -169,6 +169,7 @@ export function NutritionClient({
         logs={recentLogs}
         today={today}
         calorieTarget={activeBlock?.calorie_target ?? null}
+        maintenance={maintenance}
       />
 
       <RecentDays
