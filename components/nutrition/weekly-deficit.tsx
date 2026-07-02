@@ -294,6 +294,14 @@ export function DeficitTracker({
   const estChange = r.deficit / kcalPerUnit
   // Signed vs maintenance: negative = under maintenance (a deficit), shown as -X.
   const avgDaily = r.daysLogged ? Math.round(-r.deficit / r.daysLogged) : 0
+  // The selected window's average activity-adjusted maintenance/day. If low
+  // steps trimmed it, show the trim inline: "2,400 (-200) kcal".
+  const avgAdjustedMaint = r.daysLogged ? Math.round(r.sumMaint / r.daysLogged) : maint
+  const avgMaintAdjustment = r.daysLogged ? Math.round(r.totalAdjustment / r.daysLogged) : 0
+  const adjustedMaintDisplay =
+    avgMaintAdjustment > 0
+      ? `${avgAdjustedMaint.toLocaleString()} (${fmtSigned(-avgMaintAdjustment)})`
+      : avgAdjustedMaint.toLocaleString()
   const surplus = -r.deficit // total intake − adjusted maintenance over the window
   const losing = r.deficit > 0 // tissue direction (down = losing)
   // "On track" toward the mode's goal — drives the colors. For cut this is the
@@ -459,6 +467,12 @@ export function DeficitTracker({
                 size="default"
                 tone={onTrack ? 'green' : 'red'}
               />
+              <Stat
+                label="Adj maint/day"
+                value={adjustedMaintDisplay}
+                unit="kcal"
+                size="default"
+              />
             </div>
 
             {targetNote ? (
@@ -475,14 +489,16 @@ export function DeficitTracker({
             {r.adjustedDays > 0 ? (
               <p className="flex items-center gap-1.5 text-xs text-muted">
                 <Footprints className="size-3.5 shrink-0 text-signal" aria-hidden />
-                Activity-adjusted: −{Math.round(r.totalAdjustment).toLocaleString()} kcal across{' '}
-                {r.adjustedDays} low-step {r.adjustedDays === 1 ? 'day' : 'days'}.
+                Adjusted maintenance averaged {avgAdjustedMaint.toLocaleString()} kcal/day (base{' '}
+                {maint.toLocaleString()}, {fmtSigned(-avgMaintAdjustment)}/day from low steps). Total trim:{' '}
+                {Math.round(r.totalAdjustment).toLocaleString()} kcal across {r.adjustedDays} low-step{' '}
+                {r.adjustedDays === 1 ? 'day' : 'days'}.
               </p>
             ) : null}
 
             <p className="font-mono text-[11px] tabular-nums text-muted">
               {r.daysLogged} days logged · {rangeLabel} · {Math.round(r.sumCalories).toLocaleString()}{' '}
-              kcal eaten vs {Math.round(r.sumMaint).toLocaleString()} adj. maintenance
+              kcal eaten vs {Math.round(r.sumMaint).toLocaleString()} adj. maintenance ({avgAdjustedMaint.toLocaleString()}/day)
             </p>
           </>
         )}
