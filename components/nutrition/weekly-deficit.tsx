@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { parseISO, startOfWeek, startOfMonth, format } from 'date-fns'
+import { parseISO, startOfWeek, subDays, format } from 'date-fns'
 import { Flame, Pencil, TrendingDown, TrendingUp, Footprints } from 'lucide-react'
 
 import type { NutritionLog, Unit } from '@/lib/types'
@@ -92,7 +92,8 @@ function computeWindow(
       start = startOfWeek(todayD, { weekStartsOn: 1 })
       break
     case 'month':
-      start = startOfMonth(todayD)
+      // Rolling 30-day window, inclusive of today (not the calendar month).
+      start = subDays(todayD, 29)
       break
     case 'block':
       start = blockStart ? parseISO(blockStart) : startOfWeek(todayD, { weekStartsOn: 1 })
@@ -103,7 +104,7 @@ function computeWindow(
   }
 
   // The active diet block's start is a HARD floor — every window stays inside the
-  // block, so a week/month can't reach back before the block began.
+  // block, so a week/30-day window can't reach back before the block began.
   if (blockStart) {
     const bs = parseISO(blockStart)
     if (start < bs) start = bs

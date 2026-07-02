@@ -8,8 +8,8 @@ import { NutritionClient } from '@/components/nutrition/nutrition-client'
 
 export const dynamic = 'force-dynamic'
 
-/** How many days we pull. The deficit tracker uses all of these (Week/Month/
- *  Block/All windows); the list + trend slice the most recent 21 client-side. */
+/** How many days we pull. The deficit tracker uses all of these (Week/Month
+ *  as rolling 30d/Block/All windows); the list + trend slices the most recent 21 client-side. */
 const WINDOW_DAYS = 365
 
 const KG_PER_LB = 1 / 2.2046226218
