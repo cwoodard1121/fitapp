@@ -64,6 +64,7 @@ function fmtSigned(n: number): string {
 
 interface WindowResult {
   daysLogged: number
+  ignoredLowDays: number
   deficit: number
   sumCalories: number
   sumMaint: number
@@ -493,6 +494,13 @@ export function DeficitTracker({
                 {maint.toLocaleString()}, {fmtSigned(-avgMaintAdjustment)}/day from low steps). Total trim:{' '}
                 {Math.round(r.totalAdjustment).toLocaleString()} kcal across {r.adjustedDays} low-step{' '}
                 {r.adjustedDays === 1 ? 'day' : 'days'}.
+              </p>
+            ) : null}
+
+            {r.ignoredLowDays > 0 ? (
+              <p className="text-xs text-muted">
+                Ignored {r.ignoredLowDays} under-logged day{r.ignoredLowDays === 1 ? '' : 's'} below{' '}
+                {minCal.toLocaleString()} kcal in this window.
               </p>
             ) : null}
 

@@ -1,10 +1,8 @@
-import { format, parseISO } from 'date-fns'
+import { format } from 'date-fns'
 
 import { createClient } from '@/lib/supabase/server'
 import { ensureProfile, requireUserId } from '@/lib/data'
-import type { BodyMetric, NutritionLog } from '@/lib/types'
-import { computeCalibration, type Calibration } from '@/lib/nutrition/calibration'
-import { DEFAULT_STEP_BASELINE } from '@/lib/nutrition/deficit'
+import type { BodyMetric } from '@/lib/types'
 import { BodyClient } from '@/components/body/body-client'
 
 export const metadata = {
@@ -12,8 +10,6 @@ export const metadata = {
 }
 
 export const dynamic = 'force-dynamic'
-
-const KG_PER_LB = 1 / 2.2046226218
 
 export default async function BodyPage() {
   const profile = await ensureProfile()
@@ -28,75 +24,13 @@ export default async function BodyPage() {
     .eq('user_id', userId)
     .order('measured_on', { ascending: true })
   if (error) throw error
-  const entries = (data ?? []) as BodyMetric[]
-
-  const today = format(new Date(), 'yyyy-MM-dd')
-
-  const stepBaseline = profile.maintenance_step_baseline ?? DEFAULT_STEP_BASELINE
-
-  // The maintenance calibration runs ONLY during a diet block — the block's start
-  // is its window. No active diet block => no calibration (there's no defined cut
-  // to calibrate against). The trend chart still shows ALL data; only this is windowed.
-  const { data: blockRows } = await supabase
-    .from('blocks')
-    .select('start_date')
-    .eq('user_id', userId)
-    .eq('kind', 'diet')
-    .eq('is_active', true)
-    .order('start_date', { ascending: false })
-    .limit(1)
-  const blockStart = (blockRows?.[0]?.start_date as string | null | undefined) ?? null
-
-  let calibration: Calibration | null = null
-  if (blockStart) {
-    const windowStart = parseISO(blockStart)
-    const windowStartStr = format(windowStart, 'yyyy-MM-dd')
-
-    const [{ data: nutRows }, { data: recRows }] = await Promise.all([
-      supabase
-        .from('nutrition_logs')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('logged_on', windowStartStr),
-      supabase
-        .from('recovery_metrics')
-        .select('metric_date, steps')
-        .eq('user_id', userId)
-        .gte('metric_date', windowStartStr),
-    ])
-    const nutLogs = (nutRows ?? []) as NutritionLog[]
-    const stepsByDate: Record<string, number> = {}
-    for (const r of (recRows ?? []) as { metric_date: string; steps: number | null }[]) {
-      if (r.steps != null) stepsByDate[r.metric_date] = r.steps
-    }
-
-    const latestWeight = entries.length ? entries[entries.length - 1].bodyweight : null
-    const weightKg =
-      latestWeight == null ? 0 : unit === 'lb' ? latestWeight * KG_PER_LB : latestWeight
-
-    calibration = computeCalibration({
-      bodyEntries: entries,
-      logs: nutLogs,
-      stepsByDate,
-      maintenance: profile.maintenance_calories,
-      stepBaseline,
-      weightKg,
-      minCalories: profile.nutrition_min_calories,
-      unit,
-      windowStart,
-      today,
-    })
-  }
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-6">
       <BodyClient
-        entries={entries}
+        entries={(data ?? []) as BodyMetric[]}
         unit={unit}
-        today={today}
-        calibration={calibration}
-        maintenance={profile.maintenance_calories}
-        stepBaseline={stepBaseline}
+        today={format(new Date(), 'yyyy-MM-dd')}
       />
     </div>
   )

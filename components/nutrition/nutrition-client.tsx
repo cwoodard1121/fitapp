@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
 import type { Block, NutritionLog, Unit } from '@/lib/types'
+import type { Calibration } from '@/lib/nutrition/calibration'
 import {
   upsertNutritionLog,
   deleteNutritionLog,
@@ -16,6 +17,7 @@ import { TargetsProgress } from './targets-progress'
 import { DeficitTracker } from './weekly-deficit'
 import { RecentDays } from './recent-days'
 import { CaloriesTrend } from './calories-trend'
+import { MaintenanceCheck } from './maintenance-check'
 
 function blankForm(date: string): IntakeFormValues {
   return {
@@ -51,10 +53,12 @@ interface NutritionClientProps {
   stepsByDate: Record<string, number>
   /** Latest bodyweight in kg, for the step formula. */
   weightKg: number | null
-  /** Steps/day the maintenance assumes (null -> 10000 default). */
-  stepBaseline: number | null
+  /** Steps/day the maintenance assumes. */
+  stepBaseline: number
   /** Outlier filter from the profile: ignore days under this many kcal (null = off). */
   minCalories: number | null
+  /** Predicted-vs-actual maintenance calibration; null when no active diet block. */
+  calibration: Calibration | null
 }
 
 /** Recent days kept on screen for the list + trend (the deficit tracker uses all). */
@@ -70,6 +74,7 @@ export function NutritionClient({
   weightKg,
   stepBaseline,
   minCalories,
+  calibration,
 }: NutritionClientProps) {
   const router = useRouter()
   const [pending, startTransition] = React.useTransition()
@@ -156,6 +161,16 @@ export function NutritionClient({
         phase={activeBlock?.phase ?? null}
         blockStart={activeBlock?.start_date ?? null}
       />
+
+      {calibration && calibration.status !== 'no_maintenance' && calibration.daysLogged > 0 ? (
+        <MaintenanceCheck
+          calibration={calibration}
+          unit={unit}
+          currentMaintenance={maintenance}
+          stepBaseline={stepBaseline}
+          minCalories={minCalories}
+        />
+      ) : null}
 
       <DailyIntakeForm
         values={values}

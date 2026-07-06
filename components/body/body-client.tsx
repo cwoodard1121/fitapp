@@ -20,13 +20,11 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import type { BodyMetric, Unit } from '@/lib/types'
-import type { Calibration } from '@/lib/nutrition/calibration'
 
 import { BodyStats } from './body-stats'
 import { EntriesList } from './entries-list'
 import { LogForm } from './log-form'
 import { TrendChart } from './trend-chart'
-import { MaintenanceCheck } from './maintenance-check'
 
 interface BodyClientProps {
   /** Ascending by measured_on (oldest first). */
@@ -34,19 +32,12 @@ interface BodyClientProps {
   unit: Unit
   /** yyyy-MM-dd for "today" (computed server-side for stable SSR). */
   today: string
-  /** Predicted-vs-actual maintenance calibration (server-side); null if no diet block. */
-  calibration: Calibration | null
-  maintenance: number | null
-  stepBaseline: number
 }
 
 export function BodyClient({
   entries,
   unit,
   today,
-  calibration,
-  maintenance,
-  stepBaseline,
 }: BodyClientProps) {
   const [open, setOpen] = React.useState(false)
   // The entry the form is bound to: null = brand-new weigh-in.
@@ -145,15 +136,6 @@ export function BodyClient({
                 <TrendChart entries={entries} unit={unit} />
               </CardContent>
             </Card>
-          ) : null}
-
-          {calibration && calibration.status !== 'no_maintenance' && calibration.daysLogged > 0 ? (
-            <MaintenanceCheck
-              calibration={calibration}
-              unit={unit}
-              currentMaintenance={maintenance}
-              stepBaseline={stepBaseline}
-            />
           ) : null}
 
           <Card>

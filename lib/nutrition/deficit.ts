@@ -48,6 +48,7 @@ export interface DeficitInput {
 
 export interface DeficitResult {
   daysLogged: number
+  ignoredLowDays: number
   /** + = under (adjusted) maintenance, i.e. a deficit. */
   deficit: number
   sumCalories: number
@@ -84,6 +85,7 @@ export function accumulateDeficit(input: DeficitInput): DeficitResult {
   let sumCalories = 0
   let sumMaint = 0
   let daysLogged = 0
+  let ignoredLowDays = 0
   let adjustedDays = 0
   let totalAdjustment = 0
 
@@ -91,7 +93,10 @@ export function accumulateDeficit(input: DeficitInput): DeficitResult {
     if (l.calories == null) continue
     const d = parseISO(l.logged_on)
     if (d < start || d > end) continue
-    if (ignoreLow && l.logged_on !== today && l.calories < minCal) continue
+    if (ignoreLow && l.logged_on !== today && l.calories < minCal) {
+      ignoredLowDays += 1
+      continue
+    }
 
     const steps = stepsByDate[l.logged_on]
     const adjustment =
@@ -110,5 +115,5 @@ export function accumulateDeficit(input: DeficitInput): DeficitResult {
     }
   }
 
-  return { daysLogged, deficit, sumCalories, sumMaint, adjustedDays, totalAdjustment }
+  return { daysLogged, ignoredLowDays, deficit, sumCalories, sumMaint, adjustedDays, totalAdjustment }
 }
