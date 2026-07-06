@@ -33,6 +33,53 @@ function nutritionLog(date: string, calories: number): NutritionLog {
 }
 
 describe('maintenance calibration', () => {
+  it('removes the first 2% of cut scale loss before maintenance adjustment', () => {
+    const dates = [
+      '2026-06-20',
+      '2026-06-21',
+      '2026-06-22',
+      '2026-06-23',
+      '2026-06-24',
+      '2026-06-25',
+      '2026-06-26',
+      '2026-06-27',
+      '2026-06-28',
+      '2026-06-29',
+      '2026-06-30',
+      '2026-07-01',
+      '2026-07-02',
+      '2026-07-03',
+      '2026-07-04',
+    ]
+
+    const calibration = computeCalibration({
+      bodyEntries: [
+        bodyMetric('2026-06-20', 200),
+        bodyMetric('2026-06-23', 198.7),
+        bodyMetric('2026-06-27', 197),
+        bodyMetric('2026-07-01', 195.3),
+        bodyMetric('2026-07-04', 194),
+      ],
+      logs: dates.map((date) => nutritionLog(date, 2000)),
+      stepsByDate: {},
+      maintenance: 2500,
+      stepBaseline: 10000,
+      weightKg: 90,
+      minCalories: 1200,
+      unit: 'lb',
+      windowStart: new Date('2026-06-20T00:00:00.000Z'),
+      today: '2026-07-04',
+      phase: 'cut',
+    })
+
+    expect(calibration.status).toBe('ok')
+    expect(calibration.waterWeight.earlyDietOffset).toBeGreaterThan(3.9)
+    expect(calibration.waterWeight.earlyDietOffset).toBeLessThan(4.1)
+    expect(calibration.actualWeeklyLoss).toBeGreaterThan(0.9)
+    expect(calibration.actualWeeklyLoss).toBeLessThan(1.1)
+    expect(calibration.suggestion).toBeNull()
+  })
+
   it('smooths a refeed-linked bodyweight spike with a 2% cap', () => {
     const calibration = computeCalibration({
       bodyEntries: [

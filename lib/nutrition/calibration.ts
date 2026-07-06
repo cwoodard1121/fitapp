@@ -4,11 +4,13 @@
  *
  * The scale side uses a small water-weight guard. Abrupt high weigh-ins are
  * treated as likely water/glycogen noise and are smoothed down against nearby
- * stable readings, capped at 2% of baseline bodyweight.
+ * stable readings, capped at 2% of baseline bodyweight. For cut phases, the
+ * first 2% of starting scale loss is also treated as early diet water loss
+ * before maintenance suggestions are made.
  */
 import { differenceInCalendarDays, parseISO } from 'date-fns'
 
-import type { BodyMetric, NutritionLog, Unit } from '@/lib/types'
+import type { BlockPhase, BodyMetric, NutritionLog, Unit } from '@/lib/types'
 
 import { accumulateDeficit, DEFAULT_WEIGHT_KG, kcalPerUnit } from './deficit'
 
@@ -28,6 +30,8 @@ export interface CalibrationInput {
   windowStart: Date
   /** today's yyyy-MM-dd. */
   today: string
+  /** Active diet-block phase; early water-loss allowance only applies to cuts. */
+  phase?: BlockPhase | null
 }
 
 export interface CalibrationSuggestion {
@@ -45,6 +49,10 @@ export interface WaterWeightAdjustment {
   maxOffset: number
   /** Sum of all reading adjustments, in the user's bodyweight unit. */
   totalOffset: number
+  /** Starting cut loss ignored as early diet water, in the user's bodyweight unit. */
+  earlyDietOffset: number
+  /** Maximum early cut water-loss allowance, in the user's bodyweight unit. */
+  earlyDietAllowance: number
 }
 
 export interface Calibration {
@@ -89,7 +97,13 @@ function median(values: number[]): number | null {
 }
 
 function emptyWaterWeight(): WaterWeightAdjustment {
-  return { adjustedReadings: 0, maxOffset: 0, totalOffset: 0 }
+  return {
+    adjustedReadings: 0,
+    maxOffset: 0,
+    totalOffset: 0,
+    earlyDietOffset: 0,
+    earlyDietAllowance: 0,
+  }
 }
 
 function isLowOutlier(log: NutritionLog, minCalories: number | null, today: string): boolean {
@@ -143,6 +157,7 @@ function applyWaterWeightGuard({
   maintenance,
   minCalories,
   today,
+  preserveStartingWeight,
 }: {
   entries: BodyMetric[]
   unit: Unit
@@ -150,6 +165,7 @@ function applyWaterWeightGuard({
   maintenance: number | null
   minCalories: number | null
   today: string
+  preserveStartingWeight: boolean
 }) {
   if (entries.length === 0) {
     return {
@@ -183,6 +199,8 @@ function applyWaterWeightGuard({
   const absoluteThreshold = unit === 'kg' ? 0.4 : 1
 
   const points = raw.map((point, index) => {
+    if (preserveStartingWeight && index === 0) return point
+
     const nearby = raw
       .filter((other, otherIndex) => otherIndex !== index && Math.abs(other.x - point.x) <= 7)
       .map((other) => other.y)
@@ -217,7 +235,66 @@ function applyWaterWeightGuard({
 
   return {
     points,
-    waterWeight: { adjustedReadings, maxOffset, totalOffset },
+    waterWeight: {
+      adjustedReadings,
+      maxOffset,
+      totalOffset,
+      earlyDietOffset: 0,
+      earlyDietAllowance: 0,
+    },
+  }
+}
+
+const EARLY_DIET_WATER_LOSS_PCT = 0.02
+
+function applyEarlyDietWaterLossAllowance({
+  weeklyLoss,
+  entries,
+  phase,
+  waterWeight,
+}: {
+  weeklyLoss: number
+  entries: BodyMetric[]
+  phase: BlockPhase | null | undefined
+  waterWeight: WaterWeightAdjustment
+}): { weeklyLoss: number; waterWeight: WaterWeightAdjustment } {
+  if (phase !== 'cut' || weeklyLoss <= 0 || entries.length < 2) {
+    return { weeklyLoss, waterWeight }
+  }
+
+  const first = entries[0]
+  const last = entries[entries.length - 1]
+  const firstWeight = first.bodyweight
+  const lastWeight = last.bodyweight
+  if (firstWeight == null || lastWeight == null || firstWeight <= 0) {
+    return { weeklyLoss, waterWeight }
+  }
+
+  const spanDays = differenceInCalendarDays(parseISO(last.measured_on), parseISO(first.measured_on))
+  if (spanDays <= 0) {
+    return { weeklyLoss, waterWeight }
+  }
+
+  const scaleLoss = firstWeight - lastWeight
+  const allowance = firstWeight * EARLY_DIET_WATER_LOSS_PCT
+  const offset = Math.min(Math.max(scaleLoss, 0), allowance)
+
+  if (offset <= 0) {
+    return {
+      weeklyLoss,
+      waterWeight: { ...waterWeight, earlyDietAllowance: allowance },
+    }
+  }
+
+  const weeklyOffset = (offset * 7) / spanDays
+
+  return {
+    weeklyLoss: Math.max(0, weeklyLoss - weeklyOffset),
+    waterWeight: {
+      ...waterWeight,
+      earlyDietOffset: offset,
+      earlyDietAllowance: allowance,
+    },
   }
 }
 
@@ -242,6 +319,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
     unit,
     windowStart,
     today,
+    phase,
   } = input
 
   const perUnit = kcalPerUnit(unit)
@@ -254,16 +332,24 @@ export function computeCalibration(input: CalibrationInput): Calibration {
     return d >= windowStart && d <= todayD
   })
   const bodyReadings = inWindow.length
-  const { points: pts, waterWeight } = applyWaterWeightGuard({
+  const { points: pts, waterWeight: spikeWaterWeight } = applyWaterWeightGuard({
     entries: inWindow,
     unit,
     logs,
     maintenance,
     minCalories,
     today,
+    preserveStartingWeight: phase === 'cut',
   })
   const s = slope(pts)
-  const actualWeeklyLoss = s != null ? -s * 7 : 0
+  const adjustedScale = applyEarlyDietWaterLossAllowance({
+    weeklyLoss: s != null ? -s * 7 : 0,
+    entries: inWindow,
+    phase,
+    waterWeight: spikeWaterWeight,
+  })
+  const actualWeeklyLoss = adjustedScale.weeklyLoss
+  const waterWeight = adjustedScale.waterWeight
 
   if (maintenance == null) {
     return {

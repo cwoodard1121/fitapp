@@ -88,6 +88,7 @@ export default async function NutritionPage() {
       unit,
       windowStart: parseISO(activeBlock.start_date),
       today,
+      phase: activeBlock.phase,
     })
   }
 

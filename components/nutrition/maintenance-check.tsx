@@ -39,6 +39,8 @@ export function MaintenanceCheck({
   const router = useRouter()
   const [pending, startTransition] = React.useTransition()
   const c = calibration
+  const hasScaleWaterAdjustment =
+    c.waterWeight.adjustedReadings > 0 || c.waterWeight.earlyDietOffset > 0
 
   function applySuggestion() {
     if (!c.suggestion) return
@@ -78,7 +80,7 @@ export function MaintenanceCheck({
           />
           <RateTile
             label="Actual"
-            sub="from scale"
+            sub={hasScaleWaterAdjustment ? 'water-adjusted' : 'from scale'}
             weeklyLoss={c.actualWeeklyLoss}
             unit={unit}
           />
@@ -90,6 +92,13 @@ export function MaintenanceCheck({
               Smoothed {c.waterWeight.adjustedReadings} likely water spike
               {c.waterWeight.adjustedReadings === 1 ? '' : 's'}, capped at 2% of nearby stable
               weight. Largest offset: {c.waterWeight.maxOffset.toFixed(1)} {unit}.
+            </Note>
+          ) : null}
+
+          {c.waterWeight.earlyDietOffset > 0 ? (
+            <Note tone="muted" icon={<Waves className="size-4 shrink-0" aria-hidden />}>
+              Ignored {c.waterWeight.earlyDietOffset.toFixed(1)} {unit} as early cut water loss,
+              capped at 2% of starting weight.
             </Note>
           ) : null}
 
