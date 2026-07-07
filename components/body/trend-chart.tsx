@@ -15,7 +15,10 @@ import {
 
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { estimateBodyFatFromLeanRetention } from '@/lib/body/metrics'
+import {
+  estimateBodyFatFromLeanRetention,
+  type StrengthEstimatePoint,
+} from '@/lib/body/metrics'
 import type { Block, BodyMetric, Unit } from '@/lib/types'
 
 // Design tokens (charts take literal colors, not tailwind classes).
@@ -34,6 +37,7 @@ interface TrendChartProps {
   entries: BodyMetric[]
   unit: Unit
   activeDietBlock: Pick<Block, 'start_date'> | null
+  strengthPoints: StrengthEstimatePoint[]
 }
 
 interface Point {
@@ -104,16 +108,17 @@ function percentDomain(points: Point[]): [number, number] {
   return low === high ? [Math.max(1, low - 1), Math.min(80, high + 1)] : [low, high]
 }
 
-export function TrendChart({ entries, unit, activeDietBlock }: TrendChartProps) {
+export function TrendChart({ entries, unit, activeDietBlock, strengthPoints }: TrendChartProps) {
   const [showMa, setShowMa] = React.useState(true)
   const blockStart = activeDietBlock?.start_date ?? null
 
   const estimatedBodyfatPoints = React.useMemo(
     () =>
       blockStart
-        ? estimateBodyFatFromLeanRetention(entries, { start_date: blockStart }).points
+        ? estimateBodyFatFromLeanRetention(entries, { start_date: blockStart }, strengthPoints)
+            .points
         : [],
-    [entries, blockStart],
+    [entries, blockStart, strengthPoints],
   )
   const estimateByDate = React.useMemo(
     () => new Map(estimatedBodyfatPoints.map((p) => [p.date, p.bodyfat])),

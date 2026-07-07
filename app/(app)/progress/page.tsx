@@ -158,9 +158,22 @@ export default async function ProgressPage() {
   }
 
   /* --- Body measurements, oldest -> newest. --- */
+  const strengthPoints = exercises.flatMap((exercise) =>
+    exercise.points
+      .filter((point) => point.e1rm != null)
+      .map((point) => ({
+        date: point.date.slice(0, 10),
+        exerciseName: exercise.name,
+        e1rm: point.e1rm,
+      })),
+  )
   const bodyFatBlockStartDate = activeDietBlock?.start_date ?? null
   const estimatedBodyfat = bodyFatBlockStartDate
-    ? estimateBodyFatFromLeanRetention(bodyMetrics, { start_date: bodyFatBlockStartDate })
+    ? estimateBodyFatFromLeanRetention(
+        bodyMetrics,
+        { start_date: bodyFatBlockStartDate },
+        strengthPoints,
+      )
     : null
   const estimatedBodyfatByDate = new Map(
     (estimatedBodyfat?.points ?? []).map((p) => [p.date, p.bodyfat]),

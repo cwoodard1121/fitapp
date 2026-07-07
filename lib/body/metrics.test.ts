@@ -67,4 +67,18 @@ describe('body metric helpers', () => {
 
     expect(estimate.points.map((p) => p.date)).toEqual(['2026-06-20', '2026-06-30'])
   })
+
+  it('uses high relative strength as a weighted body-fat signal', () => {
+    const entries = [
+      bodyMetric('2026-06-20', 182, 22),
+      bodyMetric('2026-07-04', 182, null),
+    ]
+    const strength = [
+      { date: '2026-07-02', exerciseName: 'Barbell bench press', e1rm: 300 },
+    ]
+
+    const estimate = estimateBodyFatFromLeanRetention(entries, { start_date: '2026-06-20' }, strength)
+
+    expect(estimate.latest).toBeCloseTo(19.8, 1)
+  })
 })

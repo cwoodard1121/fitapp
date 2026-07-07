@@ -20,6 +20,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import type { Block, BodyMetric, Unit } from '@/lib/types'
+import type { StrengthEstimatePoint } from '@/lib/body/metrics'
 
 import { BodyStats } from './body-stats'
 import { EntriesList } from './entries-list'
@@ -31,6 +32,7 @@ interface BodyClientProps {
   entries: BodyMetric[]
   unit: Unit
   activeDietBlock: Pick<Block, 'phase' | 'start_date'> | null
+  strengthPoints: StrengthEstimatePoint[]
   /** yyyy-MM-dd for "today" (computed server-side for stable SSR). */
   today: string
 }
@@ -39,6 +41,7 @@ export function BodyClient({
   entries,
   unit,
   activeDietBlock,
+  strengthPoints,
   today,
 }: BodyClientProps) {
   const [open, setOpen] = React.useState(false)
@@ -139,6 +142,7 @@ export function BodyClient({
                   entries={entries}
                   unit={unit}
                   activeDietBlock={activeDietBlock}
+                  strengthPoints={strengthPoints}
                 />
               </CardContent>
             </Card>
