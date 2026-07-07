@@ -135,7 +135,11 @@ export function BodyClient({
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <TrendChart entries={entries} unit={unit} />
+                <TrendChart
+                  entries={entries}
+                  unit={unit}
+                  activeDietBlock={activeDietBlock}
+                />
               </CardContent>
             </Card>
           ) : null}

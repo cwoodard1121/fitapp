@@ -81,4 +81,5 @@ export interface ProgressData {
   bodyWeightRawLatest: number | null
   bodyWeightBasis: WeightBasis
   bodyWeightChange: number | null
+  bodyFatBlockStartDate: string | null
 }

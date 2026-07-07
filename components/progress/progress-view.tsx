@@ -38,6 +38,7 @@ export function ProgressView({ data }: { data: ProgressData }) {
     bodyWeightRawLatest,
     bodyWeightBasis,
     bodyWeightChange,
+    bodyFatBlockStartDate,
   } = data
 
   const [selected, setSelected] = React.useState<string>(
@@ -211,6 +212,7 @@ export function ProgressView({ data }: { data: ProgressData }) {
         rawLatestWeight={bodyWeightRawLatest}
         weightBasis={bodyWeightBasis}
         weightChange={bodyWeightChange}
+        bodyFatBlockStartDate={bodyFatBlockStartDate}
       />
     </div>
   )

@@ -53,4 +53,18 @@ describe('body metric helpers', () => {
     expect(estimate.latest).toBeCloseTo(17.9, 1)
     expect(estimateBodyFatAtWeightFromLeanRetention(entries, 188)).toBeCloseTo(17, 1)
   })
+
+  it('scopes body-fat estimate points to the active block after the anchor', () => {
+    const entries = [
+      bodyMetric('2026-06-01', 205, null),
+      bodyMetric('2026-06-10', 202, 22),
+      bodyMetric('2026-06-20', 200, null),
+      bodyMetric('2026-06-30', 198, null),
+    ]
+    const block = { start_date: '2026-06-15' }
+
+    const estimate = estimateBodyFatFromLeanRetention(entries, block)
+
+    expect(estimate.points.map((p) => p.date)).toEqual(['2026-06-20', '2026-06-30'])
+  })
 })

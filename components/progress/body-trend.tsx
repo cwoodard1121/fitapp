@@ -89,6 +89,22 @@ function ChartTooltip({
   )
 }
 
+function percentDomain(points: ChartRow[]): [number, number] {
+  const values = points
+    .flatMap((p) => [p.bodyfat, p.estimatedBodyfat])
+    .filter((v): v is number => v != null)
+  if (values.length === 0) return [1, 80]
+
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const spread = Math.max(1, max - min)
+  const pad = Math.max(0.8, spread * 0.2)
+  const low = Math.max(1, Math.floor((min - pad) * 2) / 2)
+  const high = Math.min(80, Math.ceil((max + pad) * 2) / 2)
+
+  return low === high ? [Math.max(1, low - 1), Math.min(80, high + 1)] : [low, high]
+}
+
 export function BodyTrend({
   points,
   unit,
@@ -96,6 +112,7 @@ export function BodyTrend({
   rawLatestWeight,
   weightBasis,
   weightChange,
+  bodyFatBlockStartDate,
 }: {
   points: BodyTrendPoint[]
   unit: Unit
@@ -103,6 +120,7 @@ export function BodyTrend({
   rawLatestWeight: number | null
   weightBasis: WeightBasis
   weightChange: number | null
+  bodyFatBlockStartDate: string | null
 }) {
   if (points.length === 0) return null
 
@@ -112,11 +130,21 @@ export function BodyTrend({
     bodyfat: p.bodyfat,
     estimatedBodyfat: p.estimatedBodyfat,
   }))
+  const bodyFatPoints = bodyFatBlockStartDate
+    ? points.filter((p) => p.date >= bodyFatBlockStartDate)
+    : points
+  const bodyFatData: ChartRow[] = bodyFatPoints.map((p) => ({
+    label: safeLabel(p.date),
+    weight: p.bodyweight,
+    bodyfat: p.bodyfat,
+    estimatedBodyfat: p.estimatedBodyfat,
+  }))
 
-  const hasBodyfat = points.some((p) => p.bodyfat != null)
-  const hasEstimatedBodyfat = points.some((p) => p.estimatedBodyfat != null)
+  const hasBodyfat = bodyFatData.some((p) => p.bodyfat != null)
+  const hasEstimatedBodyfat = bodyFatData.some((p) => p.estimatedBodyfat != null)
 
-  const fat = firstLast(points.map((p) => p.bodyfat))
+  const fat = firstLast(bodyFatData.map((p) => p.bodyfat))
+  const bodyFatYAxisDomain = percentDomain(bodyFatData)
 
   const axisProps = {
     stroke: COLORS.muted,
@@ -133,7 +161,12 @@ export function BodyTrend({
           Bodyweight trend
         </CardTitle>
         <CardDescription>
-          Bodyweight{hasBodyfat || hasEstimatedBodyfat ? " and body fat" : ""} over your logged range.
+          Bodyweight over your logged range
+          {hasBodyfat || hasEstimatedBodyfat
+            ? bodyFatBlockStartDate
+              ? "; body fat over the active block."
+              : "; body fat over your logged range."
+            : "."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -227,10 +260,15 @@ export function BodyTrend({
             </div>
             <div className="h-40 w-full" aria-label="Body fat trend chart">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+                <LineChart data={bodyFatData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
                   <CartesianGrid stroke={COLORS.border} strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="label" minTickGap={24} {...axisProps} />
-                  <YAxis domain={["auto", "auto"]} width={44} {...axisProps} />
+                  <YAxis
+                    domain={bodyFatYAxisDomain}
+                    width={44}
+                    tickFormatter={(value) => `${value}%`}
+                    {...axisProps}
+                  />
                   <Tooltip
                     content={<ChartTooltip unit={unit} />}
                     cursor={{ stroke: COLORS.border }}
@@ -254,9 +292,9 @@ export function BodyTrend({
                       name="Est. body fat"
                       dataKey="estimatedBodyfat"
                       stroke={COLORS.blue}
-                      strokeWidth={1.8}
-                      strokeDasharray="4 4"
-                      dot={false}
+                      strokeWidth={2}
+                      strokeDasharray="5 4"
+                      dot={{ r: 1.5, fill: COLORS.blue, strokeWidth: 0 }}
                       connectNulls
                       isAnimationActive={false}
                     />

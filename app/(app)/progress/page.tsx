@@ -158,9 +158,12 @@ export default async function ProgressPage() {
   }
 
   /* --- Body measurements, oldest -> newest. --- */
-  const estimatedBodyfat = estimateBodyFatFromLeanRetention(bodyMetrics)
+  const bodyFatBlockStartDate = activeDietBlock?.start_date ?? null
+  const estimatedBodyfat = bodyFatBlockStartDate
+    ? estimateBodyFatFromLeanRetention(bodyMetrics, { start_date: bodyFatBlockStartDate })
+    : null
   const estimatedBodyfatByDate = new Map(
-    estimatedBodyfat.points.map((p) => [p.date, p.bodyfat]),
+    (estimatedBodyfat?.points ?? []).map((p) => [p.date, p.bodyfat]),
   )
   const body: BodyTrendPoint[] = bodyMetrics.map((m) => ({
     date: m.measured_on,
@@ -310,6 +313,7 @@ export default async function ProgressPage() {
     bodyWeightRawLatest: normalizedBody.rawLatest,
     bodyWeightBasis: normalizedBody.basis,
     bodyWeightChange: normalizedBodyChange,
+    bodyFatBlockStartDate,
   }
 
   return (

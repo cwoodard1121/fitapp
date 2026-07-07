@@ -113,6 +113,21 @@ function scopeFromBlock(
   return readings.filter((r) => parseISO(r.date) >= start)
 }
 
+function hasBlockStart(
+  block: Pick<Block, 'start_date'> | null | undefined,
+): block is Pick<Block, 'start_date'> & { start_date: string } {
+  return !!block?.start_date
+}
+
+function scopeEntriesFromBlock(
+  entries: BodyMetric[],
+  block: Pick<Block, 'start_date'> | null | undefined,
+) {
+  if (!hasBlockStart(block)) return entries
+  const start = parseISO(block.start_date)
+  return entries.filter((e) => parseISO(e.measured_on) >= start)
+}
+
 function lowest(readings: WeightReading[]): WeightReading | null {
   if (readings.length === 0) return null
   return readings.reduce((best, r) => (r.weight < best.weight ? r : best), readings[0])
@@ -213,11 +228,15 @@ export function blockFloorWeeklyRate(
   }
 }
 
-export function estimateBodyFatFromLeanRetention(entries: BodyMetric[]): BodyFatEstimate {
+export function estimateBodyFatFromLeanRetention(
+  entries: BodyMetric[],
+  block?: Pick<Block, 'start_date'> | null,
+): BodyFatEstimate {
   const baseline = leanRetentionBaseline(entries)
+  const scopedEntries = scopeEntriesFromBlock(entries, block)
 
   if (!baseline) {
-    const latestMeasured = [...entries]
+    const latestMeasured = [...scopedEntries]
       .reverse()
       .find((e) => e.bodyfat_pct != null)?.bodyfat_pct ?? null
     return {
@@ -229,10 +248,12 @@ export function estimateBodyFatFromLeanRetention(entries: BodyMetric[]): BodyFat
     }
   }
 
-  const points = entries
+  const points = scopedEntries
     .filter(
       (e): e is BodyMetric & { bodyweight: number } =>
-        e.bodyweight != null && e.bodyweight > 0,
+        e.bodyweight != null &&
+        e.bodyweight > 0 &&
+        e.measured_on >= baseline.measured_on,
     )
     .map((e) => ({
       date: e.measured_on,
