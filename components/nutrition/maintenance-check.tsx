@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Gauge, ArrowDown, ArrowUp, Check, Minus, FlaskConical, Waves } from 'lucide-react'
+import { Gauge, ArrowDown, ArrowUp, Check, Minus, FlaskConical } from 'lucide-react'
 
 import type { Calibration } from '@/lib/nutrition/calibration'
 import type { Unit } from '@/lib/types'
@@ -39,16 +39,8 @@ export function MaintenanceCheck({
   const router = useRouter()
   const [pending, startTransition] = React.useTransition()
   const c = calibration
-  const hasScaleWaterAdjustment =
-    c.waterWeight.adjustedReadings > 0 || c.waterWeight.earlyDietOffset > 0
-  const actualSub =
-    c.scaleBasis === 'cut_floor'
-      ? hasScaleWaterAdjustment
-        ? 'block floor, adjusted'
-        : 'block floor'
-      : hasScaleWaterAdjustment
-        ? 'water-adjusted'
-        : 'from scale'
+  const actualSub = c.scaleBasis === 'cut_floor' ? 'block floor' : 'from scale'
+  const consistencyPct = Math.round(c.trackingConsistency * 100)
 
   function applySuggestion() {
     if (!c.suggestion) return
@@ -74,7 +66,7 @@ export function MaintenanceCheck({
           Maintenance calibration
         </CardTitle>
         <CardDescription>
-          Compares your logged calorie balance with water-smoothed scale movement.
+          Compares your recent reliable intake with scale movement inside the active block.
         </CardDescription>
       </CardHeader>
 
@@ -95,34 +87,22 @@ export function MaintenanceCheck({
         </div>
 
         <div className="space-y-2">
-          {c.waterWeight.adjustedReadings > 0 ? (
-            <Note tone="muted" icon={<Waves className="size-4 shrink-0" aria-hidden />}>
-              Smoothed {c.waterWeight.adjustedReadings} likely water spike
-              {c.waterWeight.adjustedReadings === 1 ? '' : 's'}, capped at 2% of nearby stable
-              weight. Largest offset: {c.waterWeight.maxOffset.toFixed(1)} {unit}.
-            </Note>
-          ) : null}
-
-          {c.waterWeight.earlyDietOffset > 0 ? (
-            <Note tone="muted" icon={<Waves className="size-4 shrink-0" aria-hidden />}>
-              Ignored {c.waterWeight.earlyDietOffset.toFixed(1)} {unit} as early cut water loss,
-              capped at 2% of starting weight.
-            </Note>
-          ) : null}
-
           {minCalories != null ? (
             <Note tone="muted" icon={<FlaskConical className="size-4 shrink-0" aria-hidden />}>
-              Calibration also ignores completed intake days below {minCalories.toLocaleString()}{' '}
-              kcal, matching the under-logged day filter.
+              Calibration ignores completed intake days below {minCalories.toLocaleString()} kcal
+              {c.ignoredLowDays > 0
+                ? ` (${c.ignoredLowDays} dropped in the selected window).`
+                : '.'}
             </Note>
           ) : null}
         </div>
 
         {c.status === 'insufficient' ? (
           <Note tone="muted" icon={<FlaskConical className="size-4 shrink-0" aria-hidden />}>
-            A maintenance suggestion unlocks after about 2 weeks of weigh-ins and logged intake.
-            So far: {c.bodyReadings} weigh-in{c.bodyReadings === 1 ? '' : 's'}, {c.daysLogged}{' '}
-            day{c.daysLogged === 1 ? '' : 's'} logged.
+            A maintenance suggestion unlocks after about 2 weeks, 5 weigh-ins, 10 reliable intake
+            days, and 70% recent consistency. So far: {c.bodyReadings} weigh-in
+            {c.bodyReadings === 1 ? '' : 's'}, {c.daysLogged}/{c.intakeWindowDays} reliable days
+            {c.intakeWindowDays > 0 ? ` (${consistencyPct}%)` : ''}.
           </Note>
         ) : c.suggestion ? (
           <div className="space-y-3 rounded-md border border-gate-yellow/40 bg-gate-yellow/10 p-3">

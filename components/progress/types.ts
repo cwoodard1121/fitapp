@@ -1,4 +1,5 @@
 import type { Decision, GoalMetricType, GoalStatus, Unit } from "@/lib/types"
+import type { WeightBasis } from "@/lib/body/metrics"
 
 /**
  * Plain, serialisable shapes the server component computes and hands to the
@@ -76,4 +77,8 @@ export interface ProgressData {
   goals: GoalProgressRow[]
   /** Body measurements oldest -> newest; empty when none logged. */
   body: BodyTrendPoint[]
+  bodyWeightCurrent: number | null
+  bodyWeightRawLatest: number | null
+  bodyWeightBasis: WeightBasis
+  bodyWeightChange: number | null
 }

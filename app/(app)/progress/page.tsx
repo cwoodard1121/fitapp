@@ -20,6 +20,7 @@ import {
   estimateBodyFatAtWeightFromLeanRetention,
   estimateBodyFatFromLeanRetention,
   normalizedBodyweight,
+  normalizedChangeFromStart,
 } from "@/lib/body/metrics"
 
 import { AnalysisPanel } from "@/components/analysis/analysis-panel"
@@ -173,6 +174,7 @@ export default async function ProgressPage() {
   const bestE1rmByName = new Map(exercises.map((e) => [e.name, e.bestE1rm]))
   const latestBody = bodyMetrics.length ? bodyMetrics[bodyMetrics.length - 1] : null
   const normalizedBody = normalizedBodyweight(bodyMetrics, activeDietBlock)
+  const normalizedBodyChange = normalizedChangeFromStart(bodyMetrics, activeDietBlock)
   const latestEstimatedBodyfat =
     estimatedBodyfat.latest != null
       ? estimateBodyFatAtWeightFromLeanRetention(bodyMetrics, normalizedBody.value)
@@ -309,6 +311,10 @@ export default async function ProgressPage() {
     defaultExercise,
     goals,
     body,
+    bodyWeightCurrent: normalizedBody.value,
+    bodyWeightRawLatest: normalizedBody.rawLatest,
+    bodyWeightBasis: normalizedBody.basis,
+    bodyWeightChange: normalizedBodyChange,
   }
 
   return (

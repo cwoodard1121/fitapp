@@ -2,23 +2,26 @@
  * Maintenance calibration: compare the loss your calorie deficit predicts with
  * the loss your scale shows over the active diet block.
  *
- * The scale side uses a small water-weight guard. Abrupt high weigh-ins are
- * treated as likely water/glycogen noise and are smoothed down against nearby
- * stable readings, capped at 2% of baseline bodyweight.
+ * Cut phases skip the first few days for maintenance calibration so the initial
+ * glycogen/water flush does not become a maintenance correction. After that
+ * settle period, scale movement uses the lowest weigh-in in the calibration
+ * window divided by elapsed time. A single heavier morning can age the rate a
+ * little, but it cannot erase the low-water mark.
  *
- * Cut phases use a block scale-floor rate instead of a straight line through
- * every weigh-in: start weight -> lowest water-smoothed weigh-in in the block,
- * divided by elapsed time. A single heavier morning can age the rate a little,
- * but it cannot erase the block's low-water mark. The first 2% of starting
- * scale loss is only subtracted when scale loss is faster than the calorie
- * deficit predicts, so early water loss cannot create a false "lower
- * maintenance" suggestion.
+ * The intake side uses the most recent consistent logging window inside the
+ * active block. Missed days block suggestions; obvious under-logged days are
+ * ignored; and extreme high/low deficit days are trimmed from the average.
  */
-import { differenceInCalendarDays, parseISO } from 'date-fns'
+import { addDays, differenceInCalendarDays, parseISO } from 'date-fns'
 
 import type { BlockPhase, BodyMetric, NutritionLog, Unit } from '@/lib/types'
 
-import { accumulateDeficit, DEFAULT_WEIGHT_KG, kcalPerUnit } from './deficit'
+import {
+  DEFAULT_WEIGHT_KG,
+  KCAL_PER_STEP,
+  REF_WEIGHT_KG,
+  kcalPerUnit,
+} from './deficit'
 
 export interface CalibrationInput {
   /** body_metrics ascending by measured_on. */
@@ -36,7 +39,7 @@ export interface CalibrationInput {
   windowStart: Date
   /** today's yyyy-MM-dd. */
   today: string
-  /** Active diet-block phase; early water-loss allowance only applies to cuts. */
+  /** Active diet-block phase. */
   phase?: BlockPhase | null
 }
 
@@ -63,7 +66,7 @@ export interface WaterWeightAdjustment {
 
 export interface Calibration {
   status: 'ok' | 'insufficient' | 'no_maintenance'
-  /** units/week, positive = losing; water-smoothed on the scale side. */
+  /** units/week, positive = losing. */
   predictedWeeklyLoss: number
   actualWeeklyLoss: number
   /** How the scale-side weekly rate was estimated. */
@@ -71,6 +74,12 @@ export interface Calibration {
   windowDays: number
   bodyReadings: number
   daysLogged: number
+  /** Days in the selected recent intake window. */
+  intakeWindowDays: number
+  /** Reliable logged intake days / window days. */
+  trackingConsistency: number
+  /** Completed low-calorie days dropped from calibration as likely under-logged. */
+  ignoredLowDays: number
   waterWeight: WaterWeightAdjustment
   /** Non-null only when status==='ok' and the rates diverge meaningfully. */
   suggestion: CalibrationSuggestion | null
@@ -109,13 +118,6 @@ function slope(points: TrendPoint[]): number | null {
   return (n * sxy - sx * sy) / denom
 }
 
-function median(values: number[]): number | null {
-  if (values.length === 0) return null
-  const sorted = [...values].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
-}
-
 function emptyWaterWeight(): WaterWeightAdjustment {
   return {
     adjustedReadings: 0,
@@ -126,67 +128,15 @@ function emptyWaterWeight(): WaterWeightAdjustment {
   }
 }
 
-function isLowOutlier(log: NutritionLog, minCalories: number | null, today: string): boolean {
+function isLowOutlier(log: NutritionLog, minCalories: number | null): boolean {
   return (
     minCalories != null &&
-    log.logged_on !== today &&
     log.calories != null &&
     log.calories < minCalories
   )
 }
 
-function hasRecentTrackingNoise({
-  date,
-  logs,
-  maintenance,
-  reliableMedian,
-  minCalories,
-  today,
-}: {
-  date: string
-  logs: NutritionLog[]
-  maintenance: number | null
-  reliableMedian: number | null
-  minCalories: number | null
-  today: string
-}) {
-  const bodyDate = parseISO(date)
-
-  for (const log of logs) {
-    if (log.calories == null) continue
-    const daysAgo = differenceInCalendarDays(bodyDate, parseISO(log.logged_on))
-    if (daysAgo < 0 || daysAgo > 2) continue
-
-    if (isLowOutlier(log, minCalories, today)) return true
-
-    const highVsMaintenance = maintenance != null && log.calories >= maintenance
-    const highVsRecent =
-      reliableMedian != null &&
-      (log.calories >= reliableMedian + 300 || log.calories >= reliableMedian * 1.15)
-
-    if (highVsMaintenance || highVsRecent) return true
-  }
-
-  return false
-}
-
-function applyWaterWeightGuard({
-  entries,
-  unit,
-  logs,
-  maintenance,
-  minCalories,
-  today,
-  preserveStartingWeight,
-}: {
-  entries: BodyMetric[]
-  unit: Unit
-  logs: NutritionLog[]
-  maintenance: number | null
-  minCalories: number | null
-  today: string
-  preserveStartingWeight: boolean
-}) {
+function trendPoints(entries: BodyMetric[]) {
   if (entries.length === 0) {
     return {
       points: [],
@@ -195,77 +145,15 @@ function applyWaterWeightGuard({
   }
 
   const baseMs = parseISO(entries[0].measured_on).getTime()
-  const raw = entries.map((e) => ({
-    x: (parseISO(e.measured_on).getTime() - baseMs) / 86_400_000,
-    y: e.bodyweight as number,
-    date: e.measured_on,
-  }))
-
-  if (entries.length < 3) {
-    return {
-      points: raw,
-      waterWeight: emptyWaterWeight(),
-    }
-  }
-
-  const reliableCalories = logs
-    .filter((log) => log.calories != null && !isLowOutlier(log, minCalories, today))
-    .map((log) => log.calories as number)
-  const reliableMedian = median(reliableCalories)
-
-  let adjustedReadings = 0
-  let maxOffset = 0
-  let totalOffset = 0
-  const absoluteThreshold = unit === 'kg' ? 0.4 : 1
-
-  const points = raw.map((point, index) => {
-    if (preserveStartingWeight && index === 0) return point
-
-    const nearby = raw
-      .filter((other, otherIndex) => otherIndex !== index && Math.abs(other.x - point.x) <= 7)
-      .map((other) => other.y)
-
-    if (nearby.length < 2) return point
-
-    const stable = median(nearby)
-    if (stable == null || stable <= 0) return point
-
-    const excess = point.y - stable
-    const trackingNoise = hasRecentTrackingNoise({
-      date: point.date,
-      logs,
-      maintenance,
-      reliableMedian,
-      minCalories,
-      today,
-    })
-    const threshold = trackingNoise
-      ? Math.max(absoluteThreshold, stable * 0.005)
-      : Math.max(absoluteThreshold * 1.5, stable * 0.01)
-    if (excess <= threshold) return point
-
-    const offset = Math.min(excess, stable * 0.02)
-    if (offset <= 0) return point
-
-    adjustedReadings += 1
-    maxOffset = Math.max(maxOffset, offset)
-    totalOffset += offset
-    return { ...point, y: point.y - offset }
-  })
-
   return {
-    points,
-    waterWeight: {
-      adjustedReadings,
-      maxOffset,
-      totalOffset,
-      earlyDietOffset: 0,
-      earlyDietAllowance: 0,
-    },
+    points: entries.map((e) => ({
+      x: (parseISO(e.measured_on).getTime() - baseMs) / 86_400_000,
+      y: e.bodyweight as number,
+      date: e.measured_on,
+    })),
+    waterWeight: emptyWaterWeight(),
   }
 }
-
-const EARLY_DIET_WATER_LOSS_PCT = 0.02
 
 function cutFloorEstimate(points: TrendPoint[]): ScaleEstimate | null {
   if (points.length < 2) return null
@@ -316,54 +204,173 @@ function estimateScaleLoss(points: TrendPoint[], phase: BlockPhase | null | unde
   return linearTrendEstimate(points)
 }
 
-function applyEarlyDietWaterLossAllowance({
-  estimate,
-  phase,
-  waterWeight,
-  predictedWeeklyLoss,
-}: {
-  estimate: ScaleEstimate
-  phase: BlockPhase | null | undefined
-  waterWeight: WaterWeightAdjustment
-  predictedWeeklyLoss: number
-}): { weeklyLoss: number; waterWeight: WaterWeightAdjustment } {
-  if (phase !== 'cut' || estimate.weeklyLoss <= 0 || estimate.spanDays <= 0) {
-    return { weeklyLoss: estimate.weeklyLoss, waterWeight }
-  }
-
-  const allowance = estimate.firstWeight * EARLY_DIET_WATER_LOSS_PCT
-  const rawOffset = Math.min(Math.max(estimate.scaleLoss, 0), allowance)
-  const expectedWeeklyLoss = Math.max(predictedWeeklyLoss, 0)
-  const excessWeeklyLoss = Math.max(0, estimate.weeklyLoss - expectedWeeklyLoss)
-  const offset = Math.min(rawOffset, (excessWeeklyLoss * estimate.spanDays) / 7)
-
-  if (offset <= 0) {
-    return {
-      weeklyLoss: estimate.weeklyLoss,
-      waterWeight: { ...waterWeight, earlyDietAllowance: allowance },
-    }
-  }
-
-  const weeklyOffset = (offset * 7) / estimate.spanDays
-
-  return {
-    weeklyLoss: Math.max(0, estimate.weeklyLoss - weeklyOffset),
-    waterWeight: {
-      ...waterWeight,
-      earlyDietOffset: offset,
-      earlyDietAllowance: allowance,
-    },
-  }
-}
-
 // Thresholds for a trustworthy calibration (~2 weeks of consistent data).
 const MIN_WINDOW_DAYS = 14
 const MIN_BODY_READINGS = 5
 const MIN_DAYS_LOGGED = 10
+const MIN_TRACKING_CONSISTENCY = 0.7
+const CUT_SETTLE_DAYS = 7
 // A suggestion fires only on a tangible and proportional gap.
 const MIN_DAILY_KCAL_GAP = 100
 const MIN_PROPORTIONAL_GAP = 0.25
 const MAX_SUGGESTION_KCAL = 500
+
+interface IntakeWindow {
+  start: Date
+  end: Date
+  days: number
+  reliableDays: number
+  ignoredLowDays: number
+  consistency: number
+  avgDailyDeficit: number
+}
+
+function maxDate(a: Date, b: Date) {
+  return a > b ? a : b
+}
+
+function dateKey(d: Date) {
+  return d.toISOString().slice(0, 10)
+}
+
+function trimmedMean(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const trim = values.length >= 20 ? Math.floor(values.length * 0.1) : values.length >= 10 ? 1 : 0
+  const kept = sorted.slice(trim, sorted.length - trim)
+  return kept.reduce((sum, v) => sum + v, 0) / kept.length
+}
+
+function intakeWindow({
+  logs,
+  stepsByDate,
+  maintenance,
+  weightKg,
+  stepBaseline,
+  minCalories,
+  start,
+  end,
+}: {
+  logs: NutritionLog[]
+  stepsByDate: Record<string, number>
+  maintenance: number
+  weightKg: number
+  stepBaseline: number
+  minCalories: number | null
+  start: Date
+  end: Date
+}): IntakeWindow {
+  const days = Math.max(0, differenceInCalendarDays(end, start) + 1)
+  if (days === 0) {
+    return { start, end, days: 0, reliableDays: 0, ignoredLowDays: 0, consistency: 0, avgDailyDeficit: 0 }
+  }
+
+  const logsByDate = new Map(logs.map((log) => [log.logged_on, log]))
+  const deficits: number[] = []
+  let ignoredLowDays = 0
+
+  for (let i = 0; i < days; i++) {
+    const d = addDays(start, i)
+    const key = dateKey(d)
+    const log = logsByDate.get(key)
+    if (log?.calories == null) continue
+    if (isLowOutlier(log, minCalories)) {
+      ignoredLowDays += 1
+      continue
+    }
+
+    const steps = stepsByDate[key]
+    const adjustment =
+      steps != null
+        ? Math.max(0, stepBaseline - steps) * KCAL_PER_STEP * (weightKg / REF_WEIGHT_KG)
+        : 0
+    deficits.push(maintenance - adjustment - log.calories)
+  }
+
+  return {
+    start,
+    end,
+    days,
+    reliableDays: deficits.length,
+    ignoredLowDays,
+    consistency: deficits.length / days,
+    avgDailyDeficit: trimmedMean(deficits),
+  }
+}
+
+function selectIntakeWindow({
+  logs,
+  stepsByDate,
+  maintenance,
+  weightKg,
+  stepBaseline,
+  minCalories,
+  blockStart,
+  today,
+}: {
+  logs: NutritionLog[]
+  stepsByDate: Record<string, number>
+  maintenance: number
+  weightKg: number
+  stepBaseline: number
+  minCalories: number | null
+  blockStart: Date
+  today: Date
+}) {
+  const end = addDays(today, -1)
+  if (end < blockStart) {
+    return intakeWindow({
+      logs,
+      stepsByDate,
+      maintenance,
+      weightKg,
+      stepBaseline,
+      minCalories,
+      start: blockStart,
+      end: blockStart,
+    })
+  }
+
+  const fullDays = differenceInCalendarDays(end, blockStart) + 1
+  const lengths = [21, 28, 14, fullDays]
+  const seen = new Set<number>()
+  const windows = lengths
+    .filter((len) => len >= MIN_WINDOW_DAYS && !seen.has(len) && seen.add(len))
+    .map((len) =>
+      intakeWindow({
+        logs,
+        stepsByDate,
+        maintenance,
+        weightKg,
+        stepBaseline,
+        minCalories,
+        start: maxDate(blockStart, addDays(end, -len + 1)),
+        end,
+      }),
+    )
+
+  const reliable = windows.find(
+    (w) =>
+      w.days >= MIN_WINDOW_DAYS &&
+      w.reliableDays >= MIN_DAYS_LOGGED &&
+      w.consistency >= MIN_TRACKING_CONSISTENCY,
+  )
+
+  return (
+    reliable ??
+    windows.sort((a, b) => b.reliableDays - a.reliableDays || b.consistency - a.consistency)[0] ??
+    intakeWindow({
+      logs,
+      stepsByDate,
+      maintenance,
+      weightKg,
+      stepBaseline,
+      minCalories,
+      start: blockStart,
+      end,
+    })
+  )
+}
 
 export function computeCalibration(input: CalibrationInput): Calibration {
   const {
@@ -382,71 +389,57 @@ export function computeCalibration(input: CalibrationInput): Calibration {
 
   const perUnit = kcalPerUnit(unit)
   const todayD = parseISO(today)
-  const windowDays = Math.max(0, differenceInCalendarDays(todayD, windowStart))
+  const calibrationStart = phase === 'cut' ? addDays(windowStart, CUT_SETTLE_DAYS) : windowStart
+  const windowDays = Math.max(0, differenceInCalendarDays(todayD, calibrationStart))
 
   const inWindow = bodyEntries.filter((e) => {
     if (e.bodyweight == null) return false
     const d = parseISO(e.measured_on)
-    return d >= windowStart && d <= todayD
+    return d >= calibrationStart && d <= todayD
   })
   const bodyReadings = inWindow.length
-  const { points: pts, waterWeight: spikeWaterWeight } = applyWaterWeightGuard({
-    entries: inWindow,
-    unit,
-    logs,
-    maintenance,
-    minCalories,
-    today,
-    preserveStartingWeight: phase === 'cut',
-  })
+  const { points: pts, waterWeight } = trendPoints(inWindow)
   const scaleEstimate = estimateScaleLoss(pts, phase)
   const scaleBasis = scaleEstimate?.basis ?? (phase === 'cut' ? 'cut_floor' : 'linear_trend')
+  const actualWeeklyLoss = scaleEstimate?.weeklyLoss ?? 0
 
   if (maintenance == null) {
     return {
       status: 'no_maintenance',
       predictedWeeklyLoss: 0,
-      actualWeeklyLoss: scaleEstimate?.weeklyLoss ?? 0,
+      actualWeeklyLoss,
       scaleBasis,
       windowDays,
       bodyReadings,
       daysLogged: 0,
-      waterWeight: spikeWaterWeight,
+      intakeWindowDays: 0,
+      trackingConsistency: 0,
+      ignoredLowDays: 0,
+      waterWeight,
       suggestion: null,
       aligned: false,
     }
   }
 
-  const r = accumulateDeficit({
+  const wk = weightKg > 0 ? weightKg : DEFAULT_WEIGHT_KG
+  const intake = selectIntakeWindow({
     logs,
     stepsByDate,
-    baseMaint: maintenance,
-    weightKg: weightKg > 0 ? weightKg : DEFAULT_WEIGHT_KG,
+    maintenance,
+    weightKg: wk,
     stepBaseline,
-    ignoreLow: minCalories != null,
-    minCal: minCalories ?? 0,
-    start: windowStart,
-    end: todayD,
-    today,
+    minCalories,
+    blockStart: calibrationStart,
+    today: todayD,
   })
-  const avgDailyDeficit = r.daysLogged ? r.deficit / r.daysLogged : 0
-  const predictedWeeklyLoss = (avgDailyDeficit * 7) / perUnit
-  const adjustedScale =
-    scaleEstimate == null
-      ? { weeklyLoss: 0, waterWeight: spikeWaterWeight }
-      : applyEarlyDietWaterLossAllowance({
-          estimate: scaleEstimate,
-          phase,
-          waterWeight: spikeWaterWeight,
-          predictedWeeklyLoss,
-        })
-  const actualWeeklyLoss = adjustedScale.weeklyLoss
-  const waterWeight = adjustedScale.waterWeight
+  const predictedWeeklyLoss = (intake.avgDailyDeficit * 7) / perUnit
 
   const enough =
     windowDays >= MIN_WINDOW_DAYS &&
     bodyReadings >= MIN_BODY_READINGS &&
-    r.daysLogged >= MIN_DAYS_LOGGED &&
+    intake.days >= MIN_WINDOW_DAYS &&
+    intake.reliableDays >= MIN_DAYS_LOGGED &&
+    intake.consistency >= MIN_TRACKING_CONSISTENCY &&
     scaleEstimate != null
   if (!enough) {
     return {
@@ -456,7 +449,10 @@ export function computeCalibration(input: CalibrationInput): Calibration {
       scaleBasis,
       windowDays,
       bodyReadings,
-      daysLogged: r.daysLogged,
+      daysLogged: intake.reliableDays,
+      intakeWindowDays: intake.days,
+      trackingConsistency: intake.consistency,
+      ignoredLowDays: intake.ignoredLowDays,
       waterWeight,
       suggestion: null,
       aligned: false,
@@ -488,7 +484,10 @@ export function computeCalibration(input: CalibrationInput): Calibration {
     scaleBasis,
     windowDays,
     bodyReadings,
-    daysLogged: r.daysLogged,
+    daysLogged: intake.reliableDays,
+    intakeWindowDays: intake.days,
+    trackingConsistency: intake.consistency,
+    ignoredLowDays: intake.ignoredLowDays,
     waterWeight,
     suggestion,
     aligned: suggestion == null,

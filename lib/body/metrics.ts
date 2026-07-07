@@ -2,7 +2,7 @@ import { addDays, differenceInCalendarDays, parseISO } from 'date-fns'
 
 import type { Block, BodyMetric } from '@/lib/types'
 
-type WeightBasis = 'latest' | 'block_floor'
+export type WeightBasis = 'latest' | 'block_floor'
 type BodyFatBasis = 'lean_retention' | 'measured' | 'none'
 
 interface WeightReading {

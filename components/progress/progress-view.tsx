@@ -26,7 +26,19 @@ import { BodyTrend } from "./body-trend"
 import type { ProgressData, ExerciseSeries } from "./types"
 
 export function ProgressView({ data }: { data: ProgressData }) {
-  const { exercises, volume, muscleAreas, unit, defaultExercise, goals, body } = data
+  const {
+    exercises,
+    volume,
+    muscleAreas,
+    unit,
+    defaultExercise,
+    goals,
+    body,
+    bodyWeightCurrent,
+    bodyWeightRawLatest,
+    bodyWeightBasis,
+    bodyWeightChange,
+  } = data
 
   const [selected, setSelected] = React.useState<string>(
     defaultExercise ?? exercises[0]?.name ?? ""
@@ -192,7 +204,14 @@ export function ProgressView({ data }: { data: ProgressData }) {
       <GoalsProgress goals={goals} />
 
       {/* Bodyweight + body-fat trend — hidden when no measurements logged. */}
-      <BodyTrend points={body} unit={unit} />
+      <BodyTrend
+        points={body}
+        unit={unit}
+        currentWeight={bodyWeightCurrent}
+        rawLatestWeight={bodyWeightRawLatest}
+        weightBasis={bodyWeightBasis}
+        weightChange={bodyWeightChange}
+      />
     </div>
   )
 }

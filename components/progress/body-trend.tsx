@@ -21,6 +21,7 @@ import {
   CardTitle,
   Stat,
 } from "@/components/ui"
+import type { WeightBasis } from "@/lib/body/metrics"
 import type { Unit } from "@/lib/types"
 
 import type { BodyTrendPoint } from "./types"
@@ -57,10 +58,6 @@ function firstLast(values: (number | null)[]): {
   return { first, last }
 }
 
-function round1(n: number): number {
-  return Math.round(n * 10) / 10
-}
-
 function ChartTooltip({
   active,
   payload,
@@ -95,9 +92,17 @@ function ChartTooltip({
 export function BodyTrend({
   points,
   unit,
+  currentWeight,
+  rawLatestWeight,
+  weightBasis,
+  weightChange,
 }: {
   points: BodyTrendPoint[]
   unit: Unit
+  currentWeight: number | null
+  rawLatestWeight: number | null
+  weightBasis: WeightBasis
+  weightChange: number | null
 }) {
   if (points.length === 0) return null
 
@@ -110,12 +115,6 @@ export function BodyTrend({
 
   const hasBodyfat = points.some((p) => p.bodyfat != null)
   const hasEstimatedBodyfat = points.some((p) => p.estimatedBodyfat != null)
-
-  const weight = firstLast(points.map((p) => p.bodyweight))
-  const weightChange =
-    weight.first != null && weight.last != null
-      ? round1(weight.last - weight.first)
-      : null
 
   const fat = firstLast(points.map((p) => p.estimatedBodyfat ?? p.bodyfat))
 
@@ -140,8 +139,8 @@ export function BodyTrend({
       <CardContent className="space-y-4">
         <div className="grid grid-cols-3 gap-3">
           <Stat
-            label="Latest"
-            value={weight.last}
+            label={weightBasis === "block_floor" ? "Scale floor" : "Latest"}
+            value={currentWeight}
             unit={unit}
             precision={1}
             tone="signal"
@@ -171,6 +170,13 @@ export function BodyTrend({
             <Stat label="Entries" value={points.length} />
           )}
         </div>
+        {weightBasis === "block_floor" &&
+        rawLatestWeight != null &&
+        rawLatestWeight !== currentWeight ? (
+          <p className="text-[11px] text-muted">
+            Latest raw weigh-in: {rawLatestWeight.toFixed(1)} {unit}.
+          </p>
+        ) : null}
 
         <div className="h-52 w-full" aria-label="Bodyweight trend chart">
           <ResponsiveContainer width="100%" height="100%">
