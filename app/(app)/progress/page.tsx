@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import type { ReactNode } from "react"
 
-import type { Block, BodyMetric, ExerciseSlot, Goal, SetLog, Unit } from "@/lib/types"
+import type { BaselineLift, Block, BodyMetric, ExerciseSlot, Goal, SetLog, Unit } from "@/lib/types"
 import {
   getActiveProgram,
   getProfile,
@@ -20,6 +20,7 @@ import {
   estimateBodyFatFromLeanRetention,
   normalizedBodyweight,
   normalizedChangeFromStart,
+  type StrengthEstimatePoint,
 } from "@/lib/body/metrics"
 
 import { AnalysisPanel } from "@/components/analysis/analysis-panel"
@@ -70,24 +71,27 @@ export default async function ProgressPage() {
 
   // Goals + body measurements feed the new progress sections. Both are
   // RLS-scoped; we also pin user_id explicitly.
-  const [{ data: goalRows }, { data: bodyRows }, { data: blockRows }] = await Promise.all([
-    supabase.from("goals").select("*").eq("user_id", userId),
-    supabase
-      .from("body_metrics")
-      .select("*")
-      .eq("user_id", userId)
-      .order("measured_on", { ascending: true }),
-    supabase
-      .from("blocks")
-      .select("phase,start_date")
-      .eq("user_id", userId)
-      .eq("kind", "diet")
-      .eq("is_active", true)
-      .order("start_date", { ascending: false })
-      .limit(1),
-  ])
+  const [{ data: goalRows }, { data: bodyRows }, { data: blockRows }, { data: baselineRows }] =
+    await Promise.all([
+      supabase.from("goals").select("*").eq("user_id", userId),
+      supabase
+        .from("body_metrics")
+        .select("*")
+        .eq("user_id", userId)
+        .order("measured_on", { ascending: true }),
+      supabase
+        .from("blocks")
+        .select("phase,start_date")
+        .eq("user_id", userId)
+        .eq("kind", "diet")
+        .eq("is_active", true)
+        .order("start_date", { ascending: false })
+        .limit(1),
+      supabase.from("baseline_lifts").select("*").eq("user_id", userId),
+    ])
   const goalsRaw = (goalRows as Goal[]) ?? []
   const bodyMetrics = (bodyRows as BodyMetric[]) ?? []
+  const baselineLifts = (baselineRows as BaselineLift[]) ?? []
   const activeDietBlock =
     (blockRows?.[0] as Pick<Block, "phase" | "start_date"> | undefined) ?? null
 
@@ -158,15 +162,24 @@ export default async function ProgressPage() {
   }
 
   /* --- Body measurements, oldest -> newest. --- */
-  const strengthPoints = exercises.flatMap((exercise) =>
+  const today = new Date().toISOString().slice(0, 10)
+  const loggedStrengthPoints: StrengthEstimatePoint[] = exercises.flatMap((exercise) =>
     exercise.points
       .filter((point) => point.e1rm != null)
       .map((point) => ({
         date: point.date.slice(0, 10),
         exerciseName: exercise.name,
         e1rm: point.e1rm,
+        source: "logged",
       })),
   )
+  const baselineStrengthPoints: StrengthEstimatePoint[] = baselineLifts.map((lift) => ({
+    date: lift.lifted_on ?? today,
+    exerciseName: lift.exercise_name,
+    e1rm: Number(lift.e1rm),
+    source: "baseline",
+  }))
+  const strengthPoints = [...loggedStrengthPoints, ...baselineStrengthPoints]
   const bodyFatBlockStartDate = activeDietBlock?.start_date ?? null
   const estimatedBodyfat = bodyFatBlockStartDate
     ? estimateBodyFatFromLeanRetention(

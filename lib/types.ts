@@ -174,6 +174,18 @@ export interface BodyMetric {
   created_at: string;
 }
 
+/** baseline_lifts - manual strength anchors for body-fat estimate calibration */
+export interface BaselineLift {
+  id: string;
+  user_id: string;
+  lift_kind: "bench" | "squat" | "deadlift" | "press";
+  exercise_name: string;
+  e1rm: number;
+  lifted_on: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** blocks — training or diet phases on a timeline */
 export interface Block {
   id: string;

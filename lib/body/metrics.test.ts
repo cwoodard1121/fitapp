@@ -68,6 +68,22 @@ describe('body metric helpers', () => {
     expect(estimate.points.map((p) => p.date)).toEqual(['2026-06-20', '2026-06-30'])
   })
 
+  it('uses the running block floor for body-fat estimate points', () => {
+    const entries = [
+      bodyMetric('2026-06-20', 200, 20),
+      bodyMetric('2026-06-27', 190, null),
+      bodyMetric('2026-06-30', 195, null),
+    ]
+
+    const estimate = estimateBodyFatFromLeanRetention(entries, { start_date: '2026-06-20' })
+
+    expect(estimate.points[estimate.points.length - 1]).toMatchObject({
+      date: '2026-06-30',
+      bodyweight: 190,
+    })
+    expect(estimate.latest).toBeCloseTo(17.9, 1)
+  })
+
   it('uses high relative strength as a weighted body-fat signal', () => {
     const entries = [
       bodyMetric('2026-06-20', 182, 22),

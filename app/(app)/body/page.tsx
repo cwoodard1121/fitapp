@@ -3,7 +3,7 @@ import { format } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { ensureProfile, requireUserId } from '@/lib/data'
 import { epley1RM } from '@/lib/engine/engine'
-import type { Block, BodyMetric, ExerciseSlot, SetLog } from '@/lib/types'
+import type { BaselineLift, Block, BodyMetric, ExerciseSlot, SetLog } from '@/lib/types'
 import type { StrengthEstimatePoint } from '@/lib/body/metrics'
 import { BodyClient } from '@/components/body/body-client'
 
@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic'
 export default async function BodyPage() {
   const profile = await ensureProfile()
   const unit = profile.unit
+  const today = format(new Date(), 'yyyy-MM-dd')
 
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
@@ -25,6 +26,7 @@ export default async function BodyPage() {
     { data: blockRows, error: blockError },
     { data: logRows, error: logError },
     { data: slotRows, error: slotError },
+    { data: baselineRows, error: baselineError },
   ] = await Promise.all([
     supabase
       .from('body_metrics')
@@ -45,21 +47,28 @@ export default async function BodyPage() {
       .eq('user_id', userId)
       .order('created_at', { ascending: true }),
     supabase.from('exercise_slots').select('id,exercise_name').eq('user_id', userId),
+    supabase
+      .from('baseline_lifts')
+      .select('*')
+      .eq('user_id', userId)
+      .order('lift_kind', { ascending: true }),
   ])
   if (error) throw error
   if (blockError) throw blockError
   if (logError) throw logError
   if (slotError) throw slotError
+  if (baselineError) throw baselineError
 
   const activeDietBlock =
     (blockRows?.[0] as Pick<Block, 'phase' | 'start_date'> | undefined) ?? null
+  const baselineLifts = (baselineRows ?? []) as BaselineLift[]
   const slotNameById = new Map(
     ((slotRows ?? []) as Pick<ExerciseSlot, 'id' | 'exercise_name'>[]).map((slot) => [
       slot.id,
       slot.exercise_name,
     ]),
   )
-  const strengthPoints = ((logRows ?? []) as Pick<
+  const loggedStrengthPoints = ((logRows ?? []) as Pick<
     SetLog,
     'slot_id' | 'created_at' | 'actual_load' | 'best_reps'
   >[])
@@ -71,9 +80,17 @@ export default async function BodyPage() {
           date: log.created_at.slice(0, 10),
           exerciseName,
           e1rm: Math.round(epley1RM(log.actual_load, log.best_reps) * 10) / 10,
+          source: 'logged',
         },
       ]
     })
+  const baselineStrengthPoints: StrengthEstimatePoint[] = baselineLifts.map((lift) => ({
+    date: lift.lifted_on ?? today,
+    exerciseName: lift.exercise_name,
+    e1rm: Number(lift.e1rm),
+    source: 'baseline',
+  }))
+  const strengthPoints = [...loggedStrengthPoints, ...baselineStrengthPoints]
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-6">
@@ -82,7 +99,8 @@ export default async function BodyPage() {
         unit={unit}
         activeDietBlock={activeDietBlock}
         strengthPoints={strengthPoints}
-        today={format(new Date(), 'yyyy-MM-dd')}
+        baselineLifts={baselineLifts}
+        today={today}
       />
     </div>
   )
