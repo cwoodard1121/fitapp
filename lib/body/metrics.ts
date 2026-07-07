@@ -45,7 +45,7 @@ export interface BodyFatEstimate {
 }
 
 type LeanRetentionBaseline = BodyMetric & { bodyweight: number; bodyfat_pct: number }
-type StrengthLiftKind = 'bench' | 'squat' | 'deadlift' | 'press'
+export type StrengthLiftKind = 'bench' | 'squat' | 'deadlift' | 'press'
 
 export interface BodyFatStrengthLift {
   kind: StrengthLiftKind
@@ -175,7 +175,7 @@ function leanBodyFatBreakdown(
   }
 }
 
-function strengthLiftKind(name: string): StrengthLiftKind | null {
+export function strengthLiftKind(name: string): StrengthLiftKind | null {
   const lower = name.toLowerCase()
   if (/\b(db|dumbbell|machine|smith)\b/.test(lower)) return null
   if (lower.includes('romanian deadlift') || lower.includes('rdl')) return null

@@ -20,7 +20,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import type { BaselineLift, Block, BodyMetric, Unit } from '@/lib/types'
-import type { StrengthEstimatePoint } from '@/lib/body/metrics'
+import type { StrengthEstimatePoint, StrengthLiftKind } from '@/lib/body/metrics'
 
 import { BodyFatEstimator } from './body-fat-estimator'
 import { BodyStats } from './body-stats'
@@ -35,6 +35,7 @@ interface BodyClientProps {
   activeDietBlock: Pick<Block, 'phase' | 'start_date'> | null
   strengthPoints: StrengthEstimatePoint[]
   baselineLifts: BaselineLift[]
+  suggestedBaselineLiftNames: Partial<Record<StrengthLiftKind, string>>
   /** yyyy-MM-dd for "today" (computed server-side for stable SSR). */
   today: string
 }
@@ -45,6 +46,7 @@ export function BodyClient({
   activeDietBlock,
   strengthPoints,
   baselineLifts,
+  suggestedBaselineLiftNames,
   today,
 }: BodyClientProps) {
   const [open, setOpen] = React.useState(false)
@@ -157,6 +159,7 @@ export function BodyClient({
             activeDietBlock={activeDietBlock}
             strengthPoints={strengthPoints}
             baselineLifts={baselineLifts}
+            suggestedBaselineLiftNames={suggestedBaselineLiftNames}
           />
 
           <Card>

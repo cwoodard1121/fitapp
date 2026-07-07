@@ -12,6 +12,7 @@ import {
 import {
   estimateBodyFatFromLeanRetention,
   type StrengthEstimatePoint,
+  type StrengthLiftKind,
 } from '@/lib/body/metrics'
 import type { BaselineLift, Block, BodyMetric, Unit } from '@/lib/types'
 import {
@@ -62,25 +63,28 @@ export function BodyFatEstimator({
   activeDietBlock,
   strengthPoints,
   baselineLifts,
+  suggestedBaselineLiftNames,
 }: {
   entries: BodyMetric[]
   unit: Unit
   activeDietBlock: Pick<Block, 'start_date'> | null
   strengthPoints: StrengthEstimatePoint[]
   baselineLifts: BaselineLift[]
+  suggestedBaselineLiftNames: Partial<Record<StrengthLiftKind, string>>
 }) {
   const [isPending, startTransition] = useTransition()
   const [kind, setKind] = React.useState<LiftKind>('bench')
   const selectedLift = baselineLifts.find((lift) => lift.lift_kind === kind) ?? null
-  const [exerciseName, setExerciseName] = React.useState(defaultName(kind))
+  const suggestedName = suggestedBaselineLiftNames[kind] ?? defaultName(kind)
+  const [exerciseName, setExerciseName] = React.useState(suggestedName)
   const [e1rm, setE1rm] = React.useState('')
   const [liftedOn, setLiftedOn] = React.useState('')
 
   React.useEffect(() => {
-    setExerciseName(selectedLift?.exercise_name ?? defaultName(kind))
+    setExerciseName(selectedLift?.exercise_name ?? suggestedName)
     setE1rm(selectedLift?.e1rm != null ? String(selectedLift.e1rm) : '')
     setLiftedOn(selectedLift?.lifted_on ?? '')
-  }, [kind, selectedLift])
+  }, [kind, selectedLift, suggestedName])
 
   const blockStart = activeDietBlock?.start_date ?? null
   const estimate = React.useMemo(
@@ -106,7 +110,7 @@ export function BodyFatEstimator({
     startTransition(async () => {
       const res = await upsertBaselineLift({
         lift_kind: kind,
-        exercise_name: exerciseName.trim() || defaultName(kind),
+        exercise_name: exerciseName.trim() || suggestedName,
         e1rm: parsedE1rm,
         lifted_on: liftedOn || null,
       })

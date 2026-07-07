@@ -1,10 +1,14 @@
 import { format } from 'date-fns'
 
 import { createClient } from '@/lib/supabase/server'
-import { ensureProfile, requireUserId } from '@/lib/data'
+import { ensureProfile, getActiveProgram, getProgramFull, requireUserId } from '@/lib/data'
 import { epley1RM } from '@/lib/engine/engine'
 import type { BaselineLift, Block, BodyMetric, ExerciseSlot, SetLog } from '@/lib/types'
-import type { StrengthEstimatePoint } from '@/lib/body/metrics'
+import {
+  strengthLiftKind,
+  type StrengthEstimatePoint,
+  type StrengthLiftKind,
+} from '@/lib/body/metrics'
 import { BodyClient } from '@/components/body/body-client'
 
 export const metadata = {
@@ -13,6 +17,59 @@ export const metadata = {
 
 export const dynamic = 'force-dynamic'
 
+type LiftNameSuggestions = Partial<Record<StrengthLiftKind, string>>
+
+function liftSuggestionScore(kind: StrengthLiftKind, name: string) {
+  const lower = name.toLowerCase()
+  let score = 0
+
+  if (kind === 'bench') {
+    if (lower.includes('touch')) score += 40
+    if (lower.includes('competition')) score += 30
+    if (lower.includes('barbell')) score += 20
+    if (lower.includes('incline')) score -= 20
+    if (lower.includes('close-grip') || lower.includes('close grip')) score -= 15
+  }
+
+  if (kind === 'squat') {
+    if (lower.includes('back squat')) score += 35
+    if (lower.includes('barbell')) score += 20
+    if (lower.includes('front squat')) score += 10
+    if (lower.includes('hack')) score -= 25
+  }
+
+  if (kind === 'deadlift') {
+    if (lower.includes('conventional')) score += 25
+    if (lower === 'deadlift' || lower.includes(' deadlift')) score += 20
+    if (lower.includes('sumo')) score += 10
+  }
+
+  if (kind === 'press') {
+    if (lower.includes('overhead')) score += 30
+    if (lower.includes('military')) score += 25
+    if (lower.includes('barbell')) score += 20
+  }
+
+  return score
+}
+
+function suggestedBaselineLiftNames(
+  slots: Pick<ExerciseSlot, 'exercise_name'>[],
+): LiftNameSuggestions {
+  const best = new Map<StrengthLiftKind, { name: string; score: number }>()
+  for (const slot of slots) {
+    const kind = strengthLiftKind(slot.exercise_name)
+    if (!kind) continue
+    const score = liftSuggestionScore(kind, slot.exercise_name)
+    const previous = best.get(kind)
+    if (!previous || score > previous.score) {
+      best.set(kind, { name: slot.exercise_name, score })
+    }
+  }
+
+  return Object.fromEntries([...best].map(([kind, value]) => [kind, value.name]))
+}
+
 export default async function BodyPage() {
   const profile = await ensureProfile()
   const unit = profile.unit
@@ -20,6 +77,9 @@ export default async function BodyPage() {
 
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
+  const activeProgram = await getActiveProgram()
+  const activeProgramFull = activeProgram ? await getProgramFull(activeProgram.id) : null
+  const suggestedLiftNames = suggestedBaselineLiftNames(activeProgramFull?.slots ?? [])
 
   const [
     { data, error },
@@ -100,6 +160,7 @@ export default async function BodyPage() {
         activeDietBlock={activeDietBlock}
         strengthPoints={strengthPoints}
         baselineLifts={baselineLifts}
+        suggestedBaselineLiftNames={suggestedLiftNames}
         today={today}
       />
     </div>
