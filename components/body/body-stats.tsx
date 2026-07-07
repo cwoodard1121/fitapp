@@ -2,8 +2,6 @@
 
 import { Stat } from '@/components/ui/stat'
 import {
-  estimateBodyFatAtWeightFromLeanRetention,
-  estimateBodyFatFromLeanRetention,
   normalizedBodyweight,
   normalizedDeltaOver,
 } from '@/lib/body/metrics'
@@ -41,11 +39,7 @@ function DeltaStat({
 
 export function BodyStats({ entries, unit, activeDietBlock }: BodyStatsProps) {
   const normalized = normalizedBodyweight(entries, activeDietBlock)
-  const estimatedBodyfat = estimateBodyFatFromLeanRetention(entries)
-  const normalizedEstimatedBodyfat =
-    estimatedBodyfat.basis === 'lean_retention'
-      ? estimateBodyFatAtWeightFromLeanRetention(entries, normalized.value)
-      : estimatedBodyfat.latest
+  const latestBodyfat = [...entries].reverse().find((e) => e.bodyfat_pct != null)?.bodyfat_pct ?? null
 
   const d7 = normalizedDeltaOver(entries, 7, activeDietBlock)
   const d30 = normalizedDeltaOver(entries, 30, activeDietBlock)
@@ -61,8 +55,8 @@ export function BodyStats({ entries, unit, activeDietBlock }: BodyStatsProps) {
         precision={1}
       />
       <Stat
-        label={estimatedBodyfat.basis === 'lean_retention' ? 'Est. body fat' : 'Body fat'}
-        value={normalizedEstimatedBodyfat}
+        label="Body fat"
+        value={latestBodyfat}
         unit="%"
         size="lg"
         precision={1}

@@ -64,7 +64,7 @@ export interface BodyAnalytic {
   /** Slope of bodyweight over the window (units per week). */
   weeklyRate: number | null
   latestBodyfat: number | null
-  bodyfatBasis: 'measured' | 'estimated' | 'none'
+  bodyfatBasis: 'measured' | 'none'
   bodyfatChange: number | null
   readings: number
   /**

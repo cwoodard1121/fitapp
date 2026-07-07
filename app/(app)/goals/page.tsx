@@ -3,11 +3,7 @@ import { subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId, getProfile } from '@/lib/data'
 import { epley1RM } from '@/lib/engine/engine'
-import {
-  estimateBodyFatAtWeightFromLeanRetention,
-  estimateBodyFatFromLeanRetention,
-  normalizedBodyweight,
-} from '@/lib/body/metrics'
+import { normalizedBodyweight } from '@/lib/body/metrics'
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getLatestAnalysis } from '@/lib/ai/analysis'
 import { gatherAnalytics } from '@/lib/analytics'
@@ -67,17 +63,12 @@ async function deriveCurrents(
     const bodyMetrics = (bodyRows ?? []) as BodyMetric[]
     const activeDietBlock =
       (blockRows?.[0] as Pick<Block, 'phase' | 'start_date'> | undefined) ?? null
-    const estimatedBodyfat = estimateBodyFatFromLeanRetention(bodyMetrics)
     const latestMeasuredBodyfat =
       [...bodyMetrics].reverse().find((m) => m.bodyfat_pct != null)?.bodyfat_pct ?? null
     const normalizedWeight = normalizedBodyweight(bodyMetrics, activeDietBlock)
-    const normalizedEstimatedBodyfat =
-      estimatedBodyfat.latest != null
-        ? estimateBodyFatAtWeightFromLeanRetention(bodyMetrics, normalizedWeight.value)
-        : null
     bodyCurrent = {
       bodyweight: normalizedWeight.value,
-      bodyfat: normalizedEstimatedBodyfat ?? latestMeasuredBodyfat,
+      bodyfat: latestMeasuredBodyfat,
     }
   }
 

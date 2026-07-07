@@ -4,6 +4,8 @@ import type { Block, BodyMetric } from '@/lib/types'
 
 export type WeightBasis = 'latest' | 'block_floor'
 type BodyFatBasis = 'lean_retention' | 'measured' | 'none'
+const DRY_WATER_DROP_PCT = 0.02
+const RECENT_HIGH_DAYS = 21
 
 interface WeightReading {
   date: string
@@ -55,14 +57,38 @@ function leanRetentionBaseline(entries: BodyMetric[]): LeanRetentionBaseline | n
   )
 }
 
+function recentHighWeight(readings: WeightReading[], date: string | null): number | null {
+  if (readings.length === 0) return null
+  const end = date ? parseISO(date) : parseISO(readings[readings.length - 1].date)
+  const start = addDays(end, -RECENT_HIGH_DAYS + 1)
+  const recent = readings.filter((r) => {
+    const d = parseISO(r.date)
+    return d >= start && d <= end
+  })
+  const pool = recent.length > 0 ? recent : readings
+  return pool.reduce((max, r) => Math.max(max, r.weight), pool[0].weight)
+}
+
+function dryLeanMass(entries: BodyMetric[], date: string | null): number | null {
+  const baseline = leanRetentionBaseline(entries)
+  if (!baseline) return null
+
+  const readings = weightReadings(entries).filter((r) => !date || r.date <= date)
+  const high = recentHighWeight(readings, date) ?? baseline.bodyweight
+  const fatMass = baseline.bodyweight * (baseline.bodyfat_pct / 100)
+  return Math.max(0, baseline.bodyweight - fatMass - high * DRY_WATER_DROP_PCT)
+}
+
 export function estimateBodyFatAtWeightFromLeanRetention(
   entries: BodyMetric[],
   bodyweight: number | null,
+  date: string | null = null,
 ): number | null {
-  const baseline = leanRetentionBaseline(entries)
-  if (!baseline || bodyweight == null || bodyweight <= 0) return null
+  if (bodyweight == null || bodyweight <= 0) return null
 
-  const leanMass = baseline.bodyweight * (1 - baseline.bodyfat_pct / 100)
+  const leanMass = dryLeanMass(entries, date)
+  if (leanMass == null) return null
+
   return round1(clamp(((bodyweight - leanMass) / bodyweight) * 100, 1, 80))
 }
 
@@ -203,7 +229,6 @@ export function estimateBodyFatFromLeanRetention(entries: BodyMetric[]): BodyFat
     }
   }
 
-  const leanMass = baseline.bodyweight * (1 - baseline.bodyfat_pct / 100)
   const points = entries
     .filter(
       (e): e is BodyMetric & { bodyweight: number } =>
@@ -211,8 +236,9 @@ export function estimateBodyFatFromLeanRetention(entries: BodyMetric[]): BodyFat
     )
     .map((e) => ({
       date: e.measured_on,
-      bodyfat: round1(clamp(((e.bodyweight - leanMass) / e.bodyweight) * 100, 1, 80)),
+      bodyfat: estimateBodyFatAtWeightFromLeanRetention(entries, e.bodyweight, e.measured_on) ?? 0,
     }))
+    .filter((p) => p.bodyfat > 0)
 
   return {
     latest: points[points.length - 1]?.bodyfat ?? null,

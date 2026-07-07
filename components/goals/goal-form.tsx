@@ -40,7 +40,7 @@ const METRIC_ORDER: GoalMetricType[] = [
 const METRIC_HINTS: Record<GoalMetricType, string> = {
   e1rm: 'Current pulled from your best recent estimated 1RM for the exercise.',
   bodyweight: 'Current pulled from your latest body metric.',
-  bodyfat: 'Current prefers estimated body fat when a lean-mass anchor exists.',
+  bodyfat: 'Current pulled from your latest body-fat reading.',
   volume: 'Current summed from your last 7 days of training tonnage.',
   custom: 'You track this one yourself — we just hold the target.',
 }

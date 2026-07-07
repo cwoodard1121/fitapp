@@ -40,7 +40,7 @@ describe('body metric helpers', () => {
     expect(normalizedDeltaOver(entries, 7, block)).toBe(0)
   })
 
-  it('estimates body fat from fixed lean mass after the first body-fat anchor', () => {
+  it('estimates body fat with a 2% dry-water allowance from the recent high', () => {
     const entries = [
       bodyMetric('2026-06-20', 200, 20),
       bodyMetric('2026-07-04', 190, null),
@@ -50,7 +50,7 @@ describe('body metric helpers', () => {
 
     expect(estimate.basis).toBe('lean_retention')
     expect(estimate.baselineBodyfat).toBe(20)
-    expect(estimate.latest).toBeCloseTo(15.8, 1)
-    expect(estimateBodyFatAtWeightFromLeanRetention(entries, 188)).toBeCloseTo(14.9, 1)
+    expect(estimate.latest).toBeCloseTo(17.9, 1)
+    expect(estimateBodyFatAtWeightFromLeanRetention(entries, 188)).toBeCloseTo(17, 1)
   })
 })

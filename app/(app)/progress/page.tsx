@@ -17,7 +17,6 @@ import { getAnalysisAccess } from "@/lib/ai/allowlist"
 import { getLatestAnalysis } from "@/lib/ai/analysis"
 import { gatherAnalytics } from "@/lib/analytics"
 import {
-  estimateBodyFatAtWeightFromLeanRetention,
   estimateBodyFatFromLeanRetention,
   normalizedBodyweight,
   normalizedChangeFromStart,
@@ -175,10 +174,6 @@ export default async function ProgressPage() {
   const latestBody = bodyMetrics.length ? bodyMetrics[bodyMetrics.length - 1] : null
   const normalizedBody = normalizedBodyweight(bodyMetrics, activeDietBlock)
   const normalizedBodyChange = normalizedChangeFromStart(bodyMetrics, activeDietBlock)
-  const latestEstimatedBodyfat =
-    estimatedBodyfat.latest != null
-      ? estimateBodyFatAtWeightFromLeanRetention(bodyMetrics, normalizedBody.value)
-      : null
 
   // Recent weekly tonnage (last 7 days) for volume goals; null when no data.
   const since = Date.now() - 7 * 24 * 60 * 60 * 1000
@@ -205,7 +200,7 @@ export default async function ProgressPage() {
           current = normalizedBody.value
           break
         case "bodyfat":
-          current = latestEstimatedBodyfat ?? latestBody?.bodyfat_pct ?? null
+          current = latestBody?.bodyfat_pct ?? null
           break
         case "e1rm":
           current = g.exercise_name ? bestE1rmByName.get(g.exercise_name) ?? null : null

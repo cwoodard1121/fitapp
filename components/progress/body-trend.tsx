@@ -116,7 +116,7 @@ export function BodyTrend({
   const hasBodyfat = points.some((p) => p.bodyfat != null)
   const hasEstimatedBodyfat = points.some((p) => p.estimatedBodyfat != null)
 
-  const fat = firstLast(points.map((p) => p.estimatedBodyfat ?? p.bodyfat))
+  const fat = firstLast(points.map((p) => p.bodyfat))
 
   const axisProps = {
     stroke: COLORS.muted,
@@ -159,9 +159,9 @@ export function BodyTrend({
             }
             placeholder="—"
           />
-          {hasBodyfat || hasEstimatedBodyfat ? (
+          {hasBodyfat ? (
             <Stat
-              label={hasEstimatedBodyfat ? "Est. body fat" : "Body fat"}
+              label="Body fat"
               value={fat.last}
               unit="%"
               precision={1}

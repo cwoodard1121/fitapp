@@ -390,7 +390,7 @@ function BodyCard({
             unit={unit}
           />
           <Stat
-            label={body.bodyfatBasis === 'estimated' ? 'Est. body fat' : 'Body fat'}
+            label="Body fat"
             value={body.latestBodyfat}
             unit="%"
             precision={1}

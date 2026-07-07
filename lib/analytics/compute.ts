@@ -27,8 +27,6 @@ import {
 import { weekForDate } from '@/lib/data/week'
 import {
   blockFloorWeeklyRate,
-  estimateBodyFatAtWeightFromLeanRetention,
-  estimateBodyFatFromLeanRetention,
   normalizedBodyweight,
   normalizedChangeFromStart,
 } from '@/lib/body/metrics'
@@ -330,17 +328,8 @@ function latestBody(bodyMetrics: BodyMetric[], dietBlock: Block | null): {
 } {
   const bodyweight = normalizedBodyweight(bodyMetrics, dietBlock).value
   let bodyfat: number | null = null
-  const estimatedBodyfat = estimateBodyFatFromLeanRetention(bodyMetrics)
-  const estimatedAtWeight =
-    estimatedBodyfat.latest != null
-      ? estimateBodyFatAtWeightFromLeanRetention(bodyMetrics, bodyweight)
-      : null
-  if (estimatedAtWeight != null) {
-    bodyfat = estimatedAtWeight
-  } else {
-    for (const m of bodyMetrics) {
-      if (m.bodyfat_pct != null) bodyfat = m.bodyfat_pct
-    }
+  for (const m of bodyMetrics) {
+    if (m.bodyfat_pct != null) bodyfat = m.bodyfat_pct
   }
   return { bodyweight, bodyfat }
 }
@@ -579,34 +568,18 @@ function computeBody(bodyMetrics: BodyMetric[], dietBlock: Block | null): BodyAn
   const weightChange = normalizedChangeFromStart(bodyMetrics, dietBlock)
   const { rate: weeklyRate, settling } = bodyRate(bodyMetrics, 'bodyweight', dietBlock)
 
-  const estimatedBodyfat = estimateBodyFatFromLeanRetention(bodyMetrics)
-  const normalizedEstimatedBodyfat = estimateBodyFatAtWeightFromLeanRetention(
-    bodyMetrics,
-    normalizedWeight.value,
-  )
-  const estimatedBodyfatChange =
-    estimatedBodyfat.points.length >= 1 && normalizedEstimatedBodyfat != null
-      ? round1(normalizedEstimatedBodyfat - estimatedBodyfat.points[0].bodyfat)
-      : null
   const latestMeasuredBodyfat = bf.length ? round1(bf[bf.length - 1].bodyfat_pct) : null
   const measuredBodyfatChange =
     bf.length >= 2 ? round1(bf[bf.length - 1].bodyfat_pct - bf[0].bodyfat_pct) : null
-  const useEstimatedBodyfat = normalizedEstimatedBodyfat != null
-  const latestBodyfat = useEstimatedBodyfat ? normalizedEstimatedBodyfat : latestMeasuredBodyfat
-  const bodyfatChange = useEstimatedBodyfat ? estimatedBodyfatChange : measuredBodyfatChange
 
   return {
     latestWeight,
     weightBasis: normalizedWeight.basis,
     weightChange,
     weeklyRate,
-    latestBodyfat,
-    bodyfatBasis: useEstimatedBodyfat
-      ? 'estimated'
-      : latestMeasuredBodyfat == null
-        ? 'none'
-        : 'measured',
-    bodyfatChange,
+    latestBodyfat: latestMeasuredBodyfat,
+    bodyfatBasis: latestMeasuredBodyfat == null ? 'none' : 'measured',
+    bodyfatChange: measuredBodyfatChange,
     readings: bodyMetrics.length,
     settling,
   }
