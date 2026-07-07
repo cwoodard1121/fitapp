@@ -19,7 +19,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import type { BodyMetric, Unit } from '@/lib/types'
+import type { Block, BodyMetric, Unit } from '@/lib/types'
 
 import { BodyStats } from './body-stats'
 import { EntriesList } from './entries-list'
@@ -30,6 +30,7 @@ interface BodyClientProps {
   /** Ascending by measured_on (oldest first). */
   entries: BodyMetric[]
   unit: Unit
+  activeDietBlock: Pick<Block, 'phase' | 'start_date'> | null
   /** yyyy-MM-dd for "today" (computed server-side for stable SSR). */
   today: string
 }
@@ -37,6 +38,7 @@ interface BodyClientProps {
 export function BodyClient({
   entries,
   unit,
+  activeDietBlock,
   today,
 }: BodyClientProps) {
   const [open, setOpen] = React.useState(false)
@@ -118,7 +120,7 @@ export function BodyClient({
         <>
           <Card>
             <CardContent className="pt-4">
-              <BodyStats entries={entries} unit={unit} />
+              <BodyStats entries={entries} unit={unit} activeDietBlock={activeDietBlock} />
             </CardContent>
           </Card>
 

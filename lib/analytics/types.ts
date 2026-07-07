@@ -59,10 +59,12 @@ export interface GoalAnalytic {
 /** Bodyweight / composition trajectory over the readings window. */
 export interface BodyAnalytic {
   latestWeight: number | null
+  weightBasis: 'latest' | 'block_floor'
   weightChange: number | null
   /** Slope of bodyweight over the window (units per week). */
   weeklyRate: number | null
   latestBodyfat: number | null
+  bodyfatBasis: 'measured' | 'estimated' | 'none'
   bodyfatChange: number | null
   readings: number
   /**

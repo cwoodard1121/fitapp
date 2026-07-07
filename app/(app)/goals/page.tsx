@@ -3,10 +3,15 @@ import { subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId, getProfile } from '@/lib/data'
 import { epley1RM } from '@/lib/engine/engine'
+import {
+  estimateBodyFatAtWeightFromLeanRetention,
+  estimateBodyFatFromLeanRetention,
+  normalizedBodyweight,
+} from '@/lib/body/metrics'
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getLatestAnalysis } from '@/lib/ai/analysis'
 import { gatherAnalytics } from '@/lib/analytics'
-import type { Goal } from '@/lib/types'
+import type { Block, BodyMetric, Goal } from '@/lib/types'
 import { GoalsBoard } from '@/components/goals/goals-board'
 import { GoalAnalyticsPanel } from '@/components/goals/goal-analytics'
 import type { GoalWithCurrent } from '@/components/goals/types'
@@ -42,18 +47,38 @@ async function deriveCurrents(
     ),
   )
 
-  // Latest body metric (one row covers both bodyweight + bodyfat goals).
-  type LatestBody = { bodyweight: number | null; bodyfat_pct: number | null }
-  let latestBody: LatestBody | null = null
+  let bodyCurrent: { bodyweight: number | null; bodyfat: number | null } | null = null
   if (needsBody) {
-    const { data } = await supabase
-      .from('body_metrics')
-      .select('bodyweight, bodyfat_pct, measured_on')
-      .eq('user_id', userId)
-      .order('measured_on', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    latestBody = (data as LatestBody | null) ?? null
+    const [{ data: bodyRows }, { data: blockRows }] = await Promise.all([
+      supabase
+        .from('body_metrics')
+        .select('*')
+        .eq('user_id', userId)
+        .order('measured_on', { ascending: true }),
+      supabase
+        .from('blocks')
+        .select('phase,start_date')
+        .eq('user_id', userId)
+        .eq('kind', 'diet')
+        .eq('is_active', true)
+        .order('start_date', { ascending: false })
+        .limit(1),
+    ])
+    const bodyMetrics = (bodyRows ?? []) as BodyMetric[]
+    const activeDietBlock =
+      (blockRows?.[0] as Pick<Block, 'phase' | 'start_date'> | undefined) ?? null
+    const estimatedBodyfat = estimateBodyFatFromLeanRetention(bodyMetrics)
+    const latestMeasuredBodyfat =
+      [...bodyMetrics].reverse().find((m) => m.bodyfat_pct != null)?.bodyfat_pct ?? null
+    const normalizedWeight = normalizedBodyweight(bodyMetrics, activeDietBlock)
+    const normalizedEstimatedBodyfat =
+      estimatedBodyfat.latest != null
+        ? estimateBodyFatAtWeightFromLeanRetention(bodyMetrics, normalizedWeight.value)
+        : null
+    bodyCurrent = {
+      bodyweight: normalizedWeight.value,
+      bodyfat: normalizedEstimatedBodyfat ?? latestMeasuredBodyfat,
+    }
   }
 
   // Best recent e1RM per tracked exercise (best Epley over the last ~60 logs).
@@ -107,10 +132,10 @@ async function deriveCurrents(
   for (const g of goals) {
     switch (g.metric_type) {
       case 'bodyweight':
-        out.set(g.id, latestBody?.bodyweight ?? null)
+        out.set(g.id, bodyCurrent?.bodyweight ?? null)
         break
       case 'bodyfat':
-        out.set(g.id, latestBody?.bodyfat_pct ?? null)
+        out.set(g.id, bodyCurrent?.bodyfat ?? null)
         break
       case 'e1rm':
         out.set(g.id, g.exercise_name ? bestE1rm.get(g.exercise_name) ?? null : null)

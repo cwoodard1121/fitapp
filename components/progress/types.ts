@@ -63,6 +63,7 @@ export interface BodyTrendPoint {
   date: string
   bodyweight: number | null
   bodyfat: number | null
+  estimatedBodyfat: number | null
 }
 
 export interface ProgressData {

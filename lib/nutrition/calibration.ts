@@ -4,9 +4,15 @@
  *
  * The scale side uses a small water-weight guard. Abrupt high weigh-ins are
  * treated as likely water/glycogen noise and are smoothed down against nearby
- * stable readings, capped at 2% of baseline bodyweight. For cut phases, the
- * first 2% of starting scale loss is also treated as early diet water loss
- * before maintenance suggestions are made.
+ * stable readings, capped at 2% of baseline bodyweight.
+ *
+ * Cut phases use a block scale-floor rate instead of a straight line through
+ * every weigh-in: start weight -> lowest water-smoothed weigh-in in the block,
+ * divided by elapsed time. A single heavier morning can age the rate a little,
+ * but it cannot erase the block's low-water mark. The first 2% of starting
+ * scale loss is only subtracted when scale loss is faster than the calorie
+ * deficit predicts, so early water loss cannot create a false "lower
+ * maintenance" suggestion.
  */
 import { differenceInCalendarDays, parseISO } from 'date-fns'
 
@@ -60,6 +66,8 @@ export interface Calibration {
   /** units/week, positive = losing; water-smoothed on the scale side. */
   predictedWeeklyLoss: number
   actualWeeklyLoss: number
+  /** How the scale-side weekly rate was estimated. */
+  scaleBasis: 'linear_trend' | 'cut_floor'
   windowDays: number
   bodyReadings: number
   daysLogged: number
@@ -74,6 +82,18 @@ interface TrendPoint {
   x: number
   y: number
   date: string
+}
+
+interface ScaleEstimate {
+  /** units/week, positive = losing. */
+  weeklyLoss: number
+  /** Total scale change across the estimate span, positive = losing. */
+  scaleLoss: number
+  /** Days between the starting weigh-in and the current endpoint. */
+  spanDays: number
+  /** Starting bodyweight used for allowance caps. */
+  firstWeight: number
+  basis: Calibration['scaleBasis']
 }
 
 /** Least-squares slope (y per unit x); null if undetermined. */
@@ -246,50 +266,101 @@ function applyWaterWeightGuard({
 }
 
 const EARLY_DIET_WATER_LOSS_PCT = 0.02
+const FLOOR_CLUSTER_PCT = 0.0025
+
+function floorCluster(points: TrendPoint[]): TrendPoint | null {
+  if (points.length === 0) return null
+
+  const floor = points.reduce((best, p) => (p.y < best.y ? p : best), points[0])
+  const band = Math.max(floor.y * FLOOR_CLUSTER_PCT, 0.1)
+  const cluster = points.filter((p) => p.y <= floor.y + band)
+  const avgY = cluster.reduce((sum, p) => sum + p.y, 0) / cluster.length
+
+  return { ...floor, y: avgY }
+}
+
+function cutFloorEstimate(points: TrendPoint[]): ScaleEstimate | null {
+  if (points.length < 2) return null
+
+  const first = points[0]
+  const last = points[points.length - 1]
+  const spanDays = last.x - first.x
+  if (spanDays <= 0 || first.y <= 0) return null
+
+  const floor = floorCluster(points)
+  if (!floor) return null
+  const scaleLoss = first.y - floor.y
+
+  return {
+    weeklyLoss: (scaleLoss * 7) / spanDays,
+    scaleLoss,
+    spanDays,
+    firstWeight: first.y,
+    basis: 'cut_floor',
+  }
+}
+
+function linearTrendEstimate(points: TrendPoint[]): ScaleEstimate | null {
+  if (points.length < 2) return null
+
+  const first = points[0]
+  const last = points[points.length - 1]
+  const spanDays = last.x - first.x
+  if (spanDays <= 0 || first.y <= 0) return null
+
+  const s = slope(points)
+  if (s == null) return null
+
+  const weeklyLoss = -s * 7
+  return {
+    weeklyLoss,
+    scaleLoss: (weeklyLoss * spanDays) / 7,
+    spanDays,
+    firstWeight: first.y,
+    basis: 'linear_trend',
+  }
+}
+
+function estimateScaleLoss(points: TrendPoint[], phase: BlockPhase | null | undefined) {
+  if (phase === 'cut') {
+    return cutFloorEstimate(points) ?? linearTrendEstimate(points)
+  }
+
+  return linearTrendEstimate(points)
+}
 
 function applyEarlyDietWaterLossAllowance({
-  weeklyLoss,
-  entries,
+  estimate,
   phase,
   waterWeight,
+  predictedWeeklyLoss,
 }: {
-  weeklyLoss: number
-  entries: BodyMetric[]
+  estimate: ScaleEstimate
   phase: BlockPhase | null | undefined
   waterWeight: WaterWeightAdjustment
+  predictedWeeklyLoss: number
 }): { weeklyLoss: number; waterWeight: WaterWeightAdjustment } {
-  if (phase !== 'cut' || weeklyLoss <= 0 || entries.length < 2) {
-    return { weeklyLoss, waterWeight }
+  if (phase !== 'cut' || estimate.weeklyLoss <= 0 || estimate.spanDays <= 0) {
+    return { weeklyLoss: estimate.weeklyLoss, waterWeight }
   }
 
-  const first = entries[0]
-  const last = entries[entries.length - 1]
-  const firstWeight = first.bodyweight
-  const lastWeight = last.bodyweight
-  if (firstWeight == null || lastWeight == null || firstWeight <= 0) {
-    return { weeklyLoss, waterWeight }
-  }
-
-  const spanDays = differenceInCalendarDays(parseISO(last.measured_on), parseISO(first.measured_on))
-  if (spanDays <= 0) {
-    return { weeklyLoss, waterWeight }
-  }
-
-  const scaleLoss = firstWeight - lastWeight
-  const allowance = firstWeight * EARLY_DIET_WATER_LOSS_PCT
-  const offset = Math.min(Math.max(scaleLoss, 0), allowance)
+  const allowance = estimate.firstWeight * EARLY_DIET_WATER_LOSS_PCT
+  const rawOffset = Math.min(Math.max(estimate.scaleLoss, 0), allowance)
+  const expectedWeeklyLoss = Math.max(predictedWeeklyLoss, 0)
+  const excessWeeklyLoss = Math.max(0, estimate.weeklyLoss - expectedWeeklyLoss)
+  const offset = Math.min(rawOffset, (excessWeeklyLoss * estimate.spanDays) / 7)
 
   if (offset <= 0) {
     return {
-      weeklyLoss,
+      weeklyLoss: estimate.weeklyLoss,
       waterWeight: { ...waterWeight, earlyDietAllowance: allowance },
     }
   }
 
-  const weeklyOffset = (offset * 7) / spanDays
+  const weeklyOffset = (offset * 7) / estimate.spanDays
 
   return {
-    weeklyLoss: Math.max(0, weeklyLoss - weeklyOffset),
+    weeklyLoss: Math.max(0, estimate.weeklyLoss - weeklyOffset),
     waterWeight: {
       ...waterWeight,
       earlyDietOffset: offset,
@@ -341,25 +412,19 @@ export function computeCalibration(input: CalibrationInput): Calibration {
     today,
     preserveStartingWeight: phase === 'cut',
   })
-  const s = slope(pts)
-  const adjustedScale = applyEarlyDietWaterLossAllowance({
-    weeklyLoss: s != null ? -s * 7 : 0,
-    entries: inWindow,
-    phase,
-    waterWeight: spikeWaterWeight,
-  })
-  const actualWeeklyLoss = adjustedScale.weeklyLoss
-  const waterWeight = adjustedScale.waterWeight
+  const scaleEstimate = estimateScaleLoss(pts, phase)
+  const scaleBasis = scaleEstimate?.basis ?? (phase === 'cut' ? 'cut_floor' : 'linear_trend')
 
   if (maintenance == null) {
     return {
       status: 'no_maintenance',
       predictedWeeklyLoss: 0,
-      actualWeeklyLoss,
+      actualWeeklyLoss: scaleEstimate?.weeklyLoss ?? 0,
+      scaleBasis,
       windowDays,
       bodyReadings,
       daysLogged: 0,
-      waterWeight,
+      waterWeight: spikeWaterWeight,
       suggestion: null,
       aligned: false,
     }
@@ -379,17 +444,29 @@ export function computeCalibration(input: CalibrationInput): Calibration {
   })
   const avgDailyDeficit = r.daysLogged ? r.deficit / r.daysLogged : 0
   const predictedWeeklyLoss = (avgDailyDeficit * 7) / perUnit
+  const adjustedScale =
+    scaleEstimate == null
+      ? { weeklyLoss: 0, waterWeight: spikeWaterWeight }
+      : applyEarlyDietWaterLossAllowance({
+          estimate: scaleEstimate,
+          phase,
+          waterWeight: spikeWaterWeight,
+          predictedWeeklyLoss,
+        })
+  const actualWeeklyLoss = adjustedScale.weeklyLoss
+  const waterWeight = adjustedScale.waterWeight
 
   const enough =
     windowDays >= MIN_WINDOW_DAYS &&
     bodyReadings >= MIN_BODY_READINGS &&
     r.daysLogged >= MIN_DAYS_LOGGED &&
-    s != null
+    scaleEstimate != null
   if (!enough) {
     return {
       status: 'insufficient',
       predictedWeeklyLoss,
       actualWeeklyLoss,
+      scaleBasis,
       windowDays,
       bodyReadings,
       daysLogged: r.daysLogged,
@@ -421,6 +498,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
     status: 'ok',
     predictedWeeklyLoss,
     actualWeeklyLoss,
+    scaleBasis,
     windowDays,
     bodyReadings,
     daysLogged: r.daysLogged,

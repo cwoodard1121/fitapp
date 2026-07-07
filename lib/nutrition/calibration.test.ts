@@ -151,4 +151,88 @@ describe('maintenance calibration', () => {
     expect(filtered.daysLogged).toBe(9)
     expect(unfiltered.predictedWeeklyLoss).toBeGreaterThan(filtered.predictedWeeklyLoss + 0.25)
   })
+
+  it('uses the cut block floor so one heavier morning does not lower maintenance', () => {
+    const dates = [
+      '2026-06-20',
+      '2026-06-21',
+      '2026-06-22',
+      '2026-06-23',
+      '2026-06-24',
+      '2026-06-25',
+      '2026-06-26',
+      '2026-06-27',
+      '2026-06-28',
+      '2026-06-29',
+      '2026-06-30',
+      '2026-07-01',
+      '2026-07-02',
+      '2026-07-03',
+      '2026-07-04',
+      '2026-07-05',
+    ]
+
+    const calibration = computeCalibration({
+      bodyEntries: [
+        bodyMetric('2026-06-20', 200),
+        bodyMetric('2026-06-23', 199.5),
+        bodyMetric('2026-06-27', 198.8),
+        bodyMetric('2026-07-01', 198),
+        bodyMetric('2026-07-04', 198.2),
+        bodyMetric('2026-07-05', 199.7),
+      ],
+      logs: dates.map((date) => nutritionLog(date, 2000)),
+      stepsByDate: {},
+      maintenance: 2500,
+      stepBaseline: 10000,
+      weightKg: 90,
+      minCalories: 1200,
+      unit: 'lb',
+      windowStart: new Date('2026-06-20T00:00:00.000Z'),
+      today: '2026-07-05',
+      phase: 'cut',
+    })
+
+    expect(calibration.status).toBe('ok')
+    expect(calibration.scaleBasis).toBe('cut_floor')
+    expect(calibration.waterWeight.adjustedReadings).toBe(0)
+    expect(calibration.predictedWeeklyLoss).toBeGreaterThan(0.95)
+    expect(calibration.predictedWeeklyLoss).toBeLessThan(1.05)
+    expect(calibration.actualWeeklyLoss).toBeGreaterThan(0.85)
+    expect(calibration.actualWeeklyLoss).toBeLessThan(0.95)
+    expect(calibration.suggestion).toBeNull()
+  })
+
+  it('lets an old cut block floor age down when no new lows happen', () => {
+    const dates = Array.from({ length: 29 }, (_, i) => {
+      const d = new Date('2026-06-20T00:00:00.000Z')
+      d.setUTCDate(d.getUTCDate() + i)
+      return d.toISOString().slice(0, 10)
+    })
+
+    const calibration = computeCalibration({
+      bodyEntries: [
+        bodyMetric('2026-06-20', 200),
+        bodyMetric('2026-06-27', 198),
+        bodyMetric('2026-07-04', 199),
+        bodyMetric('2026-07-11', 199.5),
+        bodyMetric('2026-07-18', 199.6),
+      ],
+      logs: dates.map((date) => nutritionLog(date, 2000)),
+      stepsByDate: {},
+      maintenance: 2500,
+      stepBaseline: 10000,
+      weightKg: 90,
+      minCalories: 1200,
+      unit: 'lb',
+      windowStart: new Date('2026-06-20T00:00:00.000Z'),
+      today: '2026-07-18',
+      phase: 'cut',
+    })
+
+    expect(calibration.status).toBe('ok')
+    expect(calibration.actualWeeklyLoss).toBeGreaterThan(0.45)
+    expect(calibration.actualWeeklyLoss).toBeLessThan(0.55)
+    expect(calibration.suggestion?.direction).toBe('lower')
+  })
 })

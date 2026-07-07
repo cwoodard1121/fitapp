@@ -25,6 +25,13 @@ import {
   derivePrevTargets,
 } from '@/lib/data/mappers'
 import { weekForDate } from '@/lib/data/week'
+import {
+  blockFloorWeeklyRate,
+  estimateBodyFatAtWeightFromLeanRetention,
+  estimateBodyFatFromLeanRetention,
+  normalizedBodyweight,
+  normalizedChangeFromStart,
+} from '@/lib/body/metrics'
 import { computeProgress } from '@/components/goals/progress'
 
 import type {
@@ -317,15 +324,23 @@ interface GoalContext {
 }
 
 /** Latest non-null bodyweight / bodyfat across the readings (oldest -> newest). */
-function latestBody(bodyMetrics: BodyMetric[]): {
+function latestBody(bodyMetrics: BodyMetric[], dietBlock: Block | null): {
   bodyweight: number | null
   bodyfat: number | null
 } {
-  let bodyweight: number | null = null
+  const bodyweight = normalizedBodyweight(bodyMetrics, dietBlock).value
   let bodyfat: number | null = null
-  for (const m of bodyMetrics) {
-    if (m.bodyweight != null) bodyweight = m.bodyweight
-    if (m.bodyfat_pct != null) bodyfat = m.bodyfat_pct
+  const estimatedBodyfat = estimateBodyFatFromLeanRetention(bodyMetrics)
+  const estimatedAtWeight =
+    estimatedBodyfat.latest != null
+      ? estimateBodyFatAtWeightFromLeanRetention(bodyMetrics, bodyweight)
+      : null
+  if (estimatedAtWeight != null) {
+    bodyfat = estimatedAtWeight
+  } else {
+    for (const m of bodyMetrics) {
+      if (m.bodyfat_pct != null) bodyfat = m.bodyfat_pct
+    }
   }
   return { bodyweight, bodyfat }
 }
@@ -371,6 +386,13 @@ function bodyRate(
   key: 'bodyweight' | 'bodyfat_pct',
   dietBlock: Block | null,
 ): BodyRate {
+  if (key === 'bodyweight' && dietBlock?.phase === 'cut') {
+    return blockFloorWeeklyRate(bodyMetrics, dietBlock, {
+      settleDays: SETTLE_DAYS,
+      minSpanDays: MIN_CLEAN_DAYS,
+    })
+  }
+
   const all = bodyMetrics
     .map((m) => ({ t: dayMs(m.measured_on), v: m[key] }))
     .filter((p): p is { t: number; v: number } => p.v != null && Number.isFinite(p.t))
@@ -427,15 +449,15 @@ function weeklyTonnagePoints(logs: SetLog[]): { t: number; v: number }[] {
 
 function computeGoal(goal: Goal, ctx: GoalContext): GoalAnalytic {
   const { series, bodyMetrics, logs, dietBlock, recentTonnage, now } = ctx
-  const body = latestBody(bodyMetrics)
+  const body = latestBody(bodyMetrics, dietBlock)
 
   /* --- Current value by metric type --- */
   let current: number | null = null
   let actualWeeklyRate: number | null = null
   switch (goal.metric_type) {
     case 'bodyweight':
-      // Rate excludes the early-diet water whoosh (bodyRate); current / absolute
-      // figures still reflect the full reading set via latestBody.
+      // Cut current uses the block floor; the rate uses the same floor basis
+      // after the early-diet settling window.
       current = body.bodyweight
       actualWeeklyRate = bodyRate(bodyMetrics, 'bodyweight', dietBlock).rate
       break
@@ -546,29 +568,44 @@ function computeGoal(goal: Goal, ctx: GoalContext): GoalAnalytic {
 /* ------------------------------------------------------------------ */
 
 function computeBody(bodyMetrics: BodyMetric[], dietBlock: Block | null): BodyAnalytic {
-  const bw = bodyMetrics.filter(
-    (m): m is BodyMetric & { bodyweight: number } => m.bodyweight != null,
-  )
   const bf = bodyMetrics.filter(
     (m): m is BodyMetric & { bodyfat_pct: number } => m.bodyfat_pct != null,
   )
 
-  // Absolute figures use the FULL reading set (the whoosh is real weight); only
-  // the weekly rate excludes the early-diet water loss via bodyRate.
-  const latestWeight = bw.length ? round1(bw[bw.length - 1].bodyweight) : null
-  const weightChange =
-    bw.length >= 2 ? round1(bw[bw.length - 1].bodyweight - bw[0].bodyweight) : null
+  // In a cut, top-line dashboard weight uses the block floor so a high-water
+  // morning does not move every card. Raw readings still render in history/charts.
+  const normalizedWeight = normalizedBodyweight(bodyMetrics, dietBlock)
+  const latestWeight = normalizedWeight.value
+  const weightChange = normalizedChangeFromStart(bodyMetrics, dietBlock)
   const { rate: weeklyRate, settling } = bodyRate(bodyMetrics, 'bodyweight', dietBlock)
 
-  const latestBodyfat = bf.length ? round1(bf[bf.length - 1].bodyfat_pct) : null
-  const bodyfatChange =
+  const estimatedBodyfat = estimateBodyFatFromLeanRetention(bodyMetrics)
+  const normalizedEstimatedBodyfat = estimateBodyFatAtWeightFromLeanRetention(
+    bodyMetrics,
+    normalizedWeight.value,
+  )
+  const estimatedBodyfatChange =
+    estimatedBodyfat.points.length >= 1 && normalizedEstimatedBodyfat != null
+      ? round1(normalizedEstimatedBodyfat - estimatedBodyfat.points[0].bodyfat)
+      : null
+  const latestMeasuredBodyfat = bf.length ? round1(bf[bf.length - 1].bodyfat_pct) : null
+  const measuredBodyfatChange =
     bf.length >= 2 ? round1(bf[bf.length - 1].bodyfat_pct - bf[0].bodyfat_pct) : null
+  const useEstimatedBodyfat = normalizedEstimatedBodyfat != null
+  const latestBodyfat = useEstimatedBodyfat ? normalizedEstimatedBodyfat : latestMeasuredBodyfat
+  const bodyfatChange = useEstimatedBodyfat ? estimatedBodyfatChange : measuredBodyfatChange
 
   return {
     latestWeight,
+    weightBasis: normalizedWeight.basis,
     weightChange,
     weeklyRate,
     latestBodyfat,
+    bodyfatBasis: useEstimatedBodyfat
+      ? 'estimated'
+      : latestMeasuredBodyfat == null
+        ? 'none'
+        : 'measured',
     bodyfatChange,
     readings: bodyMetrics.length,
     settling,

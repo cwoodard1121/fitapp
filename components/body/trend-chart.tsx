@@ -15,6 +15,7 @@ import {
 
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { estimateBodyFatFromLeanRetention } from '@/lib/body/metrics'
 import type { BodyMetric, Unit } from '@/lib/types'
 
 // Design tokens (charts take literal colors, not tailwind classes).
@@ -24,6 +25,7 @@ const COLORS = {
   border: '#2c313a',
   surface: '#1e2228',
   yellow: '#e8c45a',
+  blue: '#67d4ff',
   text: '#edeff2',
 }
 
@@ -39,6 +41,7 @@ interface Point {
   weight: number | null
   ma7: number | null
   bodyfat: number | null
+  estimatedBodyfat: number | null
 }
 
 /** Trailing N-point simple moving average over a numeric series. */
@@ -74,7 +77,7 @@ function ChartTooltip({
             <span className="ml-auto font-mono tabular-nums text-foreground">
               {typeof p.value === 'number' ? p.value : '—'}
               <span className="ml-0.5 text-muted">
-                {p.dataKey === 'bodyfat' ? '%' : ` ${unit}`}
+                {p.dataKey === 'bodyfat' || p.dataKey === 'estimatedBodyfat' ? '%' : ` ${unit}`}
               </span>
             </span>
           </div>
@@ -88,6 +91,12 @@ export function TrendChart({ entries, unit }: TrendChartProps) {
   const [showMa, setShowMa] = React.useState(true)
 
   const hasBodyfat = entries.some((e) => e.bodyfat_pct != null)
+  const estimatedBodyfat = React.useMemo(() => estimateBodyFatFromLeanRetention(entries), [entries])
+  const estimateByDate = React.useMemo(
+    () => new Map(estimatedBodyfat.points.map((p) => [p.date, p.bodyfat])),
+    [estimatedBodyfat.points],
+  )
+  const hasEstimatedBodyfat = estimatedBodyfat.points.length > 0
 
   const data: Point[] = React.useMemo(() => {
     const weights = entries.map((e) => e.bodyweight)
@@ -98,8 +107,9 @@ export function TrendChart({ entries, unit }: TrendChartProps) {
       weight: e.bodyweight,
       ma7: ma[i],
       bodyfat: e.bodyfat_pct,
+      estimatedBodyfat: estimateByDate.get(e.measured_on) ?? null,
     }))
-  }, [entries])
+  }, [entries, estimateByDate])
 
   const axisProps = {
     stroke: COLORS.muted,
@@ -185,14 +195,27 @@ export function TrendChart({ entries, unit }: TrendChartProps) {
         </ResponsiveContainer>
       </div>
 
-      {hasBodyfat ? (
+      {hasBodyfat || hasEstimatedBodyfat ? (
         <div className="space-y-2 border-t border-border pt-4">
-          <div className="flex items-center gap-1.5 text-xs text-muted">
-            <span
-              className="inline-block h-2 w-4 rounded-full"
-              style={{ backgroundColor: COLORS.yellow }}
-            />
-            Body fat %
+          <div className="flex flex-wrap items-center gap-4 text-xs text-muted">
+            {hasBodyfat ? (
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-2 w-4 rounded-full"
+                  style={{ backgroundColor: COLORS.yellow }}
+                />
+                Body fat %
+              </span>
+            ) : null}
+            {hasEstimatedBodyfat ? (
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-0 w-4 border-t-2 border-dashed"
+                  style={{ borderColor: COLORS.blue }}
+                />
+                Est. body fat
+              </span>
+            ) : null}
           </div>
           <div className="h-40 w-full" aria-label="Body fat trend chart">
             <ResponsiveContainer width="100%" height="100%">
@@ -208,17 +231,32 @@ export function TrendChart({ entries, unit }: TrendChartProps) {
                   content={<ChartTooltip unit={unit} />}
                   cursor={{ stroke: COLORS.border }}
                 />
-                <Line
-                  type="monotone"
-                  name="Body fat"
-                  dataKey="bodyfat"
-                  stroke={COLORS.yellow}
-                  strokeWidth={2}
-                  dot={{ r: 2, fill: COLORS.yellow, strokeWidth: 0 }}
-                  activeDot={{ r: 4 }}
-                  connectNulls
-                  isAnimationActive={false}
-                />
+                {hasBodyfat ? (
+                  <Line
+                    type="monotone"
+                    name="Body fat"
+                    dataKey="bodyfat"
+                    stroke={COLORS.yellow}
+                    strokeWidth={2}
+                    dot={{ r: 2, fill: COLORS.yellow, strokeWidth: 0 }}
+                    activeDot={{ r: 4 }}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                ) : null}
+                {hasEstimatedBodyfat ? (
+                  <Line
+                    type="monotone"
+                    name="Est. body fat"
+                    dataKey="estimatedBodyfat"
+                    stroke={COLORS.blue}
+                    strokeWidth={1.8}
+                    strokeDasharray="4 4"
+                    dot={false}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                ) : null}
               </LineChart>
             </ResponsiveContainer>
           </div>

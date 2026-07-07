@@ -1,35 +1,19 @@
 'use client'
 
-import * as React from 'react'
-import { differenceInCalendarDays, parseISO } from 'date-fns'
-
 import { Stat } from '@/components/ui/stat'
-import type { BodyMetric, Unit } from '@/lib/types'
+import {
+  estimateBodyFatAtWeightFromLeanRetention,
+  estimateBodyFatFromLeanRetention,
+  normalizedBodyweight,
+  normalizedDeltaOver,
+} from '@/lib/body/metrics'
+import type { Block, BodyMetric, Unit } from '@/lib/types'
 
 interface BodyStatsProps {
   /** Ascending by measured_on. */
   entries: BodyMetric[]
   unit: Unit
-}
-
-/** Weight change from the latest entry vs. the entry nearest `days` ago. */
-function deltaOver(entries: BodyMetric[], days: number): number | null {
-  if (entries.length < 2) return null
-  const latest = entries[entries.length - 1]
-  if (latest.bodyweight == null) return null
-  const latestDate = parseISO(latest.measured_on)
-  // Most recent prior entry that is at least `days` old.
-  let ref: BodyMetric | null = null
-  for (let i = entries.length - 2; i >= 0; i--) {
-    const e = entries[i]
-    if (e.bodyweight == null) continue
-    if (differenceInCalendarDays(latestDate, parseISO(e.measured_on)) >= days) {
-      ref = e
-      break
-    }
-  }
-  if (!ref || ref.bodyweight == null) return null
-  return Math.round((latest.bodyweight - ref.bodyweight) * 10) / 10
+  activeDietBlock: Pick<Block, 'phase' | 'start_date'> | null
 }
 
 function DeltaStat({
@@ -55,26 +39,30 @@ function DeltaStat({
   )
 }
 
-export function BodyStats({ entries, unit }: BodyStatsProps) {
-  const latest = entries[entries.length - 1] ?? null
-  const latestBf = [...entries].reverse().find((e) => e.bodyfat_pct != null)?.bodyfat_pct ?? null
+export function BodyStats({ entries, unit, activeDietBlock }: BodyStatsProps) {
+  const normalized = normalizedBodyweight(entries, activeDietBlock)
+  const estimatedBodyfat = estimateBodyFatFromLeanRetention(entries)
+  const normalizedEstimatedBodyfat =
+    estimatedBodyfat.basis === 'lean_retention'
+      ? estimateBodyFatAtWeightFromLeanRetention(entries, normalized.value)
+      : estimatedBodyfat.latest
 
-  const d7 = deltaOver(entries, 7)
-  const d30 = deltaOver(entries, 30)
+  const d7 = normalizedDeltaOver(entries, 7, activeDietBlock)
+  const d30 = normalizedDeltaOver(entries, 30, activeDietBlock)
 
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
       <Stat
-        label="Current"
-        value={latest?.bodyweight ?? null}
+        label={normalized.basis === 'block_floor' ? 'Scale floor' : 'Current'}
+        value={normalized.value}
         unit={unit}
         size="lg"
         tone="signal"
         precision={1}
       />
       <Stat
-        label="Body fat"
-        value={latestBf}
+        label={estimatedBodyfat.basis === 'lean_retention' ? 'Est. body fat' : 'Body fat'}
+        value={normalizedEstimatedBodyfat}
         unit="%"
         size="lg"
         precision={1}

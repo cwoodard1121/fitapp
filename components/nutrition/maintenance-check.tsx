@@ -41,6 +41,14 @@ export function MaintenanceCheck({
   const c = calibration
   const hasScaleWaterAdjustment =
     c.waterWeight.adjustedReadings > 0 || c.waterWeight.earlyDietOffset > 0
+  const actualSub =
+    c.scaleBasis === 'cut_floor'
+      ? hasScaleWaterAdjustment
+        ? 'block floor, adjusted'
+        : 'block floor'
+      : hasScaleWaterAdjustment
+        ? 'water-adjusted'
+        : 'from scale'
 
   function applySuggestion() {
     if (!c.suggestion) return
@@ -80,7 +88,7 @@ export function MaintenanceCheck({
           />
           <RateTile
             label="Actual"
-            sub={hasScaleWaterAdjustment ? 'water-adjusted' : 'from scale'}
+            sub={actualSub}
             weeklyLoss={c.actualWeeklyLoss}
             unit={unit}
           />

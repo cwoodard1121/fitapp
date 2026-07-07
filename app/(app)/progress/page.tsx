@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import type { ReactNode } from "react"
 
-import type { BodyMetric, ExerciseSlot, Goal, SetLog, Unit } from "@/lib/types"
+import type { Block, BodyMetric, ExerciseSlot, Goal, SetLog, Unit } from "@/lib/types"
 import {
   getActiveProgram,
   getProfile,
@@ -16,6 +16,11 @@ import { createClient } from "@/lib/supabase/server"
 import { getAnalysisAccess } from "@/lib/ai/allowlist"
 import { getLatestAnalysis } from "@/lib/ai/analysis"
 import { gatherAnalytics } from "@/lib/analytics"
+import {
+  estimateBodyFatAtWeightFromLeanRetention,
+  estimateBodyFatFromLeanRetention,
+  normalizedBodyweight,
+} from "@/lib/body/metrics"
 
 import { AnalysisPanel } from "@/components/analysis/analysis-panel"
 import { AnalyticsOverview } from "@/components/progress/analytics-overview"
@@ -65,16 +70,26 @@ export default async function ProgressPage() {
 
   // Goals + body measurements feed the new progress sections. Both are
   // RLS-scoped; we also pin user_id explicitly.
-  const [{ data: goalRows }, { data: bodyRows }] = await Promise.all([
+  const [{ data: goalRows }, { data: bodyRows }, { data: blockRows }] = await Promise.all([
     supabase.from("goals").select("*").eq("user_id", userId),
     supabase
       .from("body_metrics")
       .select("*")
       .eq("user_id", userId)
       .order("measured_on", { ascending: true }),
+    supabase
+      .from("blocks")
+      .select("phase,start_date")
+      .eq("user_id", userId)
+      .eq("kind", "diet")
+      .eq("is_active", true)
+      .order("start_date", { ascending: false })
+      .limit(1),
   ])
   const goalsRaw = (goalRows as Goal[]) ?? []
   const bodyMetrics = (bodyRows as BodyMetric[]) ?? []
+  const activeDietBlock =
+    (blockRows?.[0] as Pick<Block, "phase" | "start_date"> | undefined) ?? null
 
   const deloadWeek = program.deload_week
 
@@ -143,15 +158,25 @@ export default async function ProgressPage() {
   }
 
   /* --- Body measurements, oldest -> newest. --- */
+  const estimatedBodyfat = estimateBodyFatFromLeanRetention(bodyMetrics)
+  const estimatedBodyfatByDate = new Map(
+    estimatedBodyfat.points.map((p) => [p.date, p.bodyfat]),
+  )
   const body: BodyTrendPoint[] = bodyMetrics.map((m) => ({
     date: m.measured_on,
     bodyweight: m.bodyweight,
     bodyfat: m.bodyfat_pct,
+    estimatedBodyfat: estimatedBodyfatByDate.get(m.measured_on) ?? null,
   }))
 
   /* --- Derive each goal's live "current" value where we can. --- */
   const bestE1rmByName = new Map(exercises.map((e) => [e.name, e.bestE1rm]))
   const latestBody = bodyMetrics.length ? bodyMetrics[bodyMetrics.length - 1] : null
+  const normalizedBody = normalizedBodyweight(bodyMetrics, activeDietBlock)
+  const latestEstimatedBodyfat =
+    estimatedBodyfat.latest != null
+      ? estimateBodyFatAtWeightFromLeanRetention(bodyMetrics, normalizedBody.value)
+      : null
 
   // Recent weekly tonnage (last 7 days) for volume goals; null when no data.
   const since = Date.now() - 7 * 24 * 60 * 60 * 1000
@@ -175,10 +200,10 @@ export default async function ProgressPage() {
       let current: number | null = null
       switch (g.metric_type) {
         case "bodyweight":
-          current = latestBody?.bodyweight ?? null
+          current = normalizedBody.value
           break
         case "bodyfat":
-          current = latestBody?.bodyfat_pct ?? null
+          current = latestEstimatedBodyfat ?? latestBody?.bodyfat_pct ?? null
           break
         case "e1rm":
           current = g.exercise_name ? bestE1rmByName.get(g.exercise_name) ?? null : null

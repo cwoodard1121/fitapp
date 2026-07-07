@@ -373,7 +373,7 @@ function BodyCard({
       <CardContent>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat
-            label="Weight"
+            label={body.weightBasis === 'block_floor' ? 'Scale floor' : 'Weight'}
             value={body.latestWeight}
             unit={unit}
             precision={1}
@@ -390,7 +390,7 @@ function BodyCard({
             unit={unit}
           />
           <Stat
-            label="Body fat"
+            label={body.bodyfatBasis === 'estimated' ? 'Est. body fat' : 'Body fat'}
             value={body.latestBodyfat}
             unit="%"
             precision={1}
