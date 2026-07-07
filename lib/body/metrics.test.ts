@@ -33,11 +33,11 @@ describe('body metric helpers', () => {
     const block = { phase: 'cut' as const, start_date: '2026-06-20' }
 
     expect(normalizedBodyweight(entries, block)).toMatchObject({
-      value: 198.2,
+      value: 198,
       rawLatest: 199.7,
       basis: 'block_floor',
     })
-    expect(normalizedDeltaOver(entries, 7, block)).toBe(0.2)
+    expect(normalizedDeltaOver(entries, 7, block)).toBe(0)
   })
 
   it('estimates body fat from fixed lean mass after the first body-fat anchor', () => {

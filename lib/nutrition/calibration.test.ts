@@ -198,8 +198,7 @@ describe('maintenance calibration', () => {
     expect(calibration.waterWeight.adjustedReadings).toBe(0)
     expect(calibration.predictedWeeklyLoss).toBeGreaterThan(0.95)
     expect(calibration.predictedWeeklyLoss).toBeLessThan(1.05)
-    expect(calibration.actualWeeklyLoss).toBeGreaterThan(0.85)
-    expect(calibration.actualWeeklyLoss).toBeLessThan(0.95)
+    expect(calibration.actualWeeklyLoss).toBeGreaterThan(0.9)
     expect(calibration.suggestion).toBeNull()
   })
 

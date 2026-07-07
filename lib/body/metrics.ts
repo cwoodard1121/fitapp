@@ -4,7 +4,6 @@ import type { Block, BodyMetric } from '@/lib/types'
 
 type WeightBasis = 'latest' | 'block_floor'
 type BodyFatBasis = 'lean_retention' | 'measured' | 'none'
-const FLOOR_CLUSTER_PCT = 0.0025
 
 interface WeightReading {
   date: string
@@ -93,20 +92,6 @@ function lowest(readings: WeightReading[]): WeightReading | null {
   return readings.reduce((best, r) => (r.weight < best.weight ? r : best), readings[0])
 }
 
-function floorCluster(readings: WeightReading[]): WeightReading | null {
-  const floor = lowest(readings)
-  if (!floor) return null
-
-  const band = Math.max(floor.weight * FLOOR_CLUSTER_PCT, 0.1)
-  const cluster = readings.filter((r) => r.weight <= floor.weight + band)
-  const avg = cluster.reduce((sum, r) => sum + r.weight, 0) / cluster.length
-
-  return {
-    date: floor.date,
-    weight: avg,
-  }
-}
-
 export function normalizedBodyweight(
   entries: BodyMetric[],
   block?: Pick<Block, 'phase' | 'start_date'> | null,
@@ -118,7 +103,7 @@ export function normalizedBodyweight(
   }
 
   if (isCutBlock(block)) {
-    const floor = floorCluster(scopeFromBlock(readings, block))
+    const floor = lowest(scopeFromBlock(readings, block))
     if (floor) {
       return {
         value: round1(floor.weight),
@@ -193,7 +178,7 @@ export function blockFloorWeeklyRate(
   const spanDays = differenceInCalendarDays(parseISO(latest.date), parseISO(first.date))
   if (spanDays < minSpanDays) return { rate: null, settling: true }
 
-  const floor = floorCluster(scoped)
+  const floor = lowest(scoped)
   if (!floor) return { rate: null, settling: true }
 
   return {

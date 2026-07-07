@@ -266,18 +266,6 @@ function applyWaterWeightGuard({
 }
 
 const EARLY_DIET_WATER_LOSS_PCT = 0.02
-const FLOOR_CLUSTER_PCT = 0.0025
-
-function floorCluster(points: TrendPoint[]): TrendPoint | null {
-  if (points.length === 0) return null
-
-  const floor = points.reduce((best, p) => (p.y < best.y ? p : best), points[0])
-  const band = Math.max(floor.y * FLOOR_CLUSTER_PCT, 0.1)
-  const cluster = points.filter((p) => p.y <= floor.y + band)
-  const avgY = cluster.reduce((sum, p) => sum + p.y, 0) / cluster.length
-
-  return { ...floor, y: avgY }
-}
 
 function cutFloorEstimate(points: TrendPoint[]): ScaleEstimate | null {
   if (points.length < 2) return null
@@ -287,8 +275,7 @@ function cutFloorEstimate(points: TrendPoint[]): ScaleEstimate | null {
   const spanDays = last.x - first.x
   if (spanDays <= 0 || first.y <= 0) return null
 
-  const floor = floorCluster(points)
-  if (!floor) return null
+  const floor = points.reduce((best, p) => (p.y < best.y ? p : best), points[0])
   const scaleLoss = first.y - floor.y
 
   return {
