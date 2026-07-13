@@ -11,6 +11,7 @@ describe('DEFAULT_PROGRAM', () => {
       ['DB incline bench', 2],
       ['Pull-up', 2],
       ['DB lateral raise', 3],
+      ['Cable crunch', 3],
     ])
 
     expect(day2.slots.map((slot) => slot.exerciseName)).toEqual([
@@ -30,7 +31,10 @@ describe('DEFAULT_PROGRAM', () => {
       'DB incline bench',
       'Squat',
       'Deadlift',
+      'Cable crunch',
     ])
+
+    expect(day3.slots.find((slot) => slot.exerciseName === 'Cable crunch')?.baseSets).toBe(3)
 
     expect(day4.slots.find((slot) => slot.exerciseName === 'Rear-delt fly')?.baseSets).toBe(2)
     expect(day4.slots.some((slot) => slot.exerciseName === 'Close-grip bench or dip')).toBe(false)
