@@ -174,8 +174,9 @@ export async function setProgramStartDate(
 }
 
 /**
- * Full program tree: program + days (ordered by day_number) + slots
- * (ordered by order_index). One query per level, scoped to the user.
+ * Full program tree: program + days (ordered by day_number) + active slots
+ * (ordered by order_index). A negative order_index retires a slot from the
+ * current routine without deleting its historical logs.
  */
 export async function getProgramFull(programId: string): Promise<ProgramFull | null> {
   const supabase = await createClient()
@@ -206,6 +207,7 @@ export async function getProgramFull(programId: string): Promise<ProgramFull | n
       .select('*')
       .in('day_id', dayIds)
       .eq('user_id', userId)
+      .gte('order_index', 0)
       .order('order_index', { ascending: true })
     if (sErr) throw sErr
     slots = slotRows as ExerciseSlot[]
