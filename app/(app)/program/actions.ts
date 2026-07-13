@@ -298,6 +298,7 @@ export async function addSlot(
       .select('order_index')
       .eq('day_id', dayId)
       .eq('user_id', userId)
+      .gte('order_index', 0)
       .order('order_index', { ascending: false })
       .limit(1)
     if (sErr) throw sErr
@@ -446,6 +447,7 @@ export async function reorderSlot(
       .select('id, order_index')
       .eq('day_id', dayId)
       .eq('user_id', userId)
+      .gte('order_index', 0)
       .order('order_index', { ascending: true })
     if (error) throw error
 
