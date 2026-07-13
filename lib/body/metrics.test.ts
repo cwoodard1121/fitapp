@@ -4,6 +4,7 @@ import type { BodyMetric } from '@/lib/types'
 
 import {
   estimateBodyFatAtWeightFromLeanRetention,
+  estimateBodyFatBreakdown,
   estimateBodyFatFromLeanRetention,
   normalizedBodyweight,
   normalizedDeltaOver,
@@ -84,17 +85,21 @@ describe('body metric helpers', () => {
     expect(estimate.latest).toBeCloseTo(17.9, 1)
   })
 
-  it('uses high relative strength as a weighted body-fat signal', () => {
+  it('caps a single-lift body-fat adjustment instead of treating strength as a measurement', () => {
     const entries = [
-      bodyMetric('2026-06-20', 182, 22),
-      bodyMetric('2026-07-04', 182, null),
+      bodyMetric('2026-06-20', 174.4, 20),
+      bodyMetric('2026-07-04', 170, null),
     ]
     const strength = [
-      { date: '2026-07-02', exerciseName: 'Barbell bench press', e1rm: 300 },
+      { date: '2026-07-02', exerciseName: 'Barbell bench press', e1rm: 290 },
     ]
 
-    const estimate = estimateBodyFatFromLeanRetention(entries, { start_date: '2026-06-20' }, strength)
+    const withoutLift = estimateBodyFatBreakdown(entries, 170, '2026-07-04')
+    const withLift = estimateBodyFatBreakdown(entries, 170, '2026-07-04', strength)
 
-    expect(estimate.latest).toBeCloseTo(19.8, 1)
+    expect(withoutLift?.leanEstimate).toBeCloseTo(20, 1)
+    expect(withLift?.strengthAdjustment).toBe(0.3)
+    expect(withLift?.finalEstimate).toBeCloseTo(19.7, 1)
+    expect((withoutLift?.finalEstimate ?? 0) - (withLift?.finalEstimate ?? 0)).toBeLessThan(0.5)
   })
 })

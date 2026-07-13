@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 
 import {
   deleteBaselineLift,
+  setBodyFatLiftCompensation,
   upsertBaselineLift,
 } from '@/app/(app)/body/actions'
 import {
@@ -30,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
   Stat,
+  Switch,
 } from '@/components/ui'
 
 type LiftKind = BaselineLift['lift_kind']
@@ -49,10 +51,6 @@ function defaultName(kind: LiftKind) {
   return LIFTS.find((lift) => lift.kind === kind)?.defaultName ?? ''
 }
 
-function pct(value: number) {
-  return `${Math.round(value * 100)}%`
-}
-
 function formatDate(date: string | null) {
   return date ? date.slice(0, 10) : 'No date'
 }
@@ -64,6 +62,8 @@ export function BodyFatEstimator({
   strengthPoints,
   baselineLifts,
   suggestedBaselineLiftNames,
+  liftCompensationEnabled,
+  onLiftCompensationChange,
 }: {
   entries: BodyMetric[]
   unit: Unit
@@ -71,6 +71,8 @@ export function BodyFatEstimator({
   strengthPoints: StrengthEstimatePoint[]
   baselineLifts: BaselineLift[]
   suggestedBaselineLiftNames: Partial<Record<StrengthLiftKind, string>>
+  liftCompensationEnabled: boolean
+  onLiftCompensationChange: (enabled: boolean) => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [kind, setKind] = React.useState<LiftKind>('bench')
@@ -90,14 +92,30 @@ export function BodyFatEstimator({
   const estimate = React.useMemo(
     () =>
       blockStart
-        ? estimateBodyFatFromLeanRetention(entries, { start_date: blockStart }, strengthPoints)
+        ? estimateBodyFatFromLeanRetention(
+            entries,
+            { start_date: blockStart },
+            liftCompensationEnabled ? strengthPoints : undefined,
+          )
         : null,
-    [entries, blockStart, strengthPoints],
+    [entries, blockStart, strengthPoints, liftCompensationEnabled],
   )
   const breakdown = estimate?.breakdown ?? null
   const strength = breakdown?.strengthSignal ?? null
   const strengthApplied =
-    breakdown != null && strength != null && strength.bodyfat < breakdown.leanEstimate
+    breakdown != null && strength != null && breakdown.strengthAdjustment > 0
+
+  function onToggleLiftCompensation(checked: boolean) {
+    onLiftCompensationChange(checked)
+    startTransition(async () => {
+      const res = await setBodyFatLiftCompensation(checked)
+      if (res.ok) toast.success(`Lift compensation turned ${checked ? 'on' : 'off'}.`)
+      else {
+        onLiftCompensationChange(!checked)
+        toast.error(res.error)
+      }
+    })
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -134,9 +152,26 @@ export function BodyFatEstimator({
           <Dumbbell className="size-4 text-signal" aria-hidden />
           Body-fat estimate
         </CardTitle>
-        <CardDescription>Current estimate math and manual lift anchors.</CardDescription>
+        <CardDescription>Current estimate math and optional lift adjustment.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-background p-3">
+          <div className="space-y-1">
+            <Label htmlFor="lift-compensation">Lift compensation</Label>
+            <p className="text-xs text-muted">
+              Let recent strength make a small downward adjustment, capped at 0.75 point total.
+              Off keeps the estimate based only on your body-fat anchor and weight change.
+            </p>
+          </div>
+          <Switch
+            id="lift-compensation"
+            checked={liftCompensationEnabled}
+            onCheckedChange={onToggleLiftCompensation}
+            disabled={isPending}
+            aria-label="Toggle body-fat lift compensation"
+          />
+        </div>
+
         {breakdown ? (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -149,14 +184,15 @@ export function BodyFatEstimator({
               />
               <Stat label="Base" value={breakdown.leanEstimate} unit="%" precision={1} />
               <Stat
-                label="Strength"
-                value={strength?.bodyfat ?? null}
-                unit="%"
+                label="Lift signal"
+                value={liftCompensationEnabled ? (strength?.bodyfat ?? null) : 'off'}
+                unit={liftCompensationEnabled && strength ? '%' : undefined}
                 precision={1}
               />
               <Stat
-                label="Blend"
-                value={strengthApplied ? pct(strength.weight) : null}
+                label="Lift adj."
+                value={strengthApplied ? `-${breakdown.strengthAdjustment.toFixed(1)}` : null}
+                unit="pt"
                 placeholder="none"
               />
             </div>
@@ -193,7 +229,9 @@ export function BodyFatEstimator({
                 <p className="mb-2 font-medium uppercase tracking-wider text-muted">
                   Strength signal
                 </p>
-                {strength ? (
+                {!liftCompensationEnabled ? (
+                  <p>Lift compensation is off.</p>
+                ) : strength ? (
                   <div className="space-y-2">
                     {strength.lifts.map((lift) => (
                       <div
@@ -236,7 +274,8 @@ export function BodyFatEstimator({
             <div>
               <p className="text-sm font-medium text-foreground">Baseline lifts</p>
               <p className="text-xs text-muted">
-                Manual anchors apply when recent barbell logs are missing.
+                Manual anchors apply only when lift compensation is on and recent barbell logs are
+                missing.
               </p>
             </div>
           </div>

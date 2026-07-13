@@ -38,6 +38,7 @@ interface TrendChartProps {
   unit: Unit
   activeDietBlock: Pick<Block, 'start_date'> | null
   strengthPoints: StrengthEstimatePoint[]
+  liftCompensationEnabled: boolean
 }
 
 interface Point {
@@ -108,17 +109,27 @@ function percentDomain(points: Point[]): [number, number] {
   return low === high ? [Math.max(1, low - 1), Math.min(80, high + 1)] : [low, high]
 }
 
-export function TrendChart({ entries, unit, activeDietBlock, strengthPoints }: TrendChartProps) {
+export function TrendChart({
+  entries,
+  unit,
+  activeDietBlock,
+  strengthPoints,
+  liftCompensationEnabled,
+}: TrendChartProps) {
   const [showMa, setShowMa] = React.useState(true)
   const blockStart = activeDietBlock?.start_date ?? null
 
   const estimatedBodyfatPoints = React.useMemo(
     () =>
       blockStart
-        ? estimateBodyFatFromLeanRetention(entries, { start_date: blockStart }, strengthPoints)
+        ? estimateBodyFatFromLeanRetention(
+            entries,
+            { start_date: blockStart },
+            liftCompensationEnabled ? strengthPoints : undefined,
+          )
             .points
         : [],
-    [entries, blockStart, strengthPoints],
+    [entries, blockStart, strengthPoints, liftCompensationEnabled],
   )
   const estimateByDate = React.useMemo(
     () => new Map(estimatedBodyfatPoints.map((p) => [p.date, p.bodyfat])),

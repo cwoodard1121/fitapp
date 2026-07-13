@@ -7,6 +7,7 @@ type BodyFatBasis = 'lean_retention' | 'measured' | 'none'
 const DRY_WATER_DROP_PCT = 0.02
 const RECENT_HIGH_DAYS = 21
 const STRENGTH_LOOKBACK_DAYS = 180
+const STRENGTH_INFLUENCE = 0.1
 
 interface WeightReading {
   date: string
@@ -59,7 +60,8 @@ export interface BodyFatStrengthLift {
 
 export interface BodyFatStrengthSignal {
   bodyfat: number
-  weight: number
+  influence: number
+  adjustmentCap: number
   liftCount: number
   lifts: BodyFatStrengthLift[]
 }
@@ -77,6 +79,7 @@ export interface BodyFatEstimateBreakdown {
   dryWaterDrop: number
   dryLeanMass: number
   strengthSignal: BodyFatStrengthSignal | null
+  strengthAdjustment: number
 }
 
 const STRENGTH_BODYFAT_SIGNALS: Record<
@@ -150,7 +153,10 @@ function leanBodyFatBreakdown(
   entries: BodyMetric[],
   bodyweight: number,
   date: string | null,
-): Omit<BodyFatEstimateBreakdown, 'finalEstimate' | 'strengthSignal'> | null {
+): Omit<
+  BodyFatEstimateBreakdown,
+  'finalEstimate' | 'strengthSignal' | 'strengthAdjustment'
+> | null {
   const baseline = leanRetentionBaseline(entries)
   if (!baseline) return null
 
@@ -234,11 +240,13 @@ function strengthBodyFatSignal(
     .filter((v): v is BodyFatStrengthLift => v != null)
 
   if (lifts.length === 0) return null
-  const multiLiftBonus = lifts.length >= 3 ? 2 : lifts.length >= 2 ? 1 : 0
-  const evidenceWeight = lifts.length >= 3 ? 0.8 : lifts.length >= 2 ? 0.7 : 0.6
+  const averageSignal =
+    lifts.reduce((sum, lift) => sum + lift.signalBodyfat, 0) / lifts.length
+  const adjustmentCap = lifts.length >= 3 ? 0.75 : lifts.length >= 2 ? 0.5 : 0.3
   return {
-    bodyfat: Math.max(6, Math.min(...lifts.map((lift) => lift.signalBodyfat)) - multiLiftBonus),
-    weight: evidenceWeight,
+    bodyfat: round1(averageSignal),
+    influence: STRENGTH_INFLUENCE,
+    adjustmentCap,
     liftCount: lifts.length,
     lifts,
   }
@@ -256,16 +264,19 @@ export function estimateBodyFatBreakdown(
   if (!base) return null
 
   const strengthSignal = strengthBodyFatSignal(strengthPoints, bodyweight, date)
-  const finalEstimate =
-    strengthSignal && strengthSignal.bodyfat < base.leanEstimate
-      ? base.leanEstimate * (1 - strengthSignal.weight) +
-        strengthSignal.bodyfat * strengthSignal.weight
-      : base.leanEstimate
+  const strengthAdjustment = strengthSignal
+    ? Math.min(
+        strengthSignal.adjustmentCap,
+        Math.max(0, base.leanEstimate - strengthSignal.bodyfat) * strengthSignal.influence,
+      )
+    : 0
+  const finalEstimate = base.leanEstimate - strengthAdjustment
 
   return {
     ...base,
     finalEstimate: round1(clamp(finalEstimate, 1, 80)),
     strengthSignal,
+    strengthAdjustment: round1(strengthAdjustment),
   }
 }
 

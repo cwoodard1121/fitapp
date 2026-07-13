@@ -185,7 +185,7 @@ export default async function ProgressPage() {
     ? estimateBodyFatFromLeanRetention(
         bodyMetrics,
         { start_date: bodyFatBlockStartDate },
-        strengthPoints,
+        profile?.bodyfat_lift_compensation ? strengthPoints : undefined,
       )
     : null
   const estimatedBodyfatByDate = new Map(

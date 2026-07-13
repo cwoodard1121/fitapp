@@ -161,6 +161,7 @@ export default async function BodyPage() {
         strengthPoints={strengthPoints}
         baselineLifts={baselineLifts}
         suggestedBaselineLiftNames={suggestedLiftNames}
+        liftCompensationEnabled={profile.bodyfat_lift_compensation ?? false}
         today={today}
       />
     </div>

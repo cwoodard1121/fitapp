@@ -69,6 +69,8 @@ export interface Profile {
   maintenance_step_baseline: number | null;
   /** Deficit outlier filter: ignore completed days under this many kcal. null = off. */
   nutrition_min_calories: number | null;
+  /** Whether strength data may make a small, capped body-fat estimate adjustment. */
+  bodyfat_lift_compensation: boolean;
   created_at: string;
 }
 

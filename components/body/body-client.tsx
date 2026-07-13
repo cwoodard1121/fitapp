@@ -36,6 +36,7 @@ interface BodyClientProps {
   strengthPoints: StrengthEstimatePoint[]
   baselineLifts: BaselineLift[]
   suggestedBaselineLiftNames: Partial<Record<StrengthLiftKind, string>>
+  liftCompensationEnabled: boolean
   /** yyyy-MM-dd for "today" (computed server-side for stable SSR). */
   today: string
 }
@@ -47,11 +48,19 @@ export function BodyClient({
   strengthPoints,
   baselineLifts,
   suggestedBaselineLiftNames,
+  liftCompensationEnabled: initialLiftCompensationEnabled,
   today,
 }: BodyClientProps) {
   const [open, setOpen] = React.useState(false)
+  const [liftCompensationEnabled, setLiftCompensationEnabled] = React.useState(
+    initialLiftCompensationEnabled,
+  )
   // The entry the form is bound to: null = brand-new weigh-in.
   const [editing, setEditing] = React.useState<BodyMetric | null>(null)
+
+  React.useEffect(() => {
+    setLiftCompensationEnabled(initialLiftCompensationEnabled)
+  }, [initialLiftCompensationEnabled])
 
   const todayEntry = React.useMemo(
     () => entries.find((e) => e.measured_on === today) ?? null,
@@ -148,6 +157,7 @@ export function BodyClient({
                   unit={unit}
                   activeDietBlock={activeDietBlock}
                   strengthPoints={strengthPoints}
+                  liftCompensationEnabled={liftCompensationEnabled}
                 />
               </CardContent>
             </Card>
@@ -160,6 +170,8 @@ export function BodyClient({
             strengthPoints={strengthPoints}
             baselineLifts={baselineLifts}
             suggestedBaselineLiftNames={suggestedBaselineLiftNames}
+            liftCompensationEnabled={liftCompensationEnabled}
+            onLiftCompensationChange={setLiftCompensationEnabled}
           />
 
           <Card>

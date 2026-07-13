@@ -15,6 +15,8 @@ export type BaselineLiftActionResult =
   | { ok: true; lift: BaselineLift }
   | { ok: false; error: string }
 
+export type PreferenceActionResult = { ok: true } | { ok: false; error: string }
+
 const ROUTE = '/body'
 
 /** yyyy-MM-dd */
@@ -113,6 +115,34 @@ export async function deleteBodyMetric(
     return {
       ok: false,
       error: err instanceof Error ? err.message : 'Could not delete the weigh-in.',
+    }
+  }
+}
+
+/** Persist whether strength may make a small, capped body-fat adjustment. */
+export async function setBodyFatLiftCompensation(
+  enabled: boolean,
+): Promise<PreferenceActionResult> {
+  if (typeof enabled !== 'boolean') {
+    return { ok: false, error: 'Invalid lift compensation setting.' }
+  }
+
+  try {
+    const supabase = await createClient()
+    const userId = await requireUserId(supabase)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ bodyfat_lift_compensation: enabled })
+      .eq('id', userId)
+
+    if (error) return { ok: false, error: error.message }
+    revalidatePath(ROUTE)
+    revalidatePath('/progress')
+    return { ok: true }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Could not save lift compensation setting.',
     }
   }
 }
