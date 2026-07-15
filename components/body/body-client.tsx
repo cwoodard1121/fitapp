@@ -142,25 +142,13 @@ export function BodyClient({
           </Card>
 
           {entries.length >= 2 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Weight trend</CardTitle>
-                <CardDescription>
-                  {entries.length} weigh-ins ·{' '}
-                  {format(parseISO(entries[0].measured_on), 'MMM d')} –{' '}
-                  {format(parseISO(entries[entries.length - 1].measured_on), 'MMM d')}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <TrendChart
-                  entries={entries}
-                  unit={unit}
-                  activeDietBlock={activeDietBlock}
-                  strengthPoints={strengthPoints}
-                  liftCompensationEnabled={liftCompensationEnabled}
-                />
-              </CardContent>
-            </Card>
+            <TrendChart
+              entries={entries}
+              unit={unit}
+              activeDietBlock={activeDietBlock}
+              strengthPoints={strengthPoints}
+              liftCompensationEnabled={liftCompensationEnabled}
+            />
           ) : null}
 
           <BodyFatEstimator
