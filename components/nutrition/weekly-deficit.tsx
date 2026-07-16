@@ -22,6 +22,7 @@ import {
   KCAL_PER_KG,
   KCAL_PER_LB,
   TRACKING_START,
+  fractionOfDayElapsed,
 } from '@/lib/nutrition/deficit'
 
 type Win = 'week' | 'month' | 'block' | 'all'
@@ -55,6 +56,8 @@ interface DeficitTrackerProps {
   phase: string | null
   /** Active diet block start date (YYYY-MM-DD), for the "Block" window. */
   blockStart: string | null
+  /** Server-rendered fraction of today elapsed; kept live client-side. */
+  initialDayProgress: number
 }
 
 function fmtSigned(n: number): string {
@@ -64,6 +67,7 @@ function fmtSigned(n: number): string {
 
 interface WindowResult {
   daysLogged: number
+  dayEquivalents: number
   ignoredLowDays: number
   deficit: number
   sumCalories: number
@@ -85,6 +89,7 @@ function computeWindow(
   ignoreLow: boolean,
   minCal: number,
   stepBaseline: number,
+  currentDayProgress: number,
 ): WindowResult {
   const todayD = parseISO(today)
   let start: Date
@@ -124,8 +129,28 @@ function computeWindow(
     start,
     end: todayD,
     today,
+    currentDayProgress,
   })
   return { ...r, start }
+}
+
+/** Keep today's contribution moving gradually, even while the page stays open. */
+function useCurrentDayProgress(today: string, initialDayProgress: number): number {
+  const [progress, setProgress] = React.useState(initialDayProgress)
+
+  React.useEffect(() => {
+    function update() {
+      const now = new Date()
+      // Once the date rolls over, the day represented by `today` is complete.
+      setProgress(format(now, 'yyyy-MM-dd') === today ? fractionOfDayElapsed(now) : 1)
+    }
+
+    update()
+    const timer = window.setInterval(update, 60_000)
+    return () => window.clearInterval(timer)
+  }, [today])
+
+  return progress
 }
 
 const WIN_LABEL: Record<Win, string> = {
@@ -147,6 +172,7 @@ export function DeficitTracker({
   minCalories,
   phase,
   blockStart,
+  initialDayProgress,
 }: DeficitTrackerProps) {
   const mode = deriveMode(phase)
   const cardTitle =
@@ -162,6 +188,7 @@ export function DeficitTracker({
   // Outlier filter, seeded from the profile (null = off) so it syncs across devices.
   const [ignoreLow, setIgnoreLow] = React.useState(minCalories != null)
   const [minCal, setMinCal] = React.useState(minCalories ?? 1200)
+  const currentDayProgress = useCurrentDayProgress(today, initialDayProgress)
 
   /** Persist the outlier filter to the profile (null = off). Fire-and-forget. */
   function persistOutlier(min: number | null) {
@@ -289,16 +316,30 @@ export function DeficitTracker({
   const windows: Win[] = blockStart ? ['week', 'month', 'block'] : ['week', 'month', 'all']
   const active = windows.includes(win) ? win : 'week'
 
-  const r = computeWindow(logs, stepsByDate, maint, wk, active, today, blockStart, ignoreLow, minCal, baseline)
+  const r = computeWindow(
+    logs,
+    stepsByDate,
+    maint,
+    wk,
+    active,
+    today,
+    blockStart,
+    ignoreLow,
+    minCal,
+    baseline,
+    currentDayProgress,
+  )
   const inDeficit = r.deficit > 0
   const kcalPerUnit = unit === 'kg' ? KCAL_PER_KG : KCAL_PER_LB
   const estChange = r.deficit / kcalPerUnit
   // Signed vs maintenance: negative = under maintenance (a deficit), shown as -X.
-  const avgDaily = r.daysLogged ? Math.round(-r.deficit / r.daysLogged) : 0
+  const avgDaily = r.dayEquivalents ? Math.round(-r.deficit / r.dayEquivalents) : 0
   // The selected window's average activity-adjusted maintenance/day. If low
   // steps trimmed it, show the trim inline: "2,400 (-200) kcal".
-  const avgAdjustedMaint = r.daysLogged ? Math.round(r.sumMaint / r.daysLogged) : maint
-  const avgMaintAdjustment = r.daysLogged ? Math.round(r.totalAdjustment / r.daysLogged) : 0
+  const avgAdjustedMaint = r.dayEquivalents ? Math.round(r.sumMaint / r.dayEquivalents) : maint
+  const avgMaintAdjustment = r.dayEquivalents
+    ? Math.round(r.totalAdjustment / r.dayEquivalents)
+    : 0
   const adjustedMaintDisplay =
     avgMaintAdjustment > 0
       ? `${avgAdjustedMaint.toLocaleString()} (${fmtSigned(-avgMaintAdjustment)})`
@@ -347,7 +388,7 @@ export function DeficitTracker({
             tone: 'text-gate-yellow',
           }
     } else if (calorieTarget != null) {
-      const targetForLogged = calorieTarget * r.daysLogged
+      const targetForLogged = calorieTarget * r.dayEquivalents
       const overTarget = r.sumCalories - targetForLogged
       if (overTarget > 0 && inDeficit) {
         targetNote = {

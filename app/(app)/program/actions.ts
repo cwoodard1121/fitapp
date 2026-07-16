@@ -22,6 +22,7 @@ import {
   deleteProgram,
 } from '@/lib/data'
 import type { ExerciseSlot, Program, ProgramDay } from '@/lib/types'
+import { nextGeneratedSlotCode } from '@/lib/exercises/identity'
 
 const ROUTE = '/program'
 
@@ -295,30 +296,22 @@ export async function addSlot(
 
     const { data: slots, error: sErr } = await supabase
       .from('exercise_slots')
-      .select('order_index')
+      .select('order_index, slot_code')
       .eq('day_id', dayId)
       .eq('user_id', userId)
-      .gte('order_index', 0)
-      .order('order_index', { ascending: false })
-      .limit(1)
     if (sErr) throw sErr
 
-    const count = await supabase
-      .from('exercise_slots')
-      .select('id', { count: 'exact', head: true })
-      .eq('day_id', dayId)
-      .eq('user_id', userId)
-
-    const seq = (count.count ?? 0) + 1
-    const nextOrder = ((slots?.[0]?.order_index as number | undefined) ?? -1) + 1
     const dayNumber = (day as { day_number: number }).day_number
+    const existingSlots = (slots ?? []) as { order_index: number; slot_code: string }[]
+    const nextOrder = existingSlots.reduce((max, slot) => Math.max(max, slot.order_index), -1) + 1
+    const slotCode = nextGeneratedSlotCode(dayNumber, existingSlots.map((slot) => slot.slot_code))
 
     const { data, error } = await supabase
       .from('exercise_slots')
       .insert({
         day_id: dayId,
         user_id: userId,
-        slot_code: `D${dayNumber}A${seq}`,
+        slot_code: slotCode,
         order_index: nextOrder,
         exercise_name: 'New exercise',
         muscle_area: null,

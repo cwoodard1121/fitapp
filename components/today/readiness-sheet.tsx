@@ -99,9 +99,9 @@ export function ReadinessSheet({
   const [open, setOpen] = React.useState(false)
   const [pending, startTransition] = React.useTransition()
 
-  const [pump, setPump] = React.useState(log?.pump ?? 7)
-  const [soreness, setSoreness] = React.useState(log?.soreness ?? 4)
-  const [enjoyment, setEnjoyment] = React.useState(log?.enjoyment ?? 7)
+  const [pump, setPump] = React.useState(log?.pump ?? 5)
+  const [soreness, setSoreness] = React.useState(log?.soreness ?? 1)
+  const [enjoyment, setEnjoyment] = React.useState(log?.enjoyment ?? 5)
   const [performance, setPerformance] = React.useState<Performance | null>(
     log?.performance ?? null,
   )
@@ -173,8 +173,8 @@ export function ReadinessSheet({
             {exerciseName}
           </SheetTitle>
           <SheetDescription>
-            How this lift went — the engine uses it to make the call. Your overall
-            readiness is up top (one gut-check for the whole session).
+            Rate soreness before working sets. Add pump, performance, and enjoyment
+            afterward so the engine can judge both recovery and stimulus.
           </SheetDescription>
         </SheetHeader>
 
@@ -190,7 +190,7 @@ export function ReadinessSheet({
             <RatingSlider
               id={`soreness-${slotId}`}
               label="Soreness"
-              hint="How sore this muscle was coming in (from when you last trained it)."
+              hint="How sore this muscle feels coming in. Mild DOMS is okay; 8+ caps progression and 10 trims today's dose."
               value={soreness}
               onChange={setSoreness}
             />

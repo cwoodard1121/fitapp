@@ -1,16 +1,15 @@
 /**
  * Maintenance calibration: compare the loss your calorie deficit predicts with
- * the loss your scale shows over the active diet block.
+ * the loss your scale shows over the active diet block, or the tracked period
+ * when no block is active.
  *
- * Cut phases skip the first few days for maintenance calibration so the initial
- * glycogen/water flush does not become a maintenance correction. After that
- * settle period, scale movement uses the lowest weigh-in in the calibration
- * window divided by elapsed time. A single heavier morning can age the rate a
- * little, but it cannot erase the low-water mark.
+ * Cut phases use the lowest weigh-in in the calibration window so a single
+ * heavier morning cannot erase the low-water mark. During the first three weeks,
+ * faster-than-predicted loss is treated as possible water/glycogen movement and
+ * never used to raise maintenance.
  *
- * The intake side uses the most recent consistent logging window inside the
- * active block. Missed days block suggestions; obvious under-logged days are
- * ignored; and extreme high/low deficit days are trimmed from the average.
+ * The intake side requires the latest seven completed days to be consistently
+ * logged. Missing or obviously under-logged days block suggestions.
  */
 import { addDays, differenceInCalendarDays, parseISO } from 'date-fns'
 
@@ -83,6 +82,8 @@ export interface Calibration {
   waterWeight: WaterWeightAdjustment
   /** Non-null only when status==='ok' and the rates diverge meaningfully. */
   suggestion: CalibrationSuggestion | null
+  /** A trustworthy comparison exists, but an early-cut upward change is withheld. */
+  deferredReason: 'early_cut_water' | null
   /** True when status==='ok' and the rates line up (no suggestion). */
   aligned: boolean
 }
@@ -204,12 +205,11 @@ function estimateScaleLoss(points: TrendPoint[], phase: BlockPhase | null | unde
   return linearTrendEstimate(points)
 }
 
-// Thresholds for a trustworthy calibration (~2 weeks of consistent data).
-const MIN_WINDOW_DAYS = 14
-const MIN_BODY_READINGS = 5
-const MIN_DAYS_LOGGED = 10
-const MIN_TRACKING_CONSISTENCY = 0.7
-const CUT_SETTLE_DAYS = 7
+// A calibration unlocks after one complete, consistently logged week.
+const MIN_WINDOW_DAYS = 7
+const MIN_BODY_READINGS = 2
+const MIN_DAYS_LOGGED = 7
+const MIN_TRACKING_CONSISTENCY = 1
 // A suggestion fires only on a tangible and proportional gap.
 const MIN_DAILY_KCAL_GAP = 100
 const MIN_PROPORTIONAL_GAP = 0.25
@@ -233,12 +233,9 @@ function dateKey(d: Date) {
   return d.toISOString().slice(0, 10)
 }
 
-function trimmedMean(values: number[]): number {
+function mean(values: number[]): number {
   if (values.length === 0) return 0
-  const sorted = [...values].sort((a, b) => a - b)
-  const trim = values.length >= 20 ? Math.floor(values.length * 0.1) : values.length >= 10 ? 1 : 0
-  const kept = sorted.slice(trim, sorted.length - trim)
-  return kept.reduce((sum, v) => sum + v, 0) / kept.length
+  return values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
 function intakeWindow({
@@ -294,7 +291,7 @@ function intakeWindow({
     reliableDays: deficits.length,
     ignoredLowDays,
     consistency: deficits.length / days,
-    avgDailyDeficit: trimmedMean(deficits),
+    avgDailyDeficit: mean(deficits),
   }
 }
 
@@ -331,45 +328,16 @@ function selectIntakeWindow({
     })
   }
 
-  const fullDays = differenceInCalendarDays(end, blockStart) + 1
-  const lengths = [21, 28, 14, fullDays]
-  const seen = new Set<number>()
-  const windows = lengths
-    .filter((len) => len >= MIN_WINDOW_DAYS && !seen.has(len) && seen.add(len))
-    .map((len) =>
-      intakeWindow({
-        logs,
-        stepsByDate,
-        maintenance,
-        weightKg,
-        stepBaseline,
-        minCalories,
-        start: maxDate(blockStart, addDays(end, -len + 1)),
-        end,
-      }),
-    )
-
-  const reliable = windows.find(
-    (w) =>
-      w.days >= MIN_WINDOW_DAYS &&
-      w.reliableDays >= MIN_DAYS_LOGGED &&
-      w.consistency >= MIN_TRACKING_CONSISTENCY,
-  )
-
-  return (
-    reliable ??
-    windows.sort((a, b) => b.reliableDays - a.reliableDays || b.consistency - a.consistency)[0] ??
-    intakeWindow({
-      logs,
-      stepsByDate,
-      maintenance,
-      weightKg,
-      stepBaseline,
-      minCalories,
-      start: blockStart,
-      end,
-    })
-  )
+  return intakeWindow({
+    logs,
+    stepsByDate,
+    maintenance,
+    weightKg,
+    stepBaseline,
+    minCalories,
+    start: maxDate(blockStart, addDays(end, -(MIN_WINDOW_DAYS - 1))),
+    end,
+  })
 }
 
 export function computeCalibration(input: CalibrationInput): Calibration {
@@ -389,7 +357,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
 
   const perUnit = kcalPerUnit(unit)
   const todayD = parseISO(today)
-  const calibrationStart = phase === 'cut' ? addDays(windowStart, CUT_SETTLE_DAYS) : windowStart
+  const calibrationStart = windowStart
   const windowDays = Math.max(0, differenceInCalendarDays(todayD, calibrationStart))
 
   const inWindow = bodyEntries.filter((e) => {
@@ -417,6 +385,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
       ignoredLowDays: 0,
       waterWeight,
       suggestion: null,
+      deferredReason: null,
       aligned: false,
     }
   }
@@ -455,6 +424,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
       ignoredLowDays: intake.ignoredLowDays,
       waterWeight,
       suggestion: null,
+      deferredReason: null,
       aligned: false,
     }
   }
@@ -468,12 +438,18 @@ export function computeCalibration(input: CalibrationInput): Calibration {
     Math.abs(gap) >= MIN_PROPORTIONAL_GAP * Math.max(Math.abs(predictedWeeklyLoss), 0.3)
 
   let suggestion: CalibrationSuggestion | null = null
+  let deferredReason: Calibration['deferredReason'] = null
   if (meaningful) {
     const kcal = Math.min(MAX_SUGGESTION_KCAL, Math.round(Math.abs(dailyOff) / 50) * 50)
     if (kcal >= 50) {
       const direction: 'lower' | 'raise' = dailyOff > 0 ? 'lower' : 'raise'
       const newMaintenance = direction === 'lower' ? maintenance - kcal : maintenance + kcal
-      suggestion = { direction, kcal, newMaintenance }
+      const earlyCut = phase === 'cut' && differenceInCalendarDays(todayD, windowStart) < 21
+      if (!(earlyCut && direction === 'raise')) {
+        suggestion = { direction, kcal, newMaintenance }
+      } else {
+        deferredReason = 'early_cut_water'
+      }
     }
   }
 
@@ -490,6 +466,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
     ignoredLowDays: intake.ignoredLowDays,
     waterWeight,
     suggestion,
-    aligned: suggestion == null,
+    deferredReason,
+    aligned: suggestion == null && deferredReason == null,
   }
 }

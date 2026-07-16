@@ -126,6 +126,18 @@ export interface EngineResult {
   flags: Record<string, boolean>
 }
 
+export interface PlannedTargets {
+  load: number | null
+  sets: number | null
+  reps: number | null
+  rir: number | null
+}
+
+export interface ReadinessPlan {
+  targets: PlannedTargets
+  note: string | null
+}
+
 /* ------------------------------------------------------------------ */
 /* e1RM (Epley)                                                        */
 /* ------------------------------------------------------------------ */
@@ -182,6 +194,59 @@ export function targetLoad(
   return prevNextLoad ?? slot.seedLoad ?? 0
 }
 
+/**
+ * Apply incoming soreness to today's prescription before sets are performed.
+ * Mild residual soreness is normal; high soreness prevents another progression,
+ * while 10/10 trims the dose. Week 1 calls out novel DOMS instead of pretending
+ * it proves the whole program is over-dosed.
+ */
+export function adjustTargetsForReadiness(
+  targets: PlannedTargets,
+  log: SetLogInput,
+  slot: SlotConfig,
+  ctx: Pick<EngineContext, 'week'>,
+  previous: SetLogInput | null,
+): ReadinessPlan {
+  const soreness = log.soreness
+  if (soreness == null || soreness < 8) return { targets, note: null }
+
+  const severe = soreness >= 10
+  const performingStrong = log.recovery != null && log.recovery >= 7 && log.performance === 'Up'
+  const priorSets = previous?.actualSets ?? targets.sets ?? slot.baseSets
+  const setCap = severe ? Math.max(1, priorSets - 1) : priorSets
+  const priorLoad = previous?.actualLoad
+  const priorReps = previous?.bestReps
+
+  let load = priorLoad == null ? targets.load : Math.min(targets.load ?? priorLoad, priorLoad)
+  if (severe && !performingStrong && !slot.isBodyweight && load != null) {
+    load = Math.max(0, load - slot.loadIncrement)
+  }
+
+  const adjusted: PlannedTargets = {
+    ...targets,
+    load,
+    sets: targets.sets == null ? setCap : Math.min(targets.sets, setCap),
+    reps: priorReps == null ? targets.reps : Math.min(targets.reps ?? priorReps, priorReps),
+  }
+
+  if (severe) {
+    return {
+      targets: adjusted,
+      note:
+        ctx.week === 1
+          ? '10/10 soreness may be novel first-week DOMS, but it is still too high to push through. Trim today by a set and reassess after performance.'
+          : '10/10 soreness signals unresolved fatigue from the last muscle exposure. Trim today by a set and avoid progressing the load.',
+    }
+  }
+
+  return {
+    targets: adjusted,
+    note: performingStrong
+      ? 'You are performing strongly despite high soreness. Repeat the last dose today, but do not add load, reps, or sets yet.'
+      : 'High incoming soreness means the last muscle exposure may not be recovered. Repeat at most the last dose and let performance decide.',
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* The autoregulation evaluation                                       */
 /* ------------------------------------------------------------------ */
@@ -234,8 +299,10 @@ export function evaluateSlot(
   const tooeasy = actualRir != null && actualRir > targetRir + 2
   const badpump = pump != null && pump <= 5
   const goodpump = pump != null && pump >= 7
-  const lowsore = soreness != null && soreness <= 5
+  const lowsore = soreness != null && soreness <= 2
+  const productivesore = soreness != null && soreness >= 3 && soreness <= 6
   const highsore = soreness != null && soreness >= 8
+  const severesore = soreness != null && soreness >= 10
   const goodrecovery = recovery != null && recovery >= 7
   const badrecovery = recovery != null && recovery <= 4
   const perfdown = performance === 'Down'
@@ -249,7 +316,7 @@ export function evaluateSlot(
     (perfup ? w.perfUp : perfdown ? w.perfDown : 0) +
     (goodpump ? w.pumpGood : badpump ? w.pumpBad : 0) +
     (enjoyment != null && enjoyment >= 7 ? w.enjoyment : 0) +
-    (soreness != null && soreness >= 3 && soreness <= 7
+    (productivesore
       ? w.sorenessBand
       : highsore && !goodrecovery
         ? w.sorenessHighNoRecovery
@@ -260,10 +327,11 @@ export function evaluateSlot(
   const gate: Gate =
     badrecovery ||
     (perfdown && !goodrecovery) ||
-    (highsore && !goodrecovery) ||
+    severesore ||
+    (highsore && (!goodrecovery || perfdown)) ||
     (verylowrir && !goodrecovery && (perfdown || highsore))
       ? 'Red'
-      : goodrecovery
+      : goodrecovery && !highsore
         ? 'Green'
         : 'Yellow'
 
@@ -282,7 +350,7 @@ export function evaluateSlot(
   // movements always allow volume — sets are how they progress once reps cap.
   const canVolume = progressBias !== 'Load +5' || isBodyweight
 
-  // Stimulus-driven volume signal: a low pump (or low soreness) means the
+  // Stimulus-driven volume signal: a low pump means the
   // muscle was under-stimulated, so it earns a SET — and this is checked
   // BEFORE load/rep progression, so "can't add load/reps cleanly but pump is
   // low -> add a set" falls out naturally. Relaxed from the original (good
@@ -293,7 +361,7 @@ export function evaluateSlot(
     canVolume &&
     gate !== 'Red' &&
     perfok &&
-    (badpump || lowsore) &&
+    badpump &&
     (actualSets == null || actualSets < SET_CAP)
 
   const noData =
@@ -307,15 +375,25 @@ export function evaluateSlot(
   if (week === deloadWeek) {
     decision = 'Deload / maintain'
     reason = 'Deload week — keep loads light and let fatigue drop.'
-  } else if (week === 1) {
-    decision = 'Calibrate (set baseline)'
-    reason = 'Week 1 — log honest numbers to set your baseline; no push yet.'
-  } else if (noData) {
-    decision = null
-    reason = 'Nothing logged yet.'
   } else if (status === 'Skip') {
     decision = 'Skip'
     reason = 'Marked skip — no change.'
+  } else if (noData) {
+    decision = null
+    reason = severesore
+      ? 'Severe incoming soreness — use the reduced target and reassess after your first work set.'
+      : 'Nothing logged yet.'
+  } else if (severesore) {
+    decision = 'Hold/reduce'
+    reason =
+      week === 1
+        ? 'Severe soreness may be novel DOMS in Week 1, but 10/10 is too high to progress through.'
+        : 'Severe soreness says the previous muscle dose was not recovered — reduce today.'
+  } else if (week === 1) {
+    decision = 'Calibrate (set baseline)'
+    reason = highsore
+      ? 'Week 1 DOMS is common. Hold the dose steady, log honest performance, and do not add work yet.'
+      : 'Week 1 — log honest numbers to set your baseline; no push yet.'
   } else if (gate === 'Red') {
     decision = 'Hold/reduce'
     reason = badrecovery
@@ -323,9 +401,7 @@ export function evaluateSlot(
       : "Readiness is red — hold or reduce, don't add stress."
   } else if (addSet) {
     decision = 'Add 1 set'
-    reason = badpump
-      ? 'Low pump with recovery to spare — under-stimulated, so add a set (volume, not load).'
-      : 'Low soreness with recovery to spare — room for more volume, add a set.'
+    reason = 'Low pump with recovery to spare — under-stimulated, so add a set (volume, not load).'
   } else if (perfok && goodrecovery && !lowrir && (score >= PROGRESS_SCORE || tooeasy)) {
     if (isBodyweight) {
       // Bodyweight: reps then sets only — never an automatic load bump.
@@ -373,7 +449,7 @@ export function evaluateSlot(
       decision = 'Maintain'
       reason = 'On track — repeat and beat it next time.'
     }
-  } else if (tooeasy && perfok && progressBias === 'Load +5' && !isBodyweight) {
+  } else if (tooeasy && perfok && !highsore && progressBias === 'Load +5' && !isBodyweight) {
     decision = 'Add 5 lb'
     bigJump = veryeasy
     reason = veryeasy ? 'Too light — jump the load up harder.' : 'That was too light — add load.'
@@ -437,7 +513,9 @@ export function evaluateSlot(
     badpump,
     goodpump,
     lowsore,
+    productivesore,
     highsore,
+    severesore,
     goodrecovery,
     badrecovery,
     perfdown,

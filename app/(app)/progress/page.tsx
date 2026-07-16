@@ -22,6 +22,7 @@ import {
   normalizedChangeFromStart,
   type StrengthEstimatePoint,
 } from "@/lib/body/metrics"
+import { exerciseNameKey } from "@/lib/exercises/identity"
 
 import { AnalysisPanel } from "@/components/analysis/analysis-panel"
 import { AnalyticsOverview } from "@/components/progress/analytics-overview"
@@ -98,18 +99,23 @@ export default async function ProgressPage() {
   const deloadWeek = program.deload_week
 
   /* --- Group logs by exercise_name and run the engine in sequence. --- */
-  const groups = new Map<string, { slot: ExerciseSlot; logs: SetLog[] }>()
+  const groups = new Map<string, { name: string; slot: ExerciseSlot; logs: SetLog[] }>()
   for (const log of logs) {
     const slot = slotById.get(log.slot_id)
     if (!slot) continue
-    const key = slot.exercise_name
+    const key = exerciseNameKey(slot.exercise_name)
     const g = groups.get(key)
-    if (g) g.logs.push(log)
-    else groups.set(key, { slot, logs: [log] })
+    if (g) {
+      g.name = slot.exercise_name
+      g.slot = slot
+      g.logs.push(log)
+    } else {
+      groups.set(key, { name: slot.exercise_name, slot, logs: [log] })
+    }
   }
 
   const exercises: ExerciseSeries[] = []
-  for (const [name, { slot, logs: groupLogs }] of groups) {
+  for (const { name, slot, logs: groupLogs } of groups.values()) {
     const config = slotConfigFromRow(slot)
     const points: ExercisePoint[] = []
     let prevLog: SetLog | null = null
@@ -199,7 +205,7 @@ export default async function ProgressPage() {
   }))
 
   /* --- Derive each goal's live "current" value where we can. --- */
-  const bestE1rmByName = new Map(exercises.map((e) => [e.name, e.bestE1rm]))
+  const bestE1rmByName = new Map(exercises.map((e) => [exerciseNameKey(e.name), e.bestE1rm]))
   const latestBody = bodyMetrics.length ? bodyMetrics[bodyMetrics.length - 1] : null
   const normalizedBody = normalizedBodyweight(bodyMetrics, activeDietBlock)
   const normalizedBodyChange = normalizedChangeFromStart(bodyMetrics, activeDietBlock)
@@ -232,7 +238,9 @@ export default async function ProgressPage() {
           current = latestBody?.bodyfat_pct ?? null
           break
         case "e1rm":
-          current = g.exercise_name ? bestE1rmByName.get(g.exercise_name) ?? null : null
+          current = g.exercise_name
+            ? bestE1rmByName.get(exerciseNameKey(g.exercise_name)) ?? null
+            : null
           break
         case "volume":
           current = recentTonnage

@@ -166,7 +166,7 @@ export default async function SessionDetailPage({
       </header>
 
       <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-muted">
-        Every slot, and the engine's call
+        Every slot, and the engine&apos;s call
       </p>
 
       {views.length === 0 ? (

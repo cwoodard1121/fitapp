@@ -17,6 +17,7 @@ import type {
   Program,
   SetLog,
 } from '@/lib/types'
+import { exerciseNameKey } from '@/lib/exercises/identity'
 import type { Decision } from '@/lib/engine/engine'
 import { evaluateSlot, detectStall } from '@/lib/engine/engine'
 import {
@@ -160,17 +161,23 @@ function buildLiftSeries(
   deloadWeek: number,
 ): Map<string, LiftSeries> {
   const slotById = new Map<string, ExerciseSlot>(slots.map((s) => [s.id, s]))
-  const groups = new Map<string, { slot: ExerciseSlot; logs: SetLog[] }>()
+  const groups = new Map<string, { name: string; slot: ExerciseSlot; logs: SetLog[] }>()
   for (const log of logs) {
     const slot = slotById.get(log.slot_id)
     if (!slot) continue
-    const g = groups.get(slot.exercise_name)
-    if (g) g.logs.push(log)
-    else groups.set(slot.exercise_name, { slot, logs: [log] })
+    const key = exerciseNameKey(slot.exercise_name)
+    const g = groups.get(key)
+    if (g) {
+      g.name = slot.exercise_name
+      g.slot = slot
+      g.logs.push(log)
+    } else {
+      groups.set(key, { name: slot.exercise_name, slot, logs: [log] })
+    }
   }
 
   const series = new Map<string, LiftSeries>()
-  for (const [name, { slot, logs: groupLogs }] of groups) {
+  for (const [key, { name, slot, logs: groupLogs }] of groups) {
     const config = slotConfigFromRow(slot)
     const points: LiftSeriesPoint[] = []
     let prevLog: SetLog | null = null
@@ -194,7 +201,7 @@ function buildLiftSeries(
       })
       prevLog = log
     }
-    series.set(name, {
+    series.set(key, {
       name,
       area: slot.muscle_area,
       isBodyweight: slot.is_bodyweight ?? false,
@@ -292,7 +299,7 @@ function toLiftAnalytic(s: LiftSeries): LiftAnalytic {
  */
 function latestE1rmFor(series: Map<string, LiftSeries>, name: string | null): number | null {
   if (!name) return null
-  const s = series.get(name)
+  const s = series.get(exerciseNameKey(name))
   if (!s) return null
   return toLiftAnalytic(s).latestE1rm
 }
@@ -303,7 +310,7 @@ function weeklyE1rmRateFor(
   name: string | null,
 ): number | null {
   if (!name) return null
-  const s = series.get(name)
+  const s = series.get(exerciseNameKey(name))
   if (!s) return null
   return toLiftAnalytic(s).weeklyE1rmRate
 }

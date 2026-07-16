@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildSevenDayBodyFatTrend,
   buildSevenDayWeightTrend,
   summarizeWeightTrend,
   type WeightTrendInput,
@@ -9,6 +10,40 @@ import {
 const reading = (measured_on: string, bodyweight: number): WeightTrendInput => ({
   measured_on,
   bodyweight,
+})
+
+describe('buildSevenDayBodyFatTrend', () => {
+  it('builds a trailing seven-calendar-day average from body-fat readings', () => {
+    const points = buildSevenDayBodyFatTrend([
+      { measured_on: '2026-01-01', bodyfat_pct: 20 },
+      { measured_on: '2026-01-04', bodyfat_pct: 19 },
+      { measured_on: '2026-01-07', bodyfat_pct: 18 },
+    ])
+
+    expect(points.find((point) => point.date === '2026-01-06')?.average).toBeNull()
+    expect(points.at(-1)).toMatchObject({
+      bodyfat: 18,
+      average: 19,
+      sampleCount: 3,
+    })
+  })
+
+  it('keeps the average current through later bodyweight-only dates', () => {
+    const points = buildSevenDayBodyFatTrend(
+      [
+        { measured_on: '2026-01-01', bodyfat_pct: 20 },
+        { measured_on: '2026-01-07', bodyfat_pct: 18 },
+      ],
+      '2026-01-10',
+    )
+
+    expect(points.at(-1)).toMatchObject({
+      date: '2026-01-10',
+      bodyfat: null,
+      average: 18,
+      sampleCount: 1,
+    })
+  })
 })
 
 describe('buildSevenDayWeightTrend', () => {

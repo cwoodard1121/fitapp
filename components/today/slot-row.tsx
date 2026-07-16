@@ -203,6 +203,11 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
         <Stat size="sm" label="Reps" value={targets.reps} placeholder="—" />
         <Stat size="sm" label="RIR" value={targets.rir} />
       </div>
+      {view.readinessNote ? (
+        <p className="mx-4 mb-3 rounded-md border border-gate-yellow/40 bg-gate-yellow/10 px-3 py-2 text-xs leading-relaxed text-gate-yellow">
+          {view.readinessNote}
+        </p>
+      ) : null}
 
       <Separator />
 
@@ -242,7 +247,7 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
                 type="number"
                 inputMode="numeric"
                 step="1"
-                min={0}
+                min={1}
                 aria-label={`Set ${i + 1} reps`}
                 value={r.reps}
                 onChange={(e) => setField(i, 'reps', e.target.value)}

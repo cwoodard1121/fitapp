@@ -387,5 +387,7 @@ export interface SlotView {
   /** Individual sets logged for this slot (ordered by set_number). */
   entries: SetEntry[];
   targets: SlotTargets;
+  /** Incoming soreness adjustment shown before the first work set, when present. */
+  readinessNote: string | null;
   result: import("@/lib/engine/engine").EngineResult;
 }

@@ -4,7 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { requireUserId, getProfile } from '@/lib/data'
 import type { Block, BodyMetric, NutritionLog } from '@/lib/types'
 import { computeCalibration, type Calibration } from '@/lib/nutrition/calibration'
-import { DEFAULT_STEP_BASELINE } from '@/lib/nutrition/deficit'
+import {
+  DEFAULT_STEP_BASELINE,
+  TRACKING_START,
+  fractionOfDayElapsed,
+} from '@/lib/nutrition/deficit'
 
 import { NutritionClient } from '@/components/nutrition/nutrition-client'
 
@@ -25,7 +29,9 @@ export default async function NutritionPage() {
   const stepBaseline = profile?.maintenance_step_baseline ?? DEFAULT_STEP_BASELINE
   const minCalories = profile ? profile.nutrition_min_calories : 1200
 
-  const today = format(new Date(), 'yyyy-MM-dd')
+  const now = new Date()
+  const today = format(now, 'yyyy-MM-dd')
+  const initialDayProgress = fractionOfDayElapsed(now)
 
   // Active diet block (kind=diet, is_active) supplies the targets we measure
   // today's intake against. There should be at most one.
@@ -75,22 +81,29 @@ export default async function NutritionPage() {
   const weightKg =
     latestWeight == null ? null : unit === 'lb' ? latestWeight * KG_PER_LB : latestWeight
 
-  let calibration: Calibration | null = null
-  if (activeBlock?.start_date) {
-    calibration = computeCalibration({
-      bodyEntries: bodyMetrics,
-      logs,
-      stepsByDate,
-      maintenance,
-      stepBaseline,
-      weightKg: weightKg ?? 0,
-      minCalories,
-      unit,
-      windowStart: parseISO(activeBlock.start_date),
-      today,
-      phase: activeBlock.phase,
-    })
-  }
+  const observedDates = [
+    ...logs.map((log) => log.logged_on),
+    ...bodyMetrics.map((entry) => entry.measured_on),
+  ].sort()
+  const observedStart = observedDates[0] ? parseISO(observedDates[0]) : parseISO(today)
+  const calibrationStart = activeBlock?.start_date
+    ? parseISO(activeBlock.start_date)
+    : observedStart > TRACKING_START
+      ? observedStart
+      : TRACKING_START
+  const calibration: Calibration = computeCalibration({
+    bodyEntries: bodyMetrics,
+    logs,
+    stepsByDate,
+    maintenance,
+    stepBaseline,
+    weightKg: weightKg ?? 0,
+    minCalories,
+    unit,
+    windowStart: calibrationStart,
+    today,
+    phase: activeBlock?.phase ?? null,
+  })
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-5 sm:pb-10">
@@ -117,6 +130,7 @@ export default async function NutritionPage() {
         stepBaseline={stepBaseline}
         minCalories={minCalories}
         calibration={calibration}
+        initialDayProgress={initialDayProgress}
       />
     </div>
   )

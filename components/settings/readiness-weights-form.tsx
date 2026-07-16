@@ -31,7 +31,7 @@ const WEIGHT_META: Record<WeightKey, { label: string; hint: string }> = {
   pumpGood: { label: 'Pump good', hint: 'Strong working pump' },
   pumpBad: { label: 'Pump low', hint: 'Little to no pump' },
   enjoyment: { label: 'Enjoyment', hint: 'You liked the work' },
-  sorenessBand: { label: 'Soreness in band', hint: 'Soreness sat in the sweet spot' },
+  sorenessBand: { label: 'Mild soreness', hint: 'Some residual soreness, but recovered' },
   sorenessHighNoRecovery: {
     label: 'Sore, not recovered',
     hint: 'High soreness with poor recovery',

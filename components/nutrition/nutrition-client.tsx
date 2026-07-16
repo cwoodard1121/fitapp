@@ -57,8 +57,10 @@ interface NutritionClientProps {
   stepBaseline: number
   /** Outlier filter from the profile: ignore days under this many kcal (null = off). */
   minCalories: number | null
-  /** Predicted-vs-actual maintenance calibration; null when no active diet block. */
+  /** Predicted-vs-actual maintenance calibration. */
   calibration: Calibration | null
+  /** Server-rendered fraction of today elapsed. */
+  initialDayProgress: number
 }
 
 /** Recent days kept on screen for the list + trend (the deficit tracker uses all). */
@@ -75,6 +77,7 @@ export function NutritionClient({
   stepBaseline,
   minCalories,
   calibration,
+  initialDayProgress,
 }: NutritionClientProps) {
   const router = useRouter()
   const [pending, startTransition] = React.useTransition()
@@ -160,9 +163,10 @@ export function NutritionClient({
         minCalories={minCalories}
         phase={activeBlock?.phase ?? null}
         blockStart={activeBlock?.start_date ?? null}
+        initialDayProgress={initialDayProgress}
       />
 
-      {calibration && calibration.status !== 'no_maintenance' && calibration.daysLogged > 0 ? (
+      {calibration && calibration.status !== 'no_maintenance' ? (
         <MaintenanceCheck
           calibration={calibration}
           unit={unit}

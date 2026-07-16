@@ -33,6 +33,43 @@ function nutritionLog(date: string, calories: number): NutritionLog {
 }
 
 describe('maintenance calibration', () => {
+  it('unlocks at exactly seven fully logged completed days and not six', () => {
+    const dates = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date('2026-06-20T00:00:00.000Z')
+      date.setUTCDate(date.getUTCDate() + index)
+      return date.toISOString().slice(0, 10)
+    })
+    const base = {
+      bodyEntries: [
+        bodyMetric('2026-06-20', 200),
+        bodyMetric('2026-06-26', 199),
+      ],
+      stepsByDate: {},
+      maintenance: 2500,
+      stepBaseline: 10000,
+      weightKg: 90,
+      minCalories: 1200,
+      unit: 'lb' as const,
+      windowStart: new Date('2026-06-20T00:00:00.000Z'),
+      today: '2026-06-27',
+      phase: 'cut' as const,
+    }
+
+    const sevenDays = computeCalibration({
+      ...base,
+      logs: dates.map((date) => nutritionLog(date, 2000)),
+    })
+    const sixDays = computeCalibration({
+      ...base,
+      logs: dates.slice(0, -1).map((date) => nutritionLog(date, 2000)),
+    })
+
+    expect(sevenDays.status).toBe('ok')
+    expect(sevenDays.daysLogged).toBe(7)
+    expect(sixDays.status).toBe('insufficient')
+    expect(sixDays.daysLogged).toBe(6)
+  })
+
   it('does not suggest a maintenance change during the initial cut water flush', () => {
     const dates = [
       '2026-06-20',
@@ -72,9 +109,10 @@ describe('maintenance calibration', () => {
       phase: 'cut',
     })
 
-    expect(calibration.status).toBe('insufficient')
+    expect(calibration.status).toBe('ok')
     expect(calibration.waterWeight.earlyDietOffset).toBe(0)
     expect(calibration.suggestion).toBeNull()
+    expect(calibration.deferredReason).toBe('early_cut_water')
   })
 
   it('waits for consistent post-flush intake instead of assuming perfect tracking', () => {
@@ -108,8 +146,8 @@ describe('maintenance calibration', () => {
     })
 
     expect(calibration.status).toBe('insufficient')
-    expect(calibration.daysLogged).toBe(8)
-    expect(calibration.trackingConsistency).toBeLessThan(0.7)
+    expect(calibration.daysLogged).toBe(3)
+    expect(calibration.trackingConsistency).toBeLessThan(1)
     expect(calibration.suggestion).toBeNull()
   })
 
@@ -126,7 +164,7 @@ describe('maintenance calibration', () => {
       bodyMetric('2026-07-02', 198.4),
       bodyMetric('2026-07-06', 198),
     ]
-    const logs = dates.map((date) => nutritionLog(date, date === '2026-06-23' ? 500 : 2000))
+    const logs = dates.map((date) => nutritionLog(date, date === '2026-07-03' ? 500 : 2000))
 
     const base = {
       bodyEntries,
@@ -143,12 +181,12 @@ describe('maintenance calibration', () => {
     const unfiltered = computeCalibration({ ...base, minCalories: null })
     const filtered = computeCalibration({ ...base, minCalories: 1200 })
 
-    expect(unfiltered.daysLogged).toBe(17)
-    expect(filtered.daysLogged).toBe(16)
+    expect(unfiltered.daysLogged).toBe(7)
+    expect(filtered.daysLogged).toBe(6)
     expect(filtered.ignoredLowDays).toBe(1)
   })
 
-  it('trims a single bad intake day out of the maintenance average', () => {
+  it('uses only the latest seven completed intake days', () => {
     const dates = Array.from({ length: 22 }, (_, i) => {
       const d = new Date('2026-06-27T00:00:00.000Z')
       d.setUTCDate(d.getUTCDate() + i)

@@ -26,7 +26,7 @@ interface MaintenanceCheckProps {
 }
 
 /**
- * Compares calorie balance with scale movement over the active diet block.
+ * Compares calorie balance with scale movement over the tracked calibration period.
  * This lives in Nutrition because it adjusts the maintenance calorie estimate.
  */
 export function MaintenanceCheck({
@@ -66,7 +66,7 @@ export function MaintenanceCheck({
           Maintenance calibration
         </CardTitle>
         <CardDescription>
-          Compares your recent reliable intake with scale movement inside the active block.
+          Compares your latest seven completed intake days with scale movement.
         </CardDescription>
       </CardHeader>
 
@@ -99,10 +99,15 @@ export function MaintenanceCheck({
 
         {c.status === 'insufficient' ? (
           <Note tone="muted" icon={<FlaskConical className="size-4 shrink-0" aria-hidden />}>
-            A maintenance suggestion unlocks after about 2 weeks, 5 weigh-ins, 10 reliable intake
-            days, and 70% recent consistency. So far: {c.bodyReadings} weigh-in
+            A maintenance suggestion unlocks after 7 completed days with all 7 reliably logged
+            and at least 2 weigh-ins. So far: {c.bodyReadings} weigh-in
             {c.bodyReadings === 1 ? '' : 's'}, {c.daysLogged}/{c.intakeWindowDays} reliable days
             {c.intakeWindowDays > 0 ? ` (${consistencyPct}%)` : ''}.
+          </Note>
+        ) : c.deferredReason === 'early_cut_water' ? (
+          <Note tone="muted" icon={<FlaskConical className="size-4 shrink-0" aria-hidden />}>
+            The seven-day check is active, but faster early-cut scale loss can still be water and
+            glycogen. No maintenance increase will be suggested from that signal yet.
           </Note>
         ) : c.suggestion ? (
           <div className="space-y-3 rounded-md border border-gate-yellow/40 bg-gate-yellow/10 p-3">

@@ -17,7 +17,10 @@ import { aggregateFromEntries } from '@/lib/data/mappers'
 
 const ROUTE = '/today'
 
-const nullableNumber = z.union([z.number().finite(), z.null()])
+const nullableRating = z.union([z.number().finite().min(1).max(10), z.null()])
+const nullableLoad = z.union([z.number().finite().min(0).max(2000), z.null()])
+const nullableReps = z.union([z.number().int().min(1).max(100), z.null()])
+const nullableRir = z.union([z.number().finite().min(0).max(10), z.null()])
 const performanceSchema = z.enum(['Up', 'Same', 'Down']).nullable()
 const rirOverrideSchema = z.enum(['Y', 'N', 'Skip']).nullable()
 
@@ -26,9 +29,9 @@ const rirOverrideSchema = z.enum(['Y', 'N', 'Skip']).nullable()
 /* ------------------------------------------------------------------ */
 
 const setRowSchema = z.object({
-  load: nullableNumber,
-  reps: nullableNumber,
-  rir: nullableNumber,
+  load: nullableLoad,
+  reps: nullableReps,
+  rir: nullableRir,
 })
 
 const setEntriesSchema = z.object({
@@ -119,7 +122,7 @@ export async function saveSetEntries(
 const sessionReadinessSchema = z.object({
   sessionId: z.string().uuid(),
   week: z.number().int().positive(),
-  recovery: nullableNumber,
+  recovery: nullableRating,
   allSlotIds: z.array(z.string().uuid()).min(1),
 })
 
@@ -171,9 +174,9 @@ const readinessSchema = z.object({
   sessionId: z.string().uuid(),
   slotId: z.string().uuid(),
   week: z.number().int().positive(),
-  pump: nullableNumber,
-  soreness: nullableNumber,
-  enjoyment: nullableNumber,
+  pump: nullableRating,
+  soreness: nullableRating,
+  enjoyment: nullableRating,
   performance: performanceSchema,
   hitRirOverride: rirOverrideSchema,
   notes: z.string().max(2000).nullable(),

@@ -8,9 +8,15 @@ import type {
   SlotView,
 } from '@/lib/types'
 import type { EngineContext, ReadinessWeights } from '@/lib/engine/engine'
-import { evaluateSlot, targetLoad, targetSets } from '@/lib/engine/engine'
+import {
+  adjustTargetsForReadiness,
+  evaluateSlot,
+  targetLoad,
+  targetSets,
+} from '@/lib/engine/engine'
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId } from '@/lib/data/auth'
+import { exerciseNameKey } from '@/lib/exercises/identity'
 import {
   derivePrevTargets,
   setLogInputFromRow,
@@ -174,33 +180,65 @@ async function getPrevWeekLog(
 }
 
 /**
- * Previous-week set_logs for many slots, keyed by slot_id. One query.
+ * Most recent performed log for each exercise name before this session. Slot ids
+ * are deliberately ignored: the same named exercise shares history across days,
+ * programs, and casing differences.
  */
-async function getPrevWeekLogsForSlots(
-  slotIds: string[],
-  week: number,
-): Promise<Record<string, SetLog>> {
-  const map: Record<string, SetLog> = {}
-  if (week <= 1 || slotIds.length === 0) return map
+async function getPriorLogsByExercise(
+  session: Session,
+  slots: ExerciseSlot[],
+  currentLogs: Record<string, SetLog>,
+): Promise<Map<string, SetLog>> {
+  const result = new Map<string, SetLog>()
+  if (slots.length === 0) return result
 
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
-  const { data, error } = await supabase
+  const wanted = new Set(slots.map((slot) => exerciseNameKey(slot.exercise_name)))
+  const { data: namedSlots, error: slotError } = await supabase
+    .from('exercise_slots')
+    .select('id, exercise_name')
+    .eq('user_id', userId)
+  if (slotError) throw slotError
+
+  const nameBySlotId = new Map<string, string>()
+  for (const row of (namedSlots ?? []) as Pick<ExerciseSlot, 'id' | 'exercise_name'>[]) {
+    const key = exerciseNameKey(row.exercise_name)
+    if (wanted.has(key)) nameBySlotId.set(row.id, key)
+  }
+  const matchingSlotIds = [...nameBySlotId.keys()]
+  if (matchingSlotIds.length === 0) return result
+
+  const currentLogTimes = Object.values(currentLogs)
+    .map((log) => log.created_at)
+    .filter(Boolean)
+  const cutoff = currentLogTimes.sort()[0] ?? session.performed_at ?? new Date().toISOString()
+  const { data: priorRows, error: logError } = await supabase
     .from('set_logs')
     .select('*')
-    .in('slot_id', slotIds)
-    .eq('week', week - 1)
     .eq('user_id', userId)
-  if (error) throw error
+    .in('slot_id', matchingSlotIds)
+    .neq('session_id', session.id)
+    .lt('created_at', cutoff)
+    .order('created_at', { ascending: false })
+    .limit(1000)
+  if (logError) throw logError
 
-  for (const row of (data as SetLog[]) ?? []) {
-    // Keep the most recent if duplicates exist.
-    const existing = map[row.slot_id]
-    if (!existing || row.created_at > existing.created_at) {
-      map[row.slot_id] = row
+  for (const log of (priorRows ?? []) as SetLog[]) {
+    // Readiness-only rows are not a completed exercise dose and cannot seed a target.
+    if (
+      log.actual_load == null &&
+      log.best_reps == null &&
+      log.actual_sets == null &&
+      log.actual_rir == null
+    ) {
+      continue
     }
+    const key = nameBySlotId.get(log.slot_id)
+    if (key && !result.has(key)) result.set(key, log)
   }
-  return map
+
+  return result
 }
 
 /**
@@ -254,7 +292,7 @@ export async function computeSlotTargets(
 
 /**
  * Build the Today view: for each slot, attach its current log, the week's
- * targets, and the engine result. Batches previous-week lookups into one query.
+ * targets, and the engine result. Exercise history is shared by normalized name.
  */
 export async function buildTodayView(
   session: Session,
@@ -264,22 +302,33 @@ export async function buildTodayView(
   weights?: ReadinessWeights | null,
 ): Promise<SlotView[]> {
   const week = session.week
-  const slotIds = slots.map((s) => s.id)
-  const prevLogs = await getPrevWeekLogsForSlots(slotIds, week)
+  const priorLogs = await getPriorLogsByExercise(session, slots, logs)
   const entriesBySlot = await getSetEntriesForSession(session.id)
 
   return slots.map((slot) => {
     const config = slotConfigFromRow(slot)
     const log = logs[slot.id] ?? null
     const entries = entriesBySlot[slot.id] ?? []
-    const prev = derivePrevTargets(config, prevLogs[slot.id], week - 1, deloadWeek)
+    const priorLog = priorLogs.get(exerciseNameKey(slot.exercise_name))
+    const prev = derivePrevTargets(config, priorLog, priorLog?.week ?? week - 1, deloadWeek)
+    // A second occurrence during Week 1 should use the first occurrence's
+    // calibrated result instead of resetting to the seed/base targets.
+    const targetWeek = week === 1 && priorLog ? 2 : week
 
-    const targets: SlotTargets = {
-      load: targetLoad(week, deloadWeek, config, prev.prevNextLoad),
-      sets: targetSets(week, deloadWeek, config, prev.prevNextSets),
-      reps: week === 1 ? config.repLow : prev.prevNextReps ?? config.repLow,
+    const baseTargets: SlotTargets = {
+      load: targetLoad(targetWeek, deloadWeek, config, prev.prevNextLoad),
+      sets: targetSets(targetWeek, deloadWeek, config, prev.prevNextSets),
+      reps: targetWeek === 1 ? config.repLow : prev.prevNextReps ?? config.repLow,
       rir: config.targetRir,
     }
+    const readinessPlan = adjustTargetsForReadiness(
+      baseTargets,
+      setLogInputFromRow(log),
+      config,
+      { week },
+      priorLog ? setLogInputFromRow(priorLog) : null,
+    )
+    const targets: SlotTargets = readinessPlan.targets
 
     const ctx: EngineContext = {
       week,
@@ -291,7 +340,7 @@ export async function buildTodayView(
     }
     const result = evaluateSlot(setLogInputFromRow(log), config, ctx)
 
-    return { slot, log, entries, targets, result }
+    return { slot, log, entries, targets, readinessNote: readinessPlan.note, result }
   })
 }
 

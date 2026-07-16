@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Library, Loader2, Save, Search, Trash2 } from 'lucide-react'
+import { ArrowLeft, Library, Loader2, Save, Search, Trash2 } from 'lucide-react'
 import type { ExerciseSlot, Unit } from '@/lib/types'
 import type { ProgressBias } from '@/lib/engine/engine'
 import {
@@ -17,13 +17,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -49,6 +42,99 @@ const BIAS_OPTIONS: { value: ProgressBias; label: string }[] = [
   { value: 'Reps first', label: 'Reps first' },
   { value: 'Set optional', label: 'Set optional' },
 ]
+
+function ExerciseLibraryPicker({
+  groups,
+  query,
+  onQuery,
+  onPick,
+  onBack,
+}: {
+  groups: ReturnType<typeof groupCatalogByMuscle>
+  query: string
+  onQuery: (query: string) => void
+  onPick: (exercise: CatalogExercise) => void
+  onBack: () => void
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SheetHeader className="px-5 pb-3 pt-5 text-left">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            aria-label="Back to exercise editor"
+          >
+            <ArrowLeft aria-hidden />
+          </Button>
+          <div>
+            <SheetTitle>Exercise library</SheetTitle>
+            <SheetDescription>Pick a movement to fill its defaults.</SheetDescription>
+          </div>
+        </div>
+      </SheetHeader>
+
+      <div className="px-5 pb-3">
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+            aria-hidden
+          />
+          <Input
+            value={query}
+            onChange={(event) => onQuery(event.target.value)}
+            placeholder="Search by name or muscle"
+            aria-label="Search the exercise library"
+            autoFocus
+            className="pl-9"
+          />
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+        {groups.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">
+            No exercises match &ldquo;{query.trim()}&rdquo;.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {groups.map((group) => (
+              <div key={group.muscleArea} className="space-y-1.5">
+                <h3 className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
+                  {group.muscleArea}
+                </h3>
+                <ul className="space-y-1">
+                  {group.exercises.map((exercise) => (
+                    <li key={exercise.name}>
+                      <button
+                        type="button"
+                        onClick={() => onPick(exercise)}
+                        className="flex w-full items-center gap-2 rounded-md border border-border bg-background/40 px-3 py-2 text-left transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-foreground">
+                            {exercise.name}
+                          </span>
+                          <span className="block truncate text-xs text-muted">
+                            {exercise.muscleArea} · {exercise.repLow}–{exercise.repHigh} reps ·{' '}
+                            {exercise.progressBias}
+                          </span>
+                        </span>
+                        {exercise.isBodyweight ? <Badge variant="secondary">BW</Badge> : null}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export function SlotEditor({
   slot,
@@ -166,19 +252,27 @@ export function SlotEditor({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="max-h-[92vh] gap-0 overflow-y-auto rounded-t-xl p-0 sm:mx-auto sm:max-w-lg"
+        className="flex max-h-[92vh] flex-col gap-0 overflow-y-auto rounded-t-xl p-0 sm:mx-auto sm:max-w-lg"
       >
-        <SheetHeader className="px-5 pb-3 pt-5 text-left">
-          <div className="flex items-center gap-2">
-            <span className="rounded bg-background px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted">
-              {slot.slot_code}
-            </span>
-            <SheetTitle>Edit exercise</SheetTitle>
-          </div>
-          <SheetDescription>
-            Tune how the engine progresses this slot.
-          </SheetDescription>
-        </SheetHeader>
+        {pickerOpen ? (
+          <ExerciseLibraryPicker
+            groups={pickerGroups}
+            query={query}
+            onQuery={setQuery}
+            onPick={applyCatalog}
+            onBack={() => setPickerOpen(false)}
+          />
+        ) : (
+          <>
+            <SheetHeader className="px-5 pb-3 pt-5 text-left">
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-background px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted">
+                  {slot.slot_code}
+                </span>
+                <SheetTitle>Edit exercise</SheetTitle>
+              </div>
+              <SheetDescription>Tune how the engine progresses this slot.</SheetDescription>
+            </SheetHeader>
 
         <div className="space-y-4 px-5 pb-4">
           <Button
@@ -377,10 +471,10 @@ export function SlotEditor({
               Lower shows first. The up/down arrows adjust this for you.
             </p>
           </div>
-        </div>
+            </div>
 
         {/* Sticky action bar — trailing pad clears the home indicator. */}
-        <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-surface px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+            <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-surface px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           <Button
             variant="ghost"
             onClick={handleRemove}
@@ -406,79 +500,10 @@ export function SlotEditor({
             )}
             Save
           </Button>
-        </div>
-      </SheetContent>
-
-      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-        <DialogContent className="flex max-h-[80vh] flex-col gap-0 p-0 sm:max-w-lg">
-          <DialogHeader className="space-y-1.5 px-5 pb-3 pt-5 text-left">
-            <DialogTitle>Exercise library</DialogTitle>
-            <DialogDescription>
-              Pick a movement to auto-fill its defaults — you can still edit
-              everything afterward.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="px-5 pb-3">
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
-                aria-hidden
-              />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by name or muscle"
-                aria-label="Search the exercise library"
-                autoFocus
-                className="pl-9"
-              />
             </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-            {pickerGroups.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted">
-                No exercises match “{query.trim()}”.
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {pickerGroups.map((group) => (
-                  <div key={group.muscleArea} className="space-y-1.5">
-                    <h3 className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-                      {group.muscleArea}
-                    </h3>
-                    <ul className="space-y-1">
-                      {group.exercises.map((ex) => (
-                        <li key={ex.name}>
-                          <button
-                            type="button"
-                            onClick={() => applyCatalog(ex)}
-                            className="flex w-full items-center gap-2 rounded-md border border-border bg-background/40 px-3 py-2 text-left transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                          >
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium text-foreground">
-                                {ex.name}
-                              </span>
-                              <span className="block truncate text-xs text-muted">
-                                {ex.muscleArea} · {ex.repLow}–{ex.repHigh} reps ·{' '}
-                                {ex.progressBias}
-                              </span>
-                            </span>
-                            {ex.isBodyweight ? (
-                              <Badge variant="secondary">BW</Badge>
-                            ) : null}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+          </>
+        )}
+      </SheetContent>
     </Sheet>
   )
 }

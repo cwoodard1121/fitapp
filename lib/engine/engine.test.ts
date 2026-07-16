@@ -6,6 +6,7 @@ import {
   epley1RM,
   detectStall,
   DEFAULT_WEIGHTS,
+  adjustTargetsForReadiness,
   type SlotConfig,
   type SetLogInput,
   type EngineContext,
@@ -125,7 +126,7 @@ describe('evaluateSlot — pinned decision cases (T1..T10)', () => {
     expect(res.nextSets).toBe(2) // 3 - 1, floored at 1
   })
 
-  it('T5: non-load bias, good recovery, low pump/soreness, sets < 4 -> Add 1 set (nextSets = sets + 1)', () => {
+  it('T5: non-load bias, good recovery, low pump, sets < 4 -> Add 1 set (nextSets = sets + 1)', () => {
     const s = slot({ progressBias: 'Reps first', baseSets: 3, loadIncrement: 2.5 })
     const l = log({
       actualLoad: 30,
@@ -133,7 +134,7 @@ describe('evaluateSlot — pinned decision cases (T1..T10)', () => {
       actualSets: 3, // < 4
       actualRir: 3,
       pump: 4, // badpump (<= 5)
-      soreness: 4, // lowsore (<= 5)
+      soreness: 4, // mild residual soreness is productive, not a volume signal
       recovery: 8, // goodrecovery
       performance: 'Same', // perfok
     })
@@ -222,13 +223,13 @@ describe('evaluateSlot — recovery gate', () => {
 
 describe('evaluateSlot — growth score', () => {
   it('sums the components on a known positive input to 8', () => {
-    // +2 recovery, +1 perf up, +2 good pump, +1 enjoyment, +1 soreness band, +1 too easy
+    // +2 recovery, +1 perf up, +2 good pump, +1 enjoyment, +1 mild soreness, +1 too easy
     const l = log({
       recovery: 8, // +2
       performance: 'Up', // +1
       pump: 8, // +2
       enjoyment: 8, // +1
-      soreness: 5, // in [3,7] -> +1
+      soreness: 5, // in [3,6] -> +1
       actualRir: 6, // tooeasy (> targetRir + 2 = 5) -> +1
       actualLoad: 100,
       bestReps: 5,
@@ -446,6 +447,66 @@ describe('smart layer — low pump earns a set (stimulus over load)', () => {
     }
     expect(evaluateSlot(log({ ...base, actualSets: 4 }), s, ctx()).decision).toBe('Add 1 set')
     expect(evaluateSlot(log({ ...base, actualSets: 5 }), s, ctx()).flags.addSet).toBe(false)
+  })
+})
+
+describe('smart layer — incoming soreness and DOMS', () => {
+  it('does not add volume merely because incoming soreness is low', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 40,
+        bestReps: 12,
+        actualSets: 2,
+        actualRir: 3,
+        pump: 7,
+        soreness: 1,
+        recovery: 8,
+        performance: 'Same',
+      }),
+      slot(),
+      ctx(),
+    )
+
+    expect(res.flags.lowsore).toBe(true)
+    expect(res.flags.addSet).toBe(false)
+    expect(res.decision).not.toBe('Add 1 set')
+  })
+
+  it('treats mild soreness plus strong performance as compatible with progression', () => {
+    const res = evaluateSlot(strongLog({ soreness: 5 }), slot(), ctx())
+    expect(res.gate).toBe('Green')
+    expect(res.decision).toBe('Add 1 rep')
+  })
+
+  it('caps progression when soreness is high even if performance is strong', () => {
+    const plan = adjustTargetsForReadiness(
+      { load: 85, sets: 4, reps: 13, rir: 3 },
+      log({ soreness: 8, recovery: 8, performance: 'Up' }),
+      slot(),
+      { week: 2 },
+      log({ actualLoad: 80, actualSets: 3, bestReps: 12 }),
+    )
+
+    expect(plan.targets).toMatchObject({ load: 80, sets: 3, reps: 12 })
+    expect(plan.note).toMatch(/performing strongly/i)
+  })
+
+  it('trims a set for 10/10 first-week DOMS without treating mild DOMS as failure', () => {
+    const plan = adjustTargetsForReadiness(
+      { load: 80, sets: 3, reps: 10, rir: 3 },
+      log({ soreness: 10, recovery: 8, performance: 'Up' }),
+      slot(),
+      { week: 1 },
+      null,
+    )
+
+    expect(plan.targets.sets).toBe(2)
+    expect(plan.targets.load).toBe(80)
+    expect(plan.note).toMatch(/first-week DOMS/i)
+
+    const result = evaluateSlot(strongLog({ soreness: 10 }), slot(), ctx({ week: 1 }))
+    expect(result.gate).toBe('Red')
+    expect(result.decision).toBe('Hold/reduce')
   })
 })
 

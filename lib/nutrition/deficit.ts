@@ -44,10 +44,14 @@ export interface DeficitInput {
   end: Date
   /** today's yyyy-MM-dd — the in-progress day, never outlier-filtered. */
   today: string
+  /** Fraction of today elapsed (0..1); completed days are always counted in full. */
+  currentDayProgress: number
 }
 
 export interface DeficitResult {
   daysLogged: number
+  /** Full completed days plus the elapsed fraction of today, for rates/targets. */
+  dayEquivalents: number
   ignoredLowDays: number
   /** + = under (adjusted) maintenance, i.e. a deficit. */
   deficit: number
@@ -62,10 +66,23 @@ export function kcalPerUnit(unit: 'lb' | 'kg'): number {
   return unit === 'kg' ? KCAL_PER_KG : KCAL_PER_LB
 }
 
+/** Fraction of the current local calendar day that has elapsed (DST-safe). */
+export function fractionOfDayElapsed(now: Date): number {
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+
+  return Math.min(
+    1,
+    Math.max(0, (now.getTime() - start.getTime()) / (end.getTime() - start.getTime())),
+  )
+}
+
 /**
- * Sum the activity-adjusted deficit across logged days in [start, end]. Each
- * day's maintenance is trimmed by (stepBaseline - steps) * 0.04 * (weightKg/70)
- * for days under the baseline (only ever lowers).
+ * Sum the activity-adjusted deficit across logged days in [start, end]. The
+ * current day's maintenance and step baseline accrue with elapsed time; prior
+ * days remain full raw days.
  */
 export function accumulateDeficit(input: DeficitInput): DeficitResult {
   const {
@@ -79,12 +96,14 @@ export function accumulateDeficit(input: DeficitInput): DeficitResult {
     start,
     end,
     today,
+    currentDayProgress,
   } = input
 
   let deficit = 0
   let sumCalories = 0
   let sumMaint = 0
   let daysLogged = 0
+  let dayEquivalents = 0
   let ignoredLowDays = 0
   let adjustedDays = 0
   let totalAdjustment = 0
@@ -98,14 +117,19 @@ export function accumulateDeficit(input: DeficitInput): DeficitResult {
       continue
     }
 
+    const progress =
+      l.logged_on === today ? Math.min(1, Math.max(0, currentDayProgress)) : 1
     const steps = stepsByDate[l.logged_on]
     const adjustment =
       steps != null
-        ? Math.max(0, stepBaseline - steps) * KCAL_PER_STEP * (weightKg / REF_WEIGHT_KG)
+        ? Math.max(0, stepBaseline * progress - steps) *
+          KCAL_PER_STEP *
+          (weightKg / REF_WEIGHT_KG)
         : 0
-    const dayMaint = baseMaint - adjustment
+    const dayMaint = baseMaint * progress - adjustment
 
     daysLogged += 1
+    dayEquivalents += progress
     sumCalories += l.calories
     sumMaint += dayMaint
     deficit += dayMaint - l.calories
@@ -115,5 +139,14 @@ export function accumulateDeficit(input: DeficitInput): DeficitResult {
     }
   }
 
-  return { daysLogged, ignoredLowDays, deficit, sumCalories, sumMaint, adjustedDays, totalAdjustment }
+  return {
+    daysLogged,
+    dayEquivalents,
+    ignoredLowDays,
+    deficit,
+    sumCalories,
+    sumMaint,
+    adjustedDays,
+    totalAdjustment,
+  }
 }

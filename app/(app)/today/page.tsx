@@ -20,6 +20,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getRecoveryRange } from '@/lib/wearables/store'
 import { computeRecoveryScore, suggestedReadiness, type RecoveryScore } from '@/lib/recovery/score'
 import type { LiftAdvice } from '@/lib/types'
+import { exerciseNameKey } from '@/lib/exercises/identity'
 import { Badge } from '@/components/ui/badge'
 import { RecoveryStrip } from '@/components/today/recovery-strip'
 import { AnalysisFocus } from '@/components/analysis/analysis-focus'
@@ -154,12 +155,12 @@ export default async function TodayPage({
   // log can show inline "coach notes" exactly where they're relevant.
   const adviceByExercise = new Map<string, LiftAdvice>()
   for (const a of payload?.training.lifts ?? []) {
-    adviceByExercise.set(a.exercise.trim().toLowerCase(), a)
+    adviceByExercise.set(exerciseNameKey(a.exercise), a)
   }
   const dayAdvice: LiftAdvice[] = []
   const seen = new Set<string>()
   for (const s of daySlots) {
-    const key = s.exercise_name.trim().toLowerCase()
+    const key = exerciseNameKey(s.exercise_name)
     if (seen.has(key)) continue
     seen.add(key)
     const a = adviceByExercise.get(key)

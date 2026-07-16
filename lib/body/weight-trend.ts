@@ -5,11 +5,27 @@ export interface WeightTrendInput {
   bodyweight: number | null
 }
 
+export interface BodyFatTrendInput {
+  measured_on: string
+  bodyfat_pct: number | null
+}
+
 export interface WeightTrendPoint {
   /** ISO calendar date. */
   date: string
   /** The scale reading for this day, or null when no weigh-in was logged. */
   weight: number | null
+  /** Trailing average for this date and the six calendar days before it. */
+  average: number | null
+  /** Number of logged days represented by the average. */
+  sampleCount: number
+}
+
+export interface BodyFatTrendPoint {
+  /** ISO calendar date. */
+  date: string
+  /** The body-fat reading for this day, or null when none was logged. */
+  bodyfat: number | null
   /** Trailing average for this date and the six calendar days before it. */
   average: number | null
   /** Number of logged days represented by the average. */
@@ -29,7 +45,7 @@ export interface WeightTrendSummary {
 
 interface DailyReading {
   date: string
-  weight: number
+  value: number
 }
 
 const round = (value: number, precision: number) => {
@@ -45,16 +61,18 @@ const round = (value: number, precision: number) => {
  * interval [day - 6, day], averages duplicate same-day readings first, and only
  * exposes the rolling value after a full seven-day calendar window has elapsed.
  */
-export function buildSevenDayWeightTrend(
-  entries: WeightTrendInput[],
-): WeightTrendPoint[] {
-  const weightsByDate = new Map<string, number[]>()
+function buildSevenDayTrend(
+  entries: { measured_on: string; value: number | null }[],
+  valid: (value: number) => boolean,
+  throughDate?: string,
+): { date: string; value: number | null; average: number | null; sampleCount: number }[] {
+  const valuesByDate = new Map<string, number[]>()
 
   for (const entry of entries) {
     if (
-      entry.bodyweight == null ||
-      !Number.isFinite(entry.bodyweight) ||
-      entry.bodyweight <= 0
+      entry.value == null ||
+      !Number.isFinite(entry.value) ||
+      !valid(entry.value)
     ) {
       continue
     }
@@ -62,24 +80,37 @@ export function buildSevenDayWeightTrend(
     const parsed = parseISO(entry.measured_on)
     if (!isValid(parsed)) continue
     const date = format(parsed, 'yyyy-MM-dd')
-    const existing = weightsByDate.get(date) ?? []
-    existing.push(entry.bodyweight)
-    weightsByDate.set(date, existing)
+    const existing = valuesByDate.get(date) ?? []
+    existing.push(entry.value)
+    valuesByDate.set(date, existing)
   }
 
-  const readings: DailyReading[] = [...weightsByDate]
-    .map(([date, weights]) => ({
+  const readings: DailyReading[] = [...valuesByDate]
+    .map(([date, values]) => ({
       date,
-      weight: weights.reduce((sum, weight) => sum + weight, 0) / weights.length,
+      value: values.reduce((sum, value) => sum + value, 0) / values.length,
     }))
     .sort((a, b) => a.date.localeCompare(b.date))
 
   if (readings.length === 0) return []
 
   const firstDay = parseISO(readings[0].date)
-  const lastDay = parseISO(readings[readings.length - 1].date)
-  const readingByDate = new Map(readings.map((reading) => [reading.date, reading.weight]))
-  const points: WeightTrendPoint[] = []
+  const lastReadingDay = readings[readings.length - 1].date
+  const parsedThroughDate = throughDate ? parseISO(throughDate) : null
+  const parsedLastReadingDay = parseISO(lastReadingDay)
+  const lastDay =
+    parsedThroughDate &&
+    isValid(parsedThroughDate) &&
+    parsedThroughDate > parsedLastReadingDay
+      ? parsedThroughDate
+      : parsedLastReadingDay
+  const readingByDate = new Map(readings.map((reading) => [reading.date, reading.value]))
+  const points: {
+    date: string
+    value: number | null
+    average: number | null
+    sampleCount: number
+  }[] = []
 
   let windowStartIndex = 0
   let windowEndIndex = 0
@@ -90,7 +121,7 @@ export function buildSevenDayWeightTrend(
     const windowStart = format(addDays(day, -6), 'yyyy-MM-dd')
 
     while (windowEndIndex < readings.length && readings[windowEndIndex].date <= date) {
-      windowSum += readings[windowEndIndex].weight
+      windowSum += readings[windowEndIndex].value
       windowEndIndex += 1
     }
 
@@ -98,7 +129,7 @@ export function buildSevenDayWeightTrend(
       windowStartIndex < windowEndIndex &&
       readings[windowStartIndex].date < windowStart
     ) {
-      windowSum -= readings[windowStartIndex].weight
+      windowSum -= readings[windowStartIndex].value
       windowStartIndex += 1
     }
 
@@ -107,7 +138,7 @@ export function buildSevenDayWeightTrend(
 
     points.push({
       date,
-      weight: readingByDate.get(date) ?? null,
+      value: readingByDate.get(date) ?? null,
       average:
         hasFullCalendarWindow && sampleCount > 0
           ? round(windowSum / sampleCount, 1)
@@ -117,6 +148,37 @@ export function buildSevenDayWeightTrend(
   }
 
   return points
+}
+
+export function buildSevenDayWeightTrend(
+  entries: WeightTrendInput[],
+): WeightTrendPoint[] {
+  return buildSevenDayTrend(
+    entries.map((entry) => ({ measured_on: entry.measured_on, value: entry.bodyweight })),
+    (value) => value > 0,
+  ).map((point) => ({
+    date: point.date,
+    weight: point.value,
+    average: point.average,
+    sampleCount: point.sampleCount,
+  }))
+}
+
+/** Body-fat counterpart to the seven-calendar-day bodyweight trend. */
+export function buildSevenDayBodyFatTrend(
+  entries: BodyFatTrendInput[],
+  throughDate?: string,
+): BodyFatTrendPoint[] {
+  return buildSevenDayTrend(
+    entries.map((entry) => ({ measured_on: entry.measured_on, value: entry.bodyfat_pct })),
+    (value) => value > 0 && value <= 100,
+    throughDate,
+  ).map((point) => ({
+    date: point.date,
+    bodyfat: point.value,
+    average: point.average,
+    sampleCount: point.sampleCount,
+  }))
 }
 
 /** Compare the first and last available rolling averages in a selected range. */
