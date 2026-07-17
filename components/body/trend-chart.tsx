@@ -24,14 +24,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   estimateBodyFatFromLeanRetention,
   type StrengthEstimatePoint,
 } from '@/lib/body/metrics'
 import {
-  buildSevenDayBodyFatTrend,
-  buildSevenDayWeightTrend,
+  buildBodyFatTrend,
+  buildWeightTrend,
   summarizeWeightTrend,
+  type TrendWindowDays,
   type WeightTrendSummary,
 } from '@/lib/body/weight-trend'
 import type { Block, BodyMetric, Unit } from '@/lib/types'
@@ -46,9 +48,10 @@ const COLORS = {
   blue: '#67d4ff',
 }
 
-type RangePreset = '30d' | '90d' | '180d' | '365d' | 'all' | 'custom'
+type RangePreset = '14d' | '30d' | '90d' | '180d' | '365d' | 'all' | 'custom'
 
 const RANGE_OPTIONS: { value: RangePreset; label: string; days: number | null }[] = [
+  { value: '14d', label: 'Last 2 weeks', days: 14 },
   { value: '30d', label: 'Last 30 days', days: 30 },
   { value: '90d', label: 'Last 90 days', days: 90 },
   { value: '180d', label: 'Last 6 months', days: 180 },
@@ -70,9 +73,9 @@ interface Point {
   date: string
   label: string
   weight: number | null
-  ma7: number | null
+  weightAverage: number | null
   bodyfat: number | null
-  bodyfatMa7: number | null
+  bodyfatAverage: number | null
   estimatedBodyfat: number | null
 }
 
@@ -98,7 +101,7 @@ function ChartTooltip({
               {typeof item.value === 'number' ? item.value.toFixed(1) : '—'}
               <span className="ml-0.5 text-muted">
                 {item.dataKey === 'bodyfat' ||
-                item.dataKey === 'bodyfatMa7' ||
+                item.dataKey === 'bodyfatAverage' ||
                 item.dataKey === 'estimatedBodyfat'
                   ? '%'
                   : ` ${unit}`}
@@ -113,7 +116,7 @@ function ChartTooltip({
 
 function percentDomain(points: Point[]): [number, number] {
   const values = points
-    .flatMap((point) => [point.bodyfat, point.bodyfatMa7, point.estimatedBodyfat])
+    .flatMap((point) => [point.bodyfat, point.bodyfatAverage, point.estimatedBodyfat])
     .filter((value): value is number => value != null)
   if (values.length === 0) return [1, 80]
 
@@ -165,11 +168,13 @@ function TrendSummaryCard({
   unit,
   weighInCount,
   rangeLabel,
+  averageWindowDays,
 }: {
   summary: WeightTrendSummary
   unit: Unit
   weighInCount: number
   rangeLabel: string
+  averageWindowDays: TrendWindowDays
 }) {
   const Icon =
     summary.direction === 'down'
@@ -203,7 +208,7 @@ function TrendSummaryCard({
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <CardTitle>7-day weight trend</CardTitle>
+            <CardTitle>{averageWindowDays}-day weight trend</CardTitle>
             <CardDescription>{rangeLabel}</CardDescription>
           </div>
           <div
@@ -219,9 +224,12 @@ function TrendSummaryCard({
       <CardContent className="space-y-4">
         {summary.currentAverage == null ? (
           <div className="rounded-md border border-dashed border-border bg-background/30 px-4 py-5">
-            <p className="text-sm font-medium text-foreground">A full trend needs seven days.</p>
+            <p className="text-sm font-medium text-foreground">
+              A full trend needs {averageWindowDays} days.
+            </p>
             <p className="mt-1 text-xs leading-relaxed text-muted">
-              Keep logging weigh-ins. The average appears after the first complete seven-calendar-day window.
+              Keep logging weigh-ins. The average appears after the first complete{' '}
+              {averageWindowDays}-calendar-day window.
             </p>
           </div>
         ) : (
@@ -232,7 +240,9 @@ function TrendSummaryCard({
                   {summary.currentAverage.toFixed(1)}
                   <span className="ml-1.5 text-base font-normal text-muted">{unit}</span>
                 </p>
-                <p className="mt-1 text-xs text-muted">Current 7-day average</p>
+                <p className="mt-1 text-xs text-muted">
+                  Current {averageWindowDays}-day average
+                </p>
               </div>
               {summary.startAverage != null && summary.change != null ? (
                 <p className="max-w-[15rem] text-right text-xs leading-relaxed text-muted">
@@ -255,7 +265,8 @@ function TrendSummaryCard({
             </div>
             <p className="text-[11px] leading-relaxed text-muted">
               The current window uses {summary.currentSampleCount}{' '}
-              {summary.currentSampleCount === 1 ? 'weigh-in' : 'weigh-ins'} from the last seven calendar days.
+              {summary.currentSampleCount === 1 ? 'weigh-in' : 'weigh-ins'} from the last{' '}
+              {averageWindowDays} calendar days.
             </p>
           </>
         )}
@@ -271,7 +282,11 @@ export function TrendChart({
   strengthPoints,
   liftCompensationEnabled,
 }: TrendChartProps) {
-  const rollingSeries = React.useMemo(() => buildSevenDayWeightTrend(entries), [entries])
+  const [averageWindowDays, setAverageWindowDays] = React.useState<TrendWindowDays>(7)
+  const rollingSeries = React.useMemo(
+    () => buildWeightTrend(entries, averageWindowDays),
+    [entries, averageWindowDays],
+  )
   const entryDates = entries.map((entry) => entry.measured_on).sort()
   const firstDate = [rollingSeries[0]?.date, entryDates[0]].filter(Boolean).sort()[0] ?? ''
   const lastDate =
@@ -282,11 +297,12 @@ export function TrendChart({
   const blockStart = activeDietBlock?.start_date ?? null
   const bodyFatRollingSeries = React.useMemo(
     () =>
-      buildSevenDayBodyFatTrend(
+      buildBodyFatTrend(
         blockStart ? entries.filter((entry) => entry.measured_on >= blockStart) : entries,
+        averageWindowDays,
         lastDate,
       ),
-    [entries, blockStart, lastDate],
+    [entries, blockStart, averageWindowDays, lastDate],
   )
   const bodyFatByDate = React.useMemo(
     () => new Map(bodyFatRollingSeries.map((point) => [point.date, point])),
@@ -329,9 +345,9 @@ export function TrendChart({
           date: point.date,
           label: format(parseISO(point.date), 'MMM d'),
           weight: point.weight,
-          ma7: point.average,
+          weightAverage: point.average,
           bodyfat: null,
-          bodyfatMa7: null,
+          bodyfatAverage: null,
           estimatedBodyfat: null,
         })),
     [rollingSeries, rangeStart, rangeEnd],
@@ -356,9 +372,9 @@ export function TrendChart({
             date,
             label: format(parseISO(date), 'MMM d'),
             weight: null,
-            ma7: null,
+            weightAverage: null,
             bodyfat: bodyFatPoint?.bodyfat ?? null,
-            bodyfatMa7: bodyFatPoint?.average ?? null,
+            bodyfatAverage: bodyFatPoint?.average ?? null,
             estimatedBodyfat: estimateByDate.get(date) ?? null,
           }
         })
@@ -382,7 +398,7 @@ export function TrendChart({
       entry.bodyweight != null && entry.measured_on >= rangeStart && entry.measured_on <= rangeEnd,
   ).length
   const hasBodyfat = bodyFatData.some((point) => point.bodyfat != null)
-  const hasBodyfatAverage = bodyFatData.some((point) => point.bodyfatMa7 != null)
+  const hasBodyfatAverage = bodyFatData.some((point) => point.bodyfatAverage != null)
   const hasEstimatedBodyfat = bodyFatData.some((point) => point.estimatedBodyfat != null)
   const bodyFatYAxisDomain = percentDomain(bodyFatData)
   const rangeLabel = `${format(parseISO(rangeStart), 'MMM d, yyyy')} – ${format(parseISO(rangeEnd), 'MMM d, yyyy')}`
@@ -411,6 +427,7 @@ export function TrendChart({
         unit={unit}
         weighInCount={weighInCount}
         rangeLabel={rangeLabel}
+        averageWindowDays={averageWindowDays}
       />
 
       <Card>
@@ -419,24 +436,51 @@ export function TrendChart({
             <div className="space-y-1">
               <CardTitle>Weight over time</CardTitle>
               <CardDescription>
-                Calendar-day rolling average with raw weigh-ins for context.
+                Calendar-day rolling averages for weight and body fat, with raw readings
+                for context.
               </CardDescription>
             </div>
-            <Select
-              value={rangePreset}
-              onValueChange={(value) => setRangePreset(value as RangePreset)}
-            >
-              <SelectTrigger className="w-full sm:w-[10.5rem]" aria-label="Weight trend date range">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="end">
-                {RANGE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted">Average window</span>
+                <Tabs
+                  value={String(averageWindowDays)}
+                  onValueChange={(value) =>
+                    setAverageWindowDays(Number(value) as TrendWindowDays)
+                  }
+                >
+                  <TabsList
+                    className="h-9"
+                    aria-label="Weight and body fat rolling average window"
+                  >
+                    <TabsTrigger value="7" className="px-2.5 py-1 text-xs">
+                      7d
+                    </TabsTrigger>
+                    <TabsTrigger value="14" className="px-2.5 py-1 text-xs">
+                      14d
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+              <Select
+                value={rangePreset}
+                onValueChange={(value) => setRangePreset(value as RangePreset)}
+              >
+                <SelectTrigger
+                  className="w-full sm:w-[10.5rem]"
+                  aria-label="Weight and body fat trend date range"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {RANGE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           {rangePreset === 'custom' ? (
             <div className="grid grid-cols-2 gap-3 pt-2">
@@ -479,7 +523,7 @@ export function TrendChart({
                 className="inline-block h-0 w-4 border-t-[3px]"
                 style={{ borderColor: COLORS.signal }}
               />
-              7-day average
+              {averageWindowDays}-day average
             </span>
             <span className="flex items-center gap-1.5">
               <span
@@ -490,7 +534,10 @@ export function TrendChart({
             </span>
           </div>
 
-          <div className="h-60 w-full" aria-label="Bodyweight and seven-day average trend chart">
+          <div
+            className="h-60 w-full"
+            aria-label={`Bodyweight and ${averageWindowDays}-day average trend chart`}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
                 <CartesianGrid stroke={COLORS.border} strokeDasharray="3 3" vertical={false} />
@@ -511,8 +558,8 @@ export function TrendChart({
                 />
                 <Line
                   type="monotone"
-                  name="7-day average"
-                  dataKey="ma7"
+                  name={`${averageWindowDays}-day average`}
+                  dataKey="weightAverage"
                   stroke={COLORS.signal}
                   strokeWidth={2.75}
                   dot={false}
@@ -541,7 +588,7 @@ export function TrendChart({
                       className="inline-block h-0 w-4 border-t-[3px]"
                       style={{ borderColor: COLORS.yellow }}
                     />
-                    7-day body fat avg
+                    {averageWindowDays}-day body fat avg
                   </span>
                 ) : null}
                 {hasEstimatedBodyfat ? (
@@ -583,8 +630,8 @@ export function TrendChart({
                     {hasBodyfatAverage ? (
                       <Line
                         type="monotone"
-                        name="7-day body fat avg"
-                        dataKey="bodyfatMa7"
+                        name={`${averageWindowDays}-day body fat avg`}
+                        dataKey="bodyfatAverage"
                         stroke={COLORS.yellow}
                         strokeWidth={2.75}
                         dot={false}

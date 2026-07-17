@@ -15,7 +15,7 @@ export interface WeightTrendPoint {
   date: string
   /** The scale reading for this day, or null when no weigh-in was logged. */
   weight: number | null
-  /** Trailing average for this date and the six calendar days before it. */
+  /** Trailing calendar-day average ending on this date. */
   average: number | null
   /** Number of logged days represented by the average. */
   sampleCount: number
@@ -26,11 +26,13 @@ export interface BodyFatTrendPoint {
   date: string
   /** The body-fat reading for this day, or null when none was logged. */
   bodyfat: number | null
-  /** Trailing average for this date and the six calendar days before it. */
+  /** Trailing calendar-day average ending on this date. */
   average: number | null
   /** Number of logged days represented by the average. */
   sampleCount: number
 }
+
+export type TrendWindowDays = 7 | 14
 
 export interface WeightTrendSummary {
   currentAverage: number | null
@@ -54,16 +56,17 @@ const round = (value: number, precision: number) => {
 }
 
 /**
- * Build a trailing seven-calendar-day series.
+ * Build a trailing calendar-day series.
  *
  * The previous chart averaged the last seven *entries*. That can cover far more
- * than seven days when weigh-ins are missed. This implementation uses the date
- * interval [day - 6, day], averages duplicate same-day readings first, and only
- * exposes the rolling value after a full seven-day calendar window has elapsed.
+ * than the selected window when weigh-ins are missed. This implementation uses
+ * a true calendar interval, averages duplicate same-day readings first, and only
+ * exposes the rolling value after the full calendar window has elapsed.
  */
-function buildSevenDayTrend(
+function buildRollingTrend(
   entries: { measured_on: string; value: number | null }[],
   valid: (value: number) => boolean,
+  windowDays: TrendWindowDays,
   throughDate?: string,
 ): { date: string; value: number | null; average: number | null; sampleCount: number }[] {
   const valuesByDate = new Map<string, number[]>()
@@ -118,7 +121,7 @@ function buildSevenDayTrend(
 
   for (let day = firstDay; day <= lastDay; day = addDays(day, 1)) {
     const date = format(day, 'yyyy-MM-dd')
-    const windowStart = format(addDays(day, -6), 'yyyy-MM-dd')
+    const windowStart = format(addDays(day, -(windowDays - 1)), 'yyyy-MM-dd')
 
     while (windowEndIndex < readings.length && readings[windowEndIndex].date <= date) {
       windowSum += readings[windowEndIndex].value
@@ -134,7 +137,8 @@ function buildSevenDayTrend(
     }
 
     const sampleCount = windowEndIndex - windowStartIndex
-    const hasFullCalendarWindow = differenceInCalendarDays(day, firstDay) >= 6
+    const hasFullCalendarWindow =
+      differenceInCalendarDays(day, firstDay) >= windowDays - 1
 
     points.push({
       date,
@@ -150,12 +154,14 @@ function buildSevenDayTrend(
   return points
 }
 
-export function buildSevenDayWeightTrend(
+export function buildWeightTrend(
   entries: WeightTrendInput[],
+  windowDays: TrendWindowDays = 7,
 ): WeightTrendPoint[] {
-  return buildSevenDayTrend(
+  return buildRollingTrend(
     entries.map((entry) => ({ measured_on: entry.measured_on, value: entry.bodyweight })),
     (value) => value > 0,
+    windowDays,
   ).map((point) => ({
     date: point.date,
     weight: point.value,
@@ -164,14 +170,16 @@ export function buildSevenDayWeightTrend(
   }))
 }
 
-/** Body-fat counterpart to the seven-calendar-day bodyweight trend. */
-export function buildSevenDayBodyFatTrend(
+/** Body-fat counterpart to the calendar-day bodyweight trend. */
+export function buildBodyFatTrend(
   entries: BodyFatTrendInput[],
+  windowDays: TrendWindowDays = 7,
   throughDate?: string,
 ): BodyFatTrendPoint[] {
-  return buildSevenDayTrend(
+  return buildRollingTrend(
     entries.map((entry) => ({ measured_on: entry.measured_on, value: entry.bodyfat_pct })),
     (value) => value > 0 && value <= 100,
+    windowDays,
     throughDate,
   ).map((point) => ({
     date: point.date,
