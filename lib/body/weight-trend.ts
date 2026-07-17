@@ -68,6 +68,7 @@ function buildRollingTrend(
   valid: (value: number) => boolean,
   windowDays: TrendWindowDays,
   throughDate?: string,
+  requireFullWindow = true,
 ): { date: string; value: number | null; average: number | null; sampleCount: number }[] {
   const valuesByDate = new Map<string, number[]>()
 
@@ -144,7 +145,7 @@ function buildRollingTrend(
       date,
       value: readingByDate.get(date) ?? null,
       average:
-        hasFullCalendarWindow && sampleCount > 0
+        (!requireFullWindow || hasFullCalendarWindow) && sampleCount > 0
           ? round(windowSum / sampleCount, 1)
           : null,
       sampleCount,
@@ -181,6 +182,7 @@ export function buildBodyFatTrend(
     (value) => value > 0 && value <= 100,
     windowDays,
     throughDate,
+    false,
   ).map((point) => ({
     date: point.date,
     bodyfat: point.value,

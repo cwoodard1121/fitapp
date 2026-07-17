@@ -13,14 +13,17 @@ const reading = (measured_on: string, bodyweight: number): WeightTrendInput => (
 })
 
 describe('buildBodyFatTrend', () => {
-  it('builds a trailing seven-calendar-day average from body-fat readings', () => {
+  it('shows the trailing average while the seven-day window fills', () => {
     const points = buildBodyFatTrend([
       { measured_on: '2026-01-01', bodyfat_pct: 20 },
       { measured_on: '2026-01-04', bodyfat_pct: 19 },
       { measured_on: '2026-01-07', bodyfat_pct: 18 },
     ])
 
-    expect(points.find((point) => point.date === '2026-01-06')?.average).toBeNull()
+    expect(points.find((point) => point.date === '2026-01-06')).toMatchObject({
+      average: 19.5,
+      sampleCount: 2,
+    })
     expect(points.at(-1)).toMatchObject({
       bodyfat: 18,
       average: 19,
@@ -56,7 +59,10 @@ describe('buildBodyFatTrend', () => {
       14,
     )
 
-    expect(points.find((point) => point.date === '2026-01-13')?.average).toBeNull()
+    expect(points.find((point) => point.date === '2026-01-13')).toMatchObject({
+      average: 19.5,
+      sampleCount: 2,
+    })
     expect(points.at(-1)).toMatchObject({
       bodyfat: 18,
       average: 19,

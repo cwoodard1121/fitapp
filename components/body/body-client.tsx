@@ -145,9 +145,6 @@ export function BodyClient({
             <TrendChart
               entries={entries}
               unit={unit}
-              activeDietBlock={activeDietBlock}
-              strengthPoints={strengthPoints}
-              liftCompensationEnabled={liftCompensationEnabled}
             />
           ) : null}
 

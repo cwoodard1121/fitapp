@@ -26,17 +26,13 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  estimateBodyFatFromLeanRetention,
-  type StrengthEstimatePoint,
-} from '@/lib/body/metrics'
-import {
   buildBodyFatTrend,
   buildWeightTrend,
   summarizeWeightTrend,
   type TrendWindowDays,
   type WeightTrendSummary,
 } from '@/lib/body/weight-trend'
-import type { Block, BodyMetric, Unit } from '@/lib/types'
+import type { BodyMetric, Unit } from '@/lib/types'
 
 // Design tokens (charts take literal colors, not tailwind classes).
 const COLORS = {
@@ -45,7 +41,6 @@ const COLORS = {
   border: '#2c313a',
   surface: '#1e2228',
   yellow: '#e8c45a',
-  blue: '#67d4ff',
 }
 
 type RangePreset = '14d' | '30d' | '90d' | '180d' | '365d' | 'all' | 'custom'
@@ -64,9 +59,6 @@ interface TrendChartProps {
   /** Ascending by measured_on. */
   entries: BodyMetric[]
   unit: Unit
-  activeDietBlock: Pick<Block, 'start_date'> | null
-  strengthPoints: StrengthEstimatePoint[]
-  liftCompensationEnabled: boolean
 }
 
 interface Point {
@@ -76,7 +68,6 @@ interface Point {
   weightAverage: number | null
   bodyfat: number | null
   bodyfatAverage: number | null
-  estimatedBodyfat: number | null
 }
 
 function ChartTooltip({
@@ -100,9 +91,7 @@ function ChartTooltip({
             <span className="ml-auto font-mono tabular-nums text-foreground">
               {typeof item.value === 'number' ? item.value.toFixed(1) : '—'}
               <span className="ml-0.5 text-muted">
-                {item.dataKey === 'bodyfat' ||
-                item.dataKey === 'bodyfatAverage' ||
-                item.dataKey === 'estimatedBodyfat'
+                {item.dataKey === 'bodyfat' || item.dataKey === 'bodyfatAverage'
                   ? '%'
                   : ` ${unit}`}
               </span>
@@ -116,7 +105,7 @@ function ChartTooltip({
 
 function percentDomain(points: Point[]): [number, number] {
   const values = points
-    .flatMap((point) => [point.bodyfat, point.bodyfatAverage, point.estimatedBodyfat])
+    .flatMap((point) => [point.bodyfat, point.bodyfatAverage])
     .filter((value): value is number => value != null)
   if (values.length === 0) return [1, 80]
 
@@ -278,9 +267,6 @@ function TrendSummaryCard({
 export function TrendChart({
   entries,
   unit,
-  activeDietBlock,
-  strengthPoints,
-  liftCompensationEnabled,
 }: TrendChartProps) {
   const [averageWindowDays, setAverageWindowDays] = React.useState<TrendWindowDays>(7)
   const rollingSeries = React.useMemo(
@@ -294,19 +280,9 @@ export function TrendChart({
   const [rangePreset, setRangePreset] = React.useState<RangePreset>('90d')
   const [customStart, setCustomStart] = React.useState(firstDate)
   const [customEnd, setCustomEnd] = React.useState(lastDate)
-  const blockStart = activeDietBlock?.start_date ?? null
   const bodyFatRollingSeries = React.useMemo(
-    () =>
-      buildBodyFatTrend(
-        blockStart ? entries.filter((entry) => entry.measured_on >= blockStart) : entries,
-        averageWindowDays,
-        lastDate,
-      ),
-    [entries, blockStart, averageWindowDays, lastDate],
-  )
-  const bodyFatByDate = React.useMemo(
-    () => new Map(bodyFatRollingSeries.map((point) => [point.date, point])),
-    [bodyFatRollingSeries],
+    () => buildBodyFatTrend(entries, averageWindowDays, lastDate),
+    [entries, averageWindowDays, lastDate],
   )
 
   React.useEffect(() => {
@@ -321,22 +297,6 @@ export function TrendChart({
   const rangeEnd = rangePreset === 'custom' ? customEnd || lastDate : lastDate
   const rangeOption = RANGE_OPTIONS.find((item) => item.value === rangePreset)
 
-  const estimatedBodyfatPoints = React.useMemo(
-    () =>
-      blockStart
-        ? estimateBodyFatFromLeanRetention(
-            entries,
-            { start_date: blockStart },
-            liftCompensationEnabled ? strengthPoints : undefined,
-          ).points
-        : [],
-    [entries, blockStart, strengthPoints, liftCompensationEnabled],
-  )
-  const estimateByDate = React.useMemo(
-    () => new Map(estimatedBodyfatPoints.map((point) => [point.date, point.bodyfat])),
-    [estimatedBodyfatPoints],
-  )
-
   const data: Point[] = React.useMemo(
     () =>
       rollingSeries
@@ -348,45 +308,25 @@ export function TrendChart({
           weightAverage: point.average,
           bodyfat: null,
           bodyfatAverage: null,
-          estimatedBodyfat: null,
         })),
     [rollingSeries, rangeStart, rangeEnd],
   )
   const bodyFatData: Point[] = React.useMemo(
-    () => {
-      const dates = [
-        ...new Set([
-          ...bodyFatRollingSeries.map((point) => point.date),
-          ...estimatedBodyfatPoints.map((point) => point.date),
-        ]),
-      ].sort()
-
-      return dates
-        .filter(
-          (date) =>
-            date >= rangeStart && date <= rangeEnd && (!blockStart || date >= blockStart),
-        )
-        .map((date) => {
-          const bodyFatPoint = bodyFatByDate.get(date)
-          return {
-            date,
-            label: format(parseISO(date), 'MMM d'),
-            weight: null,
-            weightAverage: null,
-            bodyfat: bodyFatPoint?.bodyfat ?? null,
-            bodyfatAverage: bodyFatPoint?.average ?? null,
-            estimatedBodyfat: estimateByDate.get(date) ?? null,
-          }
-        })
-    },
+    () =>
+      bodyFatRollingSeries
+        .filter((point) => point.date >= rangeStart && point.date <= rangeEnd)
+        .map((point) => ({
+          date: point.date,
+          label: format(parseISO(point.date), 'MMM d'),
+          weight: null,
+          weightAverage: null,
+          bodyfat: point.bodyfat,
+          bodyfatAverage: point.average,
+        })),
     [
       bodyFatRollingSeries,
-      bodyFatByDate,
-      estimatedBodyfatPoints,
       rangeStart,
       rangeEnd,
-      blockStart,
-      estimateByDate,
     ],
   )
   const summary = React.useMemo(
@@ -399,7 +339,6 @@ export function TrendChart({
   ).length
   const hasBodyfat = bodyFatData.some((point) => point.bodyfat != null)
   const hasBodyfatAverage = bodyFatData.some((point) => point.bodyfatAverage != null)
-  const hasEstimatedBodyfat = bodyFatData.some((point) => point.estimatedBodyfat != null)
   const bodyFatYAxisDomain = percentDomain(bodyFatData)
   const rangeLabel = `${format(parseISO(rangeStart), 'MMM d, yyyy')} – ${format(parseISO(rangeEnd), 'MMM d, yyyy')}`
 
@@ -570,14 +509,14 @@ export function TrendChart({
             </ResponsiveContainer>
           </div>
 
-          {hasBodyfat || hasBodyfatAverage || hasEstimatedBodyfat ? (
+          {hasBodyfat || hasBodyfatAverage ? (
             <div className="space-y-2 border-t border-border pt-4">
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted">
                 {hasBodyfat ? (
                   <span className="flex items-center gap-1.5">
                     <span
-                      className="inline-block h-2 w-4 rounded-full"
-                      style={{ backgroundColor: COLORS.yellow }}
+                      className="inline-block h-2 w-2 rounded-full"
+                      style={{ backgroundColor: COLORS.muted }}
                     />
                     Raw body fat
                   </span>
@@ -589,15 +528,6 @@ export function TrendChart({
                       style={{ borderColor: COLORS.yellow }}
                     />
                     {averageWindowDays}-day body fat avg
-                  </span>
-                ) : null}
-                {hasEstimatedBodyfat ? (
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      className="inline-block h-0 w-4 border-t-2 border-dashed"
-                      style={{ borderColor: COLORS.blue }}
-                    />
-                    Est. body fat
                   </span>
                 ) : null}
               </div>
@@ -618,10 +548,10 @@ export function TrendChart({
                         type="monotone"
                         name="Body fat"
                         dataKey="bodyfat"
-                        stroke={COLORS.yellow}
+                        stroke={COLORS.muted}
                         strokeWidth={1.25}
-                        strokeOpacity={0.65}
-                        dot={{ r: 2, fill: COLORS.yellow, strokeWidth: 0 }}
+                        strokeOpacity={0.7}
+                        dot={{ r: 2, fill: COLORS.muted, strokeWidth: 0 }}
                         activeDot={{ r: 4 }}
                         connectNulls
                         isAnimationActive={false}
@@ -636,19 +566,6 @@ export function TrendChart({
                         strokeWidth={2.75}
                         dot={false}
                         connectNulls={false}
-                        isAnimationActive={false}
-                      />
-                    ) : null}
-                    {hasEstimatedBodyfat ? (
-                      <Line
-                        type="monotone"
-                        name="Est. body fat"
-                        dataKey="estimatedBodyfat"
-                        stroke={COLORS.blue}
-                        strokeWidth={2}
-                        strokeDasharray="5 4"
-                        dot={{ r: 1.5, fill: COLORS.blue, strokeWidth: 0 }}
-                        connectNulls
                         isAnimationActive={false}
                       />
                     ) : null}
