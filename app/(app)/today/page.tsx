@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { format } from 'date-fns'
 import { CalendarDays } from 'lucide-react'
 
 import {
@@ -13,7 +14,13 @@ import {
   mesocycleNumber,
   requireUserId,
 } from '@/lib/data'
-import type { RecoveryMetric, Session, SessionStatus } from '@/lib/types'
+import type {
+  BodyMetric,
+  RecoveryMetric,
+  Session,
+  SessionStatus,
+} from '@/lib/types'
+import { navyMeasurementInISOWeek } from '@/lib/body/body-fat'
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getLatestAnalysis } from '@/lib/ai/analysis'
 import { createClient } from '@/lib/supabase/server'
@@ -31,6 +38,7 @@ import { SessionReadiness } from '@/components/today/session-readiness'
 import { SlotRow } from '@/components/today/slot-row'
 import { SessionBar } from '@/components/today/session-bar'
 import { EmptyState } from '@/components/today/empty-state'
+import { WeeklyNavyPrompt } from '@/components/today/weekly-navy-prompt'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,12 +56,28 @@ export default async function TodayPage({
   const program = programs.find((p) => p.is_active) ?? null
 
   const unit = profile?.unit ?? 'lb'
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const supabase = await createClient()
+  const userId = await requireUserId(supabase)
+  const { data: bodyRows, error: bodyError } = await supabase
+    .from('body_metrics')
+    .select('*')
+    .eq('user_id', userId)
+    .order('measured_on', { ascending: false })
+    .limit(30)
+  if (bodyError) throw bodyError
+  const bodyEntries = (bodyRows ?? []) as BodyMetric[]
+  const weeklyNavyDue =
+    navyMeasurementInISOWeek(bodyEntries, today) == null
 
   // No program -> friendly empty state with the next action.
   if (!program) {
     return (
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <Header unit={unit} />
+        {weeklyNavyDue ? (
+          <WeeklyNavyPrompt entries={bodyEntries} unit={unit} today={today} />
+        ) : null}
         <EmptyState />
       </div>
     )
@@ -64,6 +88,9 @@ export default async function TodayPage({
     return (
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <Header unit={unit} />
+        {weeklyNavyDue ? (
+          <WeeklyNavyPrompt entries={bodyEntries} unit={unit} today={today} />
+        ) : null}
         <EmptyState />
       </div>
     )
@@ -137,9 +164,7 @@ export default async function TodayPage({
   let latestRecovery: RecoveryMetric | null = null
   let recoveryScore: RecoveryScore | null = null
   if (allowed) {
-    const sb = await createClient()
-    const uid = await requireUserId(sb)
-    const recent = await getRecoveryRange(sb, uid, 35)
+    const recent = await getRecoveryRange(supabase, userId, 35)
     for (let i = recent.length - 1; i >= 0; i--) {
       if (recent[i].steps != null || recent[i].sleep_minutes_asleep != null) {
         latestRecovery = recent[i]
@@ -182,6 +207,10 @@ export default async function TodayPage({
           {isDeload ? <Badge variant="warning">Deload</Badge> : null}
         </div>
       </Header>
+
+      {weeklyNavyDue ? (
+        <WeeklyNavyPrompt entries={bodyEntries} unit={unit} today={today} />
+      ) : null}
 
       <ActiveProgramSelect programs={programs} activeId={program.id} />
 

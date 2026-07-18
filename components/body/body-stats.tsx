@@ -5,6 +5,7 @@ import {
   normalizedBodyweight,
   normalizedDeltaOver,
 } from '@/lib/body/metrics'
+import { latestBodyFatInterpretation } from '@/lib/body/body-fat'
 import type { Block, BodyMetric, Unit } from '@/lib/types'
 
 interface BodyStatsProps {
@@ -39,7 +40,7 @@ function DeltaStat({
 
 export function BodyStats({ entries, unit, activeDietBlock }: BodyStatsProps) {
   const normalized = normalizedBodyweight(entries, activeDietBlock)
-  const latestBodyfat = [...entries].reverse().find((e) => e.bodyfat_pct != null)?.bodyfat_pct ?? null
+  const latestBodyfat = latestBodyFatInterpretation(entries)?.bodyfatPct ?? null
 
   const d7 = normalizedDeltaOver(entries, 7, activeDietBlock)
   const d30 = normalizedDeltaOver(entries, 30, activeDietBlock)

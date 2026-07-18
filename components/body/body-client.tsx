@@ -91,7 +91,7 @@ export function BodyClient({
 
   const sheetDesc = isEditingExisting
     ? format(parseISO(editing!.measured_on), 'EEEE, MMM d')
-    : 'Weight is required. Body fat and notes are optional.'
+    : 'Weight is required. BIA is optional; Navy tape is weekly.'
 
   return (
     <div className="space-y-6">
@@ -182,7 +182,10 @@ export function BodyClient({
       ) : null}
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="mx-auto max-w-lg">
+        <SheetContent
+          side="bottom"
+          className="mx-auto max-h-[92vh] max-w-lg overflow-y-auto"
+        >
           <SheetHeader className="mb-4 text-left">
             <SheetTitle>{sheetTitle}</SheetTitle>
             <SheetDescription>{sheetDesc}</SheetDescription>
@@ -190,6 +193,7 @@ export function BodyClient({
           <LogForm
             key={editing?.id ?? 'new'}
             unit={unit}
+            entries={entries}
             defaultDate={today}
             initial={editing}
             onDone={() => setOpen(false)}

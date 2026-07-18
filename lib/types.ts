@@ -169,7 +169,16 @@ export interface BodyMetric {
   user_id: string;
   measured_on: string;
   bodyweight: number | null;
+  /** Legacy body-fat column. New writes mirror the raw BIA value here. */
   bodyfat_pct: number | null;
+  /** Raw bioelectrical-impedance body-fat reading. */
+  bia_bodyfat_pct: number | null;
+  /** Weekly Navy tape inputs, normalized to centimetres. */
+  height_cm: number | null;
+  neck_cm: number | null;
+  waist_cm: number | null;
+  /** Male U.S. Navy circumference estimate computed from the tape inputs. */
+  navy_bodyfat_pct: number | null;
   notes: string | null;
   /** 'manual' (app entry) | 'wearable' (imported). Manual is never overwritten. */
   source: string;

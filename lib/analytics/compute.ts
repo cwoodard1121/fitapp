@@ -31,6 +31,7 @@ import {
   normalizedBodyweight,
   normalizedChangeFromStart,
 } from '@/lib/body/metrics'
+import { interpretBodyMetrics } from '@/lib/body/body-fat'
 import { computeProgress } from '@/components/goals/progress'
 
 import type {
@@ -575,18 +576,24 @@ function computeBody(bodyMetrics: BodyMetric[], dietBlock: Block | null): BodyAn
   const weightChange = normalizedChangeFromStart(bodyMetrics, dietBlock)
   const { rate: weeklyRate, settling } = bodyRate(bodyMetrics, 'bodyweight', dietBlock)
 
-  const latestMeasuredBodyfat = bf.length ? round1(bf[bf.length - 1].bodyfat_pct) : null
-  const measuredBodyfatChange =
+  const latestInterpretedBodyfat = bf.length ? round1(bf[bf.length - 1].bodyfat_pct) : null
+  const interpretedBodyfatChange =
     bf.length >= 2 ? round1(bf[bf.length - 1].bodyfat_pct - bf[0].bodyfat_pct) : null
+  const hasNavyMeasurement = bodyMetrics.some((metric) => metric.navy_bodyfat_pct != null)
 
   return {
     latestWeight,
     weightBasis: normalizedWeight.basis,
     weightChange,
     weeklyRate,
-    latestBodyfat: latestMeasuredBodyfat,
-    bodyfatBasis: latestMeasuredBodyfat == null ? 'none' : 'measured',
-    bodyfatChange: measuredBodyfatChange,
+    latestBodyfat: latestInterpretedBodyfat,
+    bodyfatBasis:
+      latestInterpretedBodyfat == null
+        ? 'none'
+        : hasNavyMeasurement
+          ? 'interpreted'
+          : 'bia',
+    bodyfatChange: interpretedBodyfatChange,
     readings: bodyMetrics.length,
     settling,
   }
@@ -738,6 +745,7 @@ export interface AnalyticsInput {
 export function computeAnalytics(input: AnalyticsInput): TrainingAnalytics {
   const { now, program, slots, logs, goals, bodyMetrics, nutrition, dietBlock } = input
   const deloadWeek = program?.deload_week ?? 0
+  const interpretedBodyMetrics = interpretBodyMetrics(bodyMetrics)
 
   const series = buildLiftSeries(slots, logs, deloadWeek)
   const lifts = [...series.values()]
@@ -747,7 +755,7 @@ export function computeAnalytics(input: AnalyticsInput): TrainingAnalytics {
   const tonnage = recentTonnage(logs, now)
   const goalCtx: GoalContext = {
     series,
-    bodyMetrics,
+    bodyMetrics: interpretedBodyMetrics,
     logs,
     dietBlock,
     recentTonnage: tonnage,
@@ -766,7 +774,7 @@ export function computeAnalytics(input: AnalyticsInput): TrainingAnalytics {
     meso: computeMeso(program, now),
     lifts,
     goals: goalAnalytics,
-    body: computeBody(bodyMetrics, dietBlock),
+    body: computeBody(interpretedBodyMetrics, dietBlock),
     volume: computeVolume(slots, logs),
     nutrition: computeNutrition(nutrition, dietBlock),
   }

@@ -32,6 +32,7 @@ import {
   type TrendWindowDays,
   type WeightTrendSummary,
 } from '@/lib/body/weight-trend'
+import { interpretBodyMetrics } from '@/lib/body/body-fat'
 import type { BodyMetric, Unit } from '@/lib/types'
 
 // Design tokens (charts take literal colors, not tailwind classes).
@@ -281,7 +282,7 @@ export function TrendChart({
   const [customStart, setCustomStart] = React.useState(firstDate)
   const [customEnd, setCustomEnd] = React.useState(lastDate)
   const bodyFatRollingSeries = React.useMemo(
-    () => buildBodyFatTrend(entries, averageWindowDays, lastDate),
+    () => buildBodyFatTrend(interpretBodyMetrics(entries), averageWindowDays, lastDate),
     [entries, averageWindowDays, lastDate],
   )
 
@@ -375,8 +376,7 @@ export function TrendChart({
             <div className="space-y-1">
               <CardTitle>Weight over time</CardTitle>
               <CardDescription>
-                Calendar-day rolling averages for weight and body fat, with raw readings
-                for context.
+                Calendar-day rolling averages for weight and interpreted body fat.
               </CardDescription>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
@@ -518,7 +518,7 @@ export function TrendChart({
                       className="inline-block h-2 w-2 rounded-full"
                       style={{ backgroundColor: COLORS.muted }}
                     />
-                    Raw body fat
+                    Interpreted body fat
                   </span>
                 ) : null}
                 {hasBodyfatAverage ? (
@@ -546,7 +546,7 @@ export function TrendChart({
                     {hasBodyfat ? (
                       <Line
                         type="monotone"
-                        name="Body fat"
+                        name="Interpreted body fat"
                         dataKey="bodyfat"
                         stroke={COLORS.muted}
                         strokeWidth={1.25}

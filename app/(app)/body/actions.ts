@@ -1,10 +1,12 @@
 'use server'
 
+import { endOfISOWeek, format, parseISO, startOfISOWeek } from 'date-fns'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId } from '@/lib/data'
+import { calculateNavyBodyFatPct } from '@/lib/body/body-fat'
 import type { BaselineLift, BodyMetric } from '@/lib/types'
 
 export type ActionResult =
@@ -37,7 +39,31 @@ const upsertSchema = z.object({
     .max(75, 'Body fat must be under 75%.')
     .nullable()
     .optional(),
+  height_cm: z.number().min(100).max(250).nullable().optional(),
+  neck_cm: z.number().min(15).max(100).nullable().optional(),
+  waist_cm: z.number().min(30).max(250).nullable().optional(),
   notes: z.string().trim().max(500, 'Keep notes under 500 characters.').nullable().optional(),
+}).superRefine((value, ctx) => {
+  const tape = [value.height_cm, value.neck_cm, value.waist_cm]
+  const supplied = tape.filter((measurement) => measurement != null).length
+  if (supplied !== 0 && supplied !== tape.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['neck_cm'],
+      message: 'Enter height, neck, and waist together for the weekly Navy measurement.',
+    })
+  }
+  if (
+    value.neck_cm != null &&
+    value.waist_cm != null &&
+    value.waist_cm <= value.neck_cm
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['waist_cm'],
+      message: 'Waist must be larger than neck for the Navy calculation.',
+    })
+  }
 })
 
 const baselineLiftSchema = z.object({
@@ -64,11 +90,49 @@ export async function upsertBodyMetric(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid entry.' }
   }
-  const { measured_on, bodyweight, bodyfat_pct, notes } = parsed.data
+  const { measured_on, bodyweight, bodyfat_pct, height_cm, neck_cm, waist_cm, notes } =
+    parsed.data
 
   try {
     const supabase = await createClient()
     const userId = await requireUserId(supabase)
+    const hasTape = height_cm != null && neck_cm != null && waist_cm != null
+    const navy_bodyfat_pct = hasTape
+      ? calculateNavyBodyFatPct({
+          heightCm: height_cm,
+          neckCm: neck_cm,
+          waistCm: waist_cm,
+        })
+      : null
+
+    if (hasTape && navy_bodyfat_pct == null) {
+      return {
+        ok: false,
+        error: "Those tape measurements don't produce a valid Navy body-fat estimate.",
+      }
+    }
+
+    if (hasTape) {
+      const measuredDate = parseISO(measured_on)
+      const weekStart = format(startOfISOWeek(measuredDate), 'yyyy-MM-dd')
+      const weekEnd = format(endOfISOWeek(measuredDate), 'yyyy-MM-dd')
+      const { data: weeklyRows, error: weeklyError } = await supabase
+        .from('body_metrics')
+        .select('measured_on,navy_bodyfat_pct')
+        .eq('user_id', userId)
+        .gte('measured_on', weekStart)
+        .lte('measured_on', weekEnd)
+        .not('navy_bodyfat_pct', 'is', null)
+
+      if (weeklyError) return { ok: false, error: weeklyError.message }
+      const existingWeekly = weeklyRows?.find((row) => row.measured_on !== measured_on)
+      if (existingWeekly) {
+        return {
+          ok: false,
+          error: `Navy measurements are weekly. This week is already logged on ${existingWeekly.measured_on}.`,
+        }
+      }
+    }
 
     const { data, error } = await supabase
       .from('body_metrics')
@@ -77,7 +141,13 @@ export async function upsertBodyMetric(
           user_id: userId,
           measured_on,
           bodyweight,
+          // Keep the legacy column mirrored during the rollout.
           bodyfat_pct: bodyfat_pct ?? null,
+          bia_bodyfat_pct: bodyfat_pct ?? null,
+          height_cm: hasTape ? height_cm : null,
+          neck_cm: hasTape ? neck_cm : null,
+          waist_cm: hasTape ? waist_cm : null,
+          navy_bodyfat_pct,
           notes: notes && notes.length > 0 ? notes : null,
           // A manual weigh-in always wins over the wearable sync.
           source: 'manual',
@@ -89,6 +159,10 @@ export async function upsertBodyMetric(
 
     if (error) return { ok: false, error: error.message }
     revalidatePath(ROUTE)
+    revalidatePath('/goals')
+    revalidatePath('/progress')
+    revalidatePath('/overview')
+    revalidatePath('/today')
     return { ok: true, metric: data as BodyMetric }
   } catch (err) {
     return {
@@ -110,6 +184,10 @@ export async function deleteBodyMetric(
     const { error } = await supabase.from('body_metrics').delete().eq('id', id)
     if (error) return { ok: false, error: error.message }
     revalidatePath(ROUTE)
+    revalidatePath('/goals')
+    revalidatePath('/progress')
+    revalidatePath('/overview')
+    revalidatePath('/today')
     return { ok: true }
   } catch (err) {
     return {

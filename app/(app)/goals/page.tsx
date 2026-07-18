@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireUserId, getProfile } from '@/lib/data'
 import { epley1RM } from '@/lib/engine/engine'
 import { normalizedBodyweight } from '@/lib/body/metrics'
+import { latestBodyFatInterpretation } from '@/lib/body/body-fat'
 import { exerciseNameKey } from '@/lib/exercises/identity'
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getLatestAnalysis } from '@/lib/ai/analysis'
@@ -65,7 +66,7 @@ async function deriveCurrents(
     const activeDietBlock =
       (blockRows?.[0] as Pick<Block, 'phase' | 'start_date'> | undefined) ?? null
     const latestMeasuredBodyfat =
-      [...bodyMetrics].reverse().find((m) => m.bodyfat_pct != null)?.bodyfat_pct ?? null
+      latestBodyFatInterpretation(bodyMetrics)?.bodyfatPct ?? null
     const normalizedWeight = normalizedBodyweight(bodyMetrics, activeDietBlock)
     bodyCurrent = {
       bodyweight: normalizedWeight.value,

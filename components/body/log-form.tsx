@@ -9,11 +9,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  biaBodyFatPct,
+  latestStoredHeightCm,
+  navyMeasurementInISOWeek,
+} from '@/lib/body/body-fat'
 import type { BodyMetric, Unit } from '@/lib/types'
 import { upsertBodyMetric } from '@/app/(app)/body/actions'
 
 interface LogFormProps {
   unit: Unit
+  entries: BodyMetric[]
   /** Default measured_on (yyyy-MM-dd), usually today. */
   defaultDate: string
   /** Existing entry to edit; null when logging a fresh weigh-in. */
@@ -21,23 +27,59 @@ interface LogFormProps {
   onDone?: () => void
 }
 
+const CM_PER_INCH = 2.54
+
 function selectOnFocus(e: React.FocusEvent<HTMLInputElement>) {
   e.currentTarget.select()
 }
 
-export function LogForm({ unit, defaultDate, initial, onDone }: LogFormProps) {
+function displayCircumference(valueCm: number | null | undefined, unit: Unit) {
+  if (valueCm == null) return ''
+  const value = unit === 'lb' ? valueCm / CM_PER_INCH : valueCm
+  return String(Math.round(value * 10) / 10)
+}
+
+function circumferenceCm(value: number, unit: Unit) {
+  return unit === 'lb' ? value * CM_PER_INCH : value
+}
+
+export function LogForm({
+  unit,
+  entries,
+  defaultDate,
+  initial,
+  onDone,
+}: LogFormProps) {
   const [isPending, startTransition] = useTransition()
 
   const [measuredOn, setMeasuredOn] = React.useState(initial?.measured_on ?? defaultDate)
   const [weight, setWeight] = React.useState(
     initial?.bodyweight != null ? String(initial.bodyweight) : '',
   )
+  const initialBia = initial
+    ? biaBodyFatPct(initial)
+    : null
   const [bodyfat, setBodyfat] = React.useState(
-    initial?.bodyfat_pct != null ? String(initial.bodyfat_pct) : '',
+    initialBia != null ? String(initialBia) : '',
+  )
+  const savedHeightCm = initial?.height_cm ?? latestStoredHeightCm(entries)
+  const [height, setHeight] = React.useState(
+    displayCircumference(savedHeightCm, unit),
+  )
+  const [neck, setNeck] = React.useState(
+    displayCircumference(initial?.neck_cm, unit),
+  )
+  const [waist, setWaist] = React.useState(
+    displayCircumference(initial?.waist_cm, unit),
   )
   const [notes, setNotes] = React.useState(initial?.notes ?? '')
 
   const weightRef = React.useRef<HTMLInputElement>(null)
+  const measurementUnit = unit === 'lb' ? 'in' : 'cm'
+  const weeklyMeasurement = React.useMemo(
+    () => navyMeasurementInISOWeek(entries, measuredOn, initial?.id),
+    [entries, measuredOn, initial?.id],
+  )
 
   // One-tap fast: focus + select the weight field as soon as the form mounts.
   React.useEffect(() => {
@@ -59,8 +101,33 @@ export function LogForm({ unit, defaultDate, initial, onDone }: LogFormProps) {
     const bfRaw = bodyfat.trim()
     const bf = bfRaw === '' ? null : Number.parseFloat(bfRaw)
     if (bf != null && !Number.isFinite(bf)) {
-      toast.error('Body fat must be a number, or leave it blank.')
+      toast.error('BIA body fat must be a number, or leave it blank.')
       return
+    }
+
+    const wantsNavyMeasurement = neck.trim() !== '' || waist.trim() !== ''
+    let heightCm: number | null = null
+    let neckCm: number | null = null
+    let waistCm: number | null = null
+    if (wantsNavyMeasurement) {
+      const parsedHeight = Number.parseFloat(height)
+      const parsedNeck = Number.parseFloat(neck)
+      const parsedWaist = Number.parseFloat(waist)
+      if (
+        !Number.isFinite(parsedHeight) ||
+        !Number.isFinite(parsedNeck) ||
+        !Number.isFinite(parsedWaist)
+      ) {
+        toast.error('Enter height, neck, and waist for the weekly Navy measurement.')
+        return
+      }
+      heightCm = circumferenceCm(parsedHeight, unit)
+      neckCm = circumferenceCm(parsedNeck, unit)
+      waistCm = circumferenceCm(parsedWaist, unit)
+      if (waistCm <= neckCm) {
+        toast.error('Waist must be larger than neck for the Navy calculation.')
+        return
+      }
     }
 
     startTransition(async () => {
@@ -68,6 +135,9 @@ export function LogForm({ unit, defaultDate, initial, onDone }: LogFormProps) {
         measured_on: measuredOn,
         bodyweight: w,
         bodyfat_pct: bf,
+        height_cm: heightCm,
+        neck_cm: neckCm,
+        waist_cm: waistCm,
         notes: notes.trim() || null,
       })
       if (res.ok) {
@@ -102,7 +172,7 @@ export function LogForm({ unit, defaultDate, initial, onDone }: LogFormProps) {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="bm-bodyfat">
-            Body fat % <span className="text-muted">· optional</span>
+            BIA body fat % <span className="text-muted">· optional</span>
           </Label>
           <Input
             id="bm-bodyfat"
@@ -118,6 +188,82 @@ export function LogForm({ unit, defaultDate, initial, onDone }: LogFormProps) {
             className="h-12 font-mono tabular-nums text-base"
           />
         </div>
+      </div>
+
+      <div className="space-y-3 rounded-md border border-border bg-background/50 p-3">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Label>Weekly Navy tape</Label>
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
+              once per week
+            </span>
+          </div>
+          <p className="text-xs leading-relaxed text-muted">
+            Height is saved from your latest tape. Measure neck just below the
+            larynx and waist across the navel after a normal exhale.
+          </p>
+        </div>
+
+        {weeklyMeasurement ? (
+          <p className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
+            Navy tape already logged this week on{' '}
+            <span className="font-mono text-foreground">
+              {weeklyMeasurement.measured_on}
+            </span>
+            . Edit that entry to change it.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="bm-height">Height ({measurementUnit})</Label>
+              <Input
+                id="bm-height"
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                min="0"
+                placeholder="—"
+                value={height}
+                onFocus={selectOnFocus}
+                onChange={(e) => setHeight(e.target.value)}
+                disabled={isPending}
+                className="h-11 font-mono tabular-nums"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bm-neck">Neck ({measurementUnit})</Label>
+              <Input
+                id="bm-neck"
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                min="0"
+                placeholder="—"
+                value={neck}
+                onFocus={selectOnFocus}
+                onChange={(e) => setNeck(e.target.value)}
+                disabled={isPending}
+                className="h-11 font-mono tabular-nums"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bm-waist">Waist ({measurementUnit})</Label>
+              <Input
+                id="bm-waist"
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                min="0"
+                placeholder="—"
+                value={waist}
+                onFocus={selectOnFocus}
+                onChange={(e) => setWaist(e.target.value)}
+                disabled={isPending}
+                className="h-11 font-mono tabular-nums"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-1.5">

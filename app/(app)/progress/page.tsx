@@ -22,6 +22,10 @@ import {
   normalizedChangeFromStart,
   type StrengthEstimatePoint,
 } from "@/lib/body/metrics"
+import {
+  interpretBodyMetrics,
+  latestBodyFatInterpretation,
+} from "@/lib/body/body-fat"
 import { exerciseNameKey } from "@/lib/exercises/identity"
 
 import { AnalysisPanel } from "@/components/analysis/analysis-panel"
@@ -92,6 +96,7 @@ export default async function ProgressPage() {
     ])
   const goalsRaw = (goalRows as Goal[]) ?? []
   const bodyMetrics = (bodyRows as BodyMetric[]) ?? []
+  const interpretedBodyMetrics = interpretBodyMetrics(bodyMetrics)
   const baselineLifts = (baselineRows as BaselineLift[]) ?? []
   const activeDietBlock =
     (blockRows?.[0] as Pick<Block, "phase" | "start_date"> | undefined) ?? null
@@ -189,7 +194,7 @@ export default async function ProgressPage() {
   const bodyFatBlockStartDate = activeDietBlock?.start_date ?? null
   const estimatedBodyfat = bodyFatBlockStartDate
     ? estimateBodyFatFromLeanRetention(
-        bodyMetrics,
+        interpretedBodyMetrics,
         { start_date: bodyFatBlockStartDate },
         profile?.bodyfat_lift_compensation ? strengthPoints : undefined,
       )
@@ -197,7 +202,7 @@ export default async function ProgressPage() {
   const estimatedBodyfatByDate = new Map(
     (estimatedBodyfat?.points ?? []).map((p) => [p.date, p.bodyfat]),
   )
-  const body: BodyTrendPoint[] = bodyMetrics.map((m) => ({
+  const body: BodyTrendPoint[] = interpretedBodyMetrics.map((m) => ({
     date: m.measured_on,
     bodyweight: m.bodyweight,
     bodyfat: m.bodyfat_pct,
@@ -206,7 +211,7 @@ export default async function ProgressPage() {
 
   /* --- Derive each goal's live "current" value where we can. --- */
   const bestE1rmByName = new Map(exercises.map((e) => [exerciseNameKey(e.name), e.bestE1rm]))
-  const latestBody = bodyMetrics.length ? bodyMetrics[bodyMetrics.length - 1] : null
+  const latestBodyfat = latestBodyFatInterpretation(bodyMetrics)?.bodyfatPct ?? null
   const normalizedBody = normalizedBodyweight(bodyMetrics, activeDietBlock)
   const normalizedBodyChange = normalizedChangeFromStart(bodyMetrics, activeDietBlock)
 
@@ -235,7 +240,7 @@ export default async function ProgressPage() {
           current = normalizedBody.value
           break
         case "bodyfat":
-          current = latestBody?.bodyfat_pct ?? null
+          current = latestBodyfat
           break
         case "e1rm":
           current = g.exercise_name
