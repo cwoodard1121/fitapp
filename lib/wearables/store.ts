@@ -303,7 +303,12 @@ export async function upsertBodyDays(
 
   const rows = present
     // Never overwrite a manual weigh-in — app inputs win over the wearable.
-    .filter((d) => existing.get(d.date)?.source !== 'manual')
+    .filter((d) => {
+      const e = existing.get(d.date)
+      const existingBia = e?.bia_bodyfat_pct ?? e?.bodyfat_pct
+      // A tape-only manual row must not block a later wearable weight/BIA sync.
+      return e?.source !== 'manual' || (e.bodyweight == null && existingBia == null)
+    })
     .map((d) => {
       const e = existing.get(d.date)
       const previousBia = e?.bia_bodyfat_pct ?? e?.bodyfat_pct

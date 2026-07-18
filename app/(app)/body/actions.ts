@@ -66,6 +66,23 @@ const upsertSchema = z.object({
   }
 })
 
+const navyMeasurementSchema = z
+  .object({
+    measured_on: dateSchema,
+    height_cm: z.number().min(100).max(250),
+    neck_cm: z.number().min(15).max(100),
+    waist_cm: z.number().min(30).max(250),
+  })
+  .superRefine((value, ctx) => {
+    if (value.waist_cm <= value.neck_cm) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['waist_cm'],
+        message: 'Waist must be larger than neck for the Navy calculation.',
+      })
+    }
+  })
+
 const baselineLiftSchema = z.object({
   lift_kind: z.enum(['bench', 'squat', 'deadlift', 'press']),
   exercise_name: z.string().trim().min(1, 'Name the lift.').max(80, 'Keep the lift name short.'),
@@ -77,6 +94,7 @@ const baselineLiftSchema = z.object({
 })
 
 export type UpsertBodyMetricInput = z.input<typeof upsertSchema>
+export type UpsertNavyMeasurementInput = z.input<typeof navyMeasurementSchema>
 export type UpsertBaselineLiftInput = z.input<typeof baselineLiftSchema>
 
 /**
@@ -168,6 +186,102 @@ export async function upsertBodyMetric(
     return {
       ok: false,
       error: err instanceof Error ? err.message : 'Could not save the weigh-in.',
+    }
+  }
+}
+
+/**
+ * Add the weekly Navy tape without requiring or replacing a weigh-in. When a
+ * body-metric row already exists for the date, its weight, BIA, notes, and
+ * source are carried forward unchanged.
+ */
+export async function upsertNavyMeasurement(
+  input: UpsertNavyMeasurementInput,
+): Promise<ActionResult> {
+  const parsed = navyMeasurementSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid measurement.' }
+  }
+  const { measured_on, height_cm, neck_cm, waist_cm } = parsed.data
+  const navy_bodyfat_pct = calculateNavyBodyFatPct({
+    heightCm: height_cm,
+    neckCm: neck_cm,
+    waistCm: waist_cm,
+  })
+  if (navy_bodyfat_pct == null) {
+    return {
+      ok: false,
+      error: "Those tape measurements don't produce a valid Navy body-fat estimate.",
+    }
+  }
+
+  try {
+    const supabase = await createClient()
+    const userId = await requireUserId(supabase)
+    const measuredDate = parseISO(measured_on)
+    const weekStart = format(startOfISOWeek(measuredDate), 'yyyy-MM-dd')
+    const weekEnd = format(endOfISOWeek(measuredDate), 'yyyy-MM-dd')
+
+    const { data: weeklyRows, error: weeklyError } = await supabase
+      .from('body_metrics')
+      .select('measured_on,navy_bodyfat_pct')
+      .eq('user_id', userId)
+      .gte('measured_on', weekStart)
+      .lte('measured_on', weekEnd)
+      .not('navy_bodyfat_pct', 'is', null)
+
+    if (weeklyError) return { ok: false, error: weeklyError.message }
+    const existingWeekly = weeklyRows?.find((row) => row.measured_on !== measured_on)
+    if (existingWeekly) {
+      return {
+        ok: false,
+        error: `Navy measurements are weekly. This week is already logged on ${existingWeekly.measured_on}.`,
+      }
+    }
+
+    const { data: existingRow, error: existingError } = await supabase
+      .from('body_metrics')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('measured_on', measured_on)
+      .maybeSingle()
+
+    if (existingError) return { ok: false, error: existingError.message }
+    const existing = existingRow as BodyMetric | null
+
+    const { data, error } = await supabase
+      .from('body_metrics')
+      .upsert(
+        {
+          user_id: userId,
+          measured_on,
+          bodyweight: existing?.bodyweight ?? null,
+          bodyfat_pct: existing?.bodyfat_pct ?? null,
+          bia_bodyfat_pct:
+            existing?.bia_bodyfat_pct ?? existing?.bodyfat_pct ?? null,
+          height_cm,
+          neck_cm,
+          waist_cm,
+          navy_bodyfat_pct,
+          notes: existing?.notes ?? null,
+          source: existing?.source ?? 'manual',
+        },
+        { onConflict: 'user_id,measured_on' },
+      )
+      .select('*')
+      .single()
+
+    if (error) return { ok: false, error: error.message }
+    revalidatePath(ROUTE)
+    revalidatePath('/goals')
+    revalidatePath('/progress')
+    revalidatePath('/overview')
+    revalidatePath('/today')
+    return { ok: true, metric: data as BodyMetric }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Could not save the weekly tape.',
     }
   }
 }

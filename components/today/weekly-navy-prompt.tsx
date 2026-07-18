@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { format, parseISO, startOfISOWeek } from 'date-fns'
 import { Ruler } from 'lucide-react'
 
-import { LogForm } from '@/components/body/log-form'
+import { NavyTapeForm } from '@/components/body/navy-tape-form'
 import {
   Button,
   Card,
@@ -29,7 +29,6 @@ export function WeeklyNavyPrompt({
 }) {
   const router = useRouter()
   const [open, setOpen] = React.useState(false)
-  const todayEntry = entries.find((entry) => entry.measured_on === today) ?? null
   const weekStart = format(startOfISOWeek(parseISO(today)), 'yyyy-MM-dd')
   const sessionKey = `simplegym:weekly-navy-prompt:${weekStart}`
 
@@ -88,15 +87,13 @@ export function WeeklyNavyPrompt({
           <SheetHeader className="mb-4 text-left">
             <SheetTitle>Weekly Navy body fat</SheetTitle>
             <SheetDescription>
-              Log height, neck, and waist with today&apos;s weigh-in. Height
-              prefills after your first tape.
+              Enter height, neck, and waist. No weight or BIA reading is needed.
             </SheetDescription>
           </SheetHeader>
-          <LogForm
+          <NavyTapeForm
             unit={unit}
             entries={entries}
-            defaultDate={today}
-            initial={todayEntry}
+            measuredOn={today}
             onDone={onDone}
           />
         </SheetContent>
