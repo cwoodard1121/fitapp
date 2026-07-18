@@ -15,6 +15,10 @@ import {
   type StrengthEstimatePoint,
   type StrengthLiftKind,
 } from '@/lib/body/metrics'
+import {
+  interpretBodyMetrics,
+  latestBodyFatInterpretation,
+} from '@/lib/body/body-fat'
 import type { BaselineLift, Block, BodyMetric, Unit } from '@/lib/types'
 import {
   Button,
@@ -81,6 +85,14 @@ export function BodyFatEstimator({
   const [exerciseName, setExerciseName] = React.useState(suggestedName)
   const [e1rm, setE1rm] = React.useState('')
   const [liftedOn, setLiftedOn] = React.useState('')
+  const interpretedEntries = React.useMemo(
+    () => interpretBodyMetrics(entries),
+    [entries],
+  )
+  const interpretation = React.useMemo(
+    () => latestBodyFatInterpretation(entries),
+    [entries],
+  )
 
   React.useEffect(() => {
     setExerciseName(selectedLift?.exercise_name ?? suggestedName)
@@ -93,12 +105,12 @@ export function BodyFatEstimator({
     () =>
       blockStart
         ? estimateBodyFatFromLeanRetention(
-            entries,
+            interpretedEntries,
             { start_date: blockStart },
             liftCompensationEnabled ? strengthPoints : undefined,
           )
         : null,
-    [entries, blockStart, strengthPoints, liftCompensationEnabled],
+    [interpretedEntries, blockStart, strengthPoints, liftCompensationEnabled],
   )
   const breakdown = estimate?.breakdown ?? null
   const strength = breakdown?.strengthSignal ?? null
@@ -150,11 +162,44 @@ export function BodyFatEstimator({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
           <Dumbbell className="size-4 text-signal" aria-hidden />
-          Body-fat estimate
+          Body-fat interpretation
         </CardTitle>
-        <CardDescription>Current estimate math and optional lift adjustment.</CardDescription>
+        <CardDescription>
+          Navy tape carries 65%; the trailing seven-day BIA median carries 35%.
+          BIA-only history stays unchanged until the first tape.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat
+            label="Interpreted"
+            value={interpretation?.bodyfatPct ?? null}
+            unit="%"
+            precision={1}
+            tone="signal"
+          />
+          <Stat
+            label="Navy · 65%"
+            value={interpretation?.navyBodyfatPct ?? null}
+            unit="%"
+            precision={1}
+          />
+          <Stat
+            label="BIA median · 35%"
+            value={interpretation?.biaMedianPct ?? null}
+            unit="%"
+            precision={1}
+          />
+          <Stat
+            label="BIA samples"
+            value={interpretation?.biaSampleCount ?? 0}
+            size="sm"
+          />
+        </div>
+
+        <p className="border-t border-border pt-4 text-xs font-medium uppercase tracking-wider text-muted">
+          Active-cut projection
+        </p>
         <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-background p-3">
           <div className="space-y-1">
             <Label htmlFor="lift-compensation">Lift compensation</Label>

@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { BodyMetric, Unit } from '@/lib/types'
+import { buildBodyFatInterpretations } from '@/lib/body/body-fat'
 import { deleteBodyMetric } from '@/app/(app)/body/actions'
 
 interface EntriesListProps {
@@ -34,6 +35,13 @@ interface EntriesListProps {
 export function EntriesList({ entries, unit, onEdit }: EntriesListProps) {
   const [pendingDelete, setPendingDelete] = React.useState<BodyMetric | null>(null)
   const [isDeleting, startDelete] = useTransition()
+  const interpretationByDate = React.useMemo(
+    () =>
+      new Map(
+        buildBodyFatInterpretations(entries).map((point) => [point.date, point]),
+      ),
+    [entries],
+  )
 
   function confirmDelete() {
     const entry = pendingDelete
@@ -65,9 +73,9 @@ export function EntriesList({ entries, unit, onEdit }: EntriesListProps) {
               <span className="ml-0.5 text-xs text-muted">{unit}</span>
             </div>
             <div className="font-mono tabular-nums text-muted">
-              {e.bodyfat_pct != null ? (
+              {interpretationByDate.get(e.measured_on)?.bodyfatPct != null ? (
                 <>
-                  {e.bodyfat_pct.toFixed(1)}
+                  {interpretationByDate.get(e.measured_on)!.bodyfatPct!.toFixed(1)}
                   <span className="ml-0.5 text-xs">%</span>
                 </>
               ) : (

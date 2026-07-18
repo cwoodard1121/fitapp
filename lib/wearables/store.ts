@@ -306,11 +306,15 @@ export async function upsertBodyDays(
     .filter((d) => existing.get(d.date)?.source !== 'manual')
     .map((d) => {
       const e = existing.get(d.date)
+      const previousBia = e?.bia_bodyfat_pct ?? e?.bodyfat_pct
+      const biaBodyFat = keepOrPrev(d.bodyFatPct, previousBia)
       return {
         user_id: userId,
         measured_on: d.date,
         bodyweight: keepOrPrev(d.bodyweight, e?.bodyweight),
-        bodyfat_pct: keepOrPrev(d.bodyFatPct, e?.bodyfat_pct),
+        // bodyfat_pct remains a compatibility mirror for older app versions.
+        bodyfat_pct: biaBodyFat,
+        bia_bodyfat_pct: biaBodyFat,
         source: 'wearable',
       }
     })
