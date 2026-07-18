@@ -9,74 +9,43 @@ import { upsertNavyMeasurement } from '@/app/(app)/body/actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { latestStoredHeightCm } from '@/lib/body/body-fat'
-import type { BodyMetric, Unit } from '@/lib/types'
-
-const CM_PER_INCH = 2.54
-
-function displayMeasurement(valueCm: number | null, unit: Unit) {
-  if (valueCm == null) return ''
-  const value = unit === 'lb' ? valueCm / CM_PER_INCH : valueCm
-  return String(Math.round(value * 10) / 10)
-}
-
-function measurementCm(value: number, unit: Unit) {
-  return unit === 'lb' ? value * CM_PER_INCH : value
-}
 
 function selectOnFocus(event: React.FocusEvent<HTMLInputElement>) {
   event.currentTarget.select()
 }
 
 export function NavyTapeForm({
-  entries,
-  unit,
+  heightCm,
   measuredOn,
   onDone,
 }: {
-  entries: BodyMetric[]
-  unit: Unit
+  heightCm: number
   measuredOn: string
   onDone?: () => void
 }) {
   const [isPending, startTransition] = useTransition()
-  const measurementUnit = unit === 'lb' ? 'in' : 'cm'
-  const savedHeightCm = latestStoredHeightCm(entries)
-  const [height, setHeight] = React.useState(
-    displayMeasurement(savedHeightCm, unit),
-  )
   const [neck, setNeck] = React.useState('')
   const [waist, setWaist] = React.useState('')
-  const heightRef = React.useRef<HTMLInputElement>(null)
   const neckRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
     const timer = window.setTimeout(() => {
-      const target = savedHeightCm == null ? heightRef.current : neckRef.current
-      target?.focus()
-      target?.select()
+      neckRef.current?.focus()
+      neckRef.current?.select()
     }, 50)
     return () => window.clearTimeout(timer)
-  }, [savedHeightCm])
+  }, [])
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const parsedHeight = Number.parseFloat(height)
     const parsedNeck = Number.parseFloat(neck)
     const parsedWaist = Number.parseFloat(waist)
-    if (
-      !Number.isFinite(parsedHeight) ||
-      !Number.isFinite(parsedNeck) ||
-      !Number.isFinite(parsedWaist)
-    ) {
-      toast.error('Enter height, neck, and waist.')
+    if (!Number.isFinite(parsedNeck) || !Number.isFinite(parsedWaist)) {
+      toast.error('Enter neck and waist in centimeters.')
       return
     }
 
-    const heightCm = measurementCm(parsedHeight, unit)
-    const neckCm = measurementCm(parsedNeck, unit)
-    const waistCm = measurementCm(parsedWaist, unit)
-    if (waistCm <= neckCm) {
+    if (parsedWaist <= parsedNeck) {
       toast.error('Waist must be larger than neck for the Navy calculation.')
       return
     }
@@ -84,9 +53,8 @@ export function NavyTapeForm({
     startTransition(async () => {
       const result = await upsertNavyMeasurement({
         measured_on: measuredOn,
-        height_cm: heightCm,
-        neck_cm: neckCm,
-        waist_cm: waistCm,
+        neck_cm: parsedNeck,
+        waist_cm: parsedWaist,
       })
       if (result.ok) {
         toast.success('Weekly measurements saved.')
@@ -101,36 +69,20 @@ export function NavyTapeForm({
     <form onSubmit={onSubmit} className="space-y-4">
       <p className="text-xs leading-relaxed text-muted">
         Measure neck just below the larynx and waist across the navel after a
-        normal exhale. Height prefills after your first entry.
+        normal exhale. Using your {heightCm} cm height from Settings.
       </p>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label htmlFor="navy-height">Height ({measurementUnit})</Label>
-          <Input
-            id="navy-height"
-            ref={heightRef}
-            type="number"
-            inputMode="decimal"
-            step="0.1"
-            min="0"
-            required
-            value={height}
-            onFocus={selectOnFocus}
-            onChange={(event) => setHeight(event.target.value)}
-            disabled={isPending}
-            className="h-12 font-mono tabular-nums"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="navy-neck">Neck ({measurementUnit})</Label>
+          <Label htmlFor="navy-neck">Neck (cm)</Label>
           <Input
             id="navy-neck"
             ref={neckRef}
             type="number"
             inputMode="decimal"
             step="0.1"
-            min="0"
+            min="15"
+            max="100"
             required
             value={neck}
             onFocus={selectOnFocus}
@@ -140,13 +92,14 @@ export function NavyTapeForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="navy-waist">Waist ({measurementUnit})</Label>
+          <Label htmlFor="navy-waist">Waist (cm)</Label>
           <Input
             id="navy-waist"
             type="number"
             inputMode="decimal"
             step="0.1"
-            min="0"
+            min="30"
+            max="250"
             required
             value={waist}
             onFocus={selectOnFocus}

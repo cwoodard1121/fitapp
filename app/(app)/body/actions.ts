@@ -39,18 +39,17 @@ const upsertSchema = z.object({
     .max(75, 'Body fat must be under 75%.')
     .nullable()
     .optional(),
-  height_cm: z.number().min(100).max(250).nullable().optional(),
   neck_cm: z.number().min(15).max(100).nullable().optional(),
   waist_cm: z.number().min(30).max(250).nullable().optional(),
   notes: z.string().trim().max(500, 'Keep notes under 500 characters.').nullable().optional(),
 }).superRefine((value, ctx) => {
-  const tape = [value.height_cm, value.neck_cm, value.waist_cm]
+  const tape = [value.neck_cm, value.waist_cm]
   const supplied = tape.filter((measurement) => measurement != null).length
   if (supplied !== 0 && supplied !== tape.length) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['neck_cm'],
-      message: 'Enter height, neck, and waist together for the weekly Navy measurement.',
+      message: 'Enter neck and waist together for the weekly Navy measurement.',
     })
   }
   if (
@@ -69,7 +68,6 @@ const upsertSchema = z.object({
 const navyMeasurementSchema = z
   .object({
     measured_on: dateSchema,
-    height_cm: z.number().min(100).max(250),
     neck_cm: z.number().min(15).max(100),
     waist_cm: z.number().min(30).max(250),
   })
@@ -108,18 +106,39 @@ export async function upsertBodyMetric(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid entry.' }
   }
-  const { measured_on, bodyweight, bodyfat_pct, height_cm, neck_cm, waist_cm, notes } =
+  const { measured_on, bodyweight, bodyfat_pct, neck_cm, waist_cm, notes } =
     parsed.data
 
   try {
     const supabase = await createClient()
     const userId = await requireUserId(supabase)
-    const hasTape = height_cm != null && neck_cm != null && waist_cm != null
+    const hasTape = neck_cm != null && waist_cm != null
+    let heightCm: number | null = null
+    if (hasTape) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('height_cm')
+        .eq('id', userId)
+        .maybeSingle()
+      if (profileError) return { ok: false, error: profileError.message }
+      heightCm =
+        typeof profile?.height_cm === 'number'
+          ? profile.height_cm
+          : profile?.height_cm != null
+            ? Number(profile.height_cm)
+            : null
+      if (heightCm == null || !Number.isFinite(heightCm)) {
+        return {
+          ok: false,
+          error: 'Set your height in Settings before logging the weekly tape.',
+        }
+      }
+    }
     const navy_bodyfat_pct = hasTape
       ? calculateNavyBodyFatPct({
-          heightCm: height_cm,
-          neckCm: neck_cm,
-          waistCm: waist_cm,
+          heightCm: heightCm!,
+          neckCm: neck_cm!,
+          waistCm: waist_cm!,
         })
       : null
 
@@ -162,7 +181,7 @@ export async function upsertBodyMetric(
           // Keep the legacy column mirrored during the rollout.
           bodyfat_pct: bodyfat_pct ?? null,
           bia_bodyfat_pct: bodyfat_pct ?? null,
-          height_cm: hasTape ? height_cm : null,
+          height_cm: hasTape ? heightCm : null,
           neck_cm: hasTape ? neck_cm : null,
           waist_cm: hasTape ? waist_cm : null,
           navy_bodyfat_pct,
@@ -202,22 +221,40 @@ export async function upsertNavyMeasurement(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid measurement.' }
   }
-  const { measured_on, height_cm, neck_cm, waist_cm } = parsed.data
-  const navy_bodyfat_pct = calculateNavyBodyFatPct({
-    heightCm: height_cm,
-    neckCm: neck_cm,
-    waistCm: waist_cm,
-  })
-  if (navy_bodyfat_pct == null) {
-    return {
-      ok: false,
-      error: "Those tape measurements don't produce a valid Navy body-fat estimate.",
-    }
-  }
+  const { measured_on, neck_cm, waist_cm } = parsed.data
 
   try {
     const supabase = await createClient()
     const userId = await requireUserId(supabase)
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('height_cm')
+      .eq('id', userId)
+      .maybeSingle()
+    if (profileError) return { ok: false, error: profileError.message }
+    const height_cm =
+      typeof profile?.height_cm === 'number'
+        ? profile.height_cm
+        : profile?.height_cm != null
+          ? Number(profile.height_cm)
+          : null
+    if (height_cm == null || !Number.isFinite(height_cm)) {
+      return {
+        ok: false,
+        error: 'Set your height in Settings before logging the weekly tape.',
+      }
+    }
+    const navy_bodyfat_pct = calculateNavyBodyFatPct({
+      heightCm: height_cm,
+      neckCm: neck_cm,
+      waistCm: waist_cm,
+    })
+    if (navy_bodyfat_pct == null) {
+      return {
+        ok: false,
+        error: "Those tape measurements don't produce a valid Navy body-fat estimate.",
+      }
+    }
     const measuredDate = parseISO(measured_on)
     const weekStart = format(startOfISOWeek(measuredDate), 'yyyy-MM-dd')
     const weekEnd = format(endOfISOWeek(measuredDate), 'yyyy-MM-dd')

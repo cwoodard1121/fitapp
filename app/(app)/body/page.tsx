@@ -157,6 +157,7 @@ export default async function BodyPage() {
       <BodyClient
         entries={(data ?? []) as BodyMetric[]}
         unit={unit}
+        heightCm={profile.height_cm}
         activeDietBlock={activeDietBlock}
         strengthPoints={strengthPoints}
         baselineLifts={baselineLifts}

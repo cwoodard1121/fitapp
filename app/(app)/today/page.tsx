@@ -76,7 +76,7 @@ export default async function TodayPage({
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <Header unit={unit} />
         {weeklyNavyDue ? (
-          <WeeklyNavyPrompt entries={bodyEntries} unit={unit} today={today} />
+          <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
         ) : null}
         <EmptyState />
       </div>
@@ -89,7 +89,7 @@ export default async function TodayPage({
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <Header unit={unit} />
         {weeklyNavyDue ? (
-          <WeeklyNavyPrompt entries={bodyEntries} unit={unit} today={today} />
+          <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
         ) : null}
         <EmptyState />
       </div>
@@ -209,7 +209,7 @@ export default async function TodayPage({
       </Header>
 
       {weeklyNavyDue ? (
-        <WeeklyNavyPrompt entries={bodyEntries} unit={unit} today={today} />
+        <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
       ) : null}
 
       <ActiveProgramSelect programs={programs} activeId={program.id} />

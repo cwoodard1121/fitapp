@@ -23,6 +23,9 @@ import { updateProfile } from '@/app/(app)/settings/actions'
 export function ProfileForm({ profile }: { profile: Profile }) {
   const [displayName, setDisplayName] = useState(profile.display_name ?? '')
   const [unit, setUnit] = useState<Unit>(profile.unit)
+  const [heightCm, setHeightCm] = useState(
+    profile.height_cm != null ? String(profile.height_cm) : '',
+  )
   const [deloadWeek, setDeloadWeek] = useState(String(profile.deload_week ?? 0))
   const [pending, startTransition] = useTransition()
 
@@ -32,6 +35,7 @@ export function ProfileForm({ profile }: { profile: Profile }) {
       const res = await updateProfile({
         display_name: displayName,
         unit,
+        height_cm: heightCm.trim() === '' ? null : Number(heightCm),
         deload_week: Number(deloadWeek),
       })
       if (res.ok) toast.success('Saved your profile.')
@@ -57,6 +61,26 @@ export function ProfileForm({ profile }: { profile: Profile }) {
               placeholder="What should we call you?"
               autoComplete="name"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="height_cm">Height (cm)</Label>
+            <Input
+              id="height_cm"
+              type="number"
+              inputMode="decimal"
+              min={100}
+              max={250}
+              step={0.1}
+              value={heightCm}
+              onChange={(e) => setHeightCm(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              placeholder="e.g. 178"
+              className="font-mono tabular-nums"
+            />
+            <p className="text-xs text-muted">
+              Used for the weekly Navy body-fat calculation.
+            </p>
           </div>
 
           <div className="flex items-center justify-between gap-4">

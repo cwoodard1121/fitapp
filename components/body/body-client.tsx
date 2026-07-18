@@ -32,6 +32,7 @@ interface BodyClientProps {
   /** Ascending by measured_on (oldest first). */
   entries: BodyMetric[]
   unit: Unit
+  heightCm: number | null
   activeDietBlock: Pick<Block, 'phase' | 'start_date'> | null
   strengthPoints: StrengthEstimatePoint[]
   baselineLifts: BaselineLift[]
@@ -44,6 +45,7 @@ interface BodyClientProps {
 export function BodyClient({
   entries,
   unit,
+  heightCm,
   activeDietBlock,
   strengthPoints,
   baselineLifts,
@@ -193,6 +195,7 @@ export function BodyClient({
           <LogForm
             key={editing?.id ?? 'new'}
             unit={unit}
+            heightCm={heightCm}
             entries={entries}
             defaultDate={today}
             initial={editing}

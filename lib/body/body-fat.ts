@@ -213,15 +213,6 @@ export function latestBodyFatInterpretation(
   )
 }
 
-export function latestStoredHeightCm(entries: BodyFatEntry[]): number | null {
-  return (
-    [...entries]
-      .sort((a, b) => b.measured_on.localeCompare(a.measured_on))
-      .find((entry) => entry.height_cm != null && entry.height_cm > 0)?.height_cm ??
-    null
-  )
-}
-
 export function navyMeasurementInISOWeek(
   entries: BodyFatEntry[],
   date: string,

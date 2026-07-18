@@ -21,6 +21,7 @@ export type ActionResult = { ok: true } | { ok: false; error: string }
 export interface ProfileInput {
   display_name: string | null
   unit: 'lb' | 'kg'
+  height_cm: number | null
   deload_week: number
 }
 
@@ -37,16 +38,28 @@ export async function updateProfile(input: ProfileInput): Promise<ActionResult> 
 
     const display_name = input.display_name?.trim() ? input.display_name.trim() : null
     const unit: 'lb' | 'kg' = input.unit === 'kg' ? 'kg' : 'lb'
+    const height_cm =
+      input.height_cm == null || input.height_cm === 0
+        ? null
+        : Number(input.height_cm)
+    if (
+      height_cm != null &&
+      (!Number.isFinite(height_cm) || height_cm < 100 || height_cm > 250)
+    ) {
+      return { ok: false, error: 'Height must be between 100 and 250 cm.' }
+    }
     const deload_week = clampInt(input.deload_week, 0, 52, 0)
 
     const { error } = await supabase
       .from('profiles')
-      .update({ display_name, unit, deload_week })
+      .update({ display_name, unit, height_cm, deload_week })
       .eq('id', userId)
 
     if (error) return { ok: false, error: error.message }
 
     revalidatePath('/settings')
+    revalidatePath('/body')
+    revalidatePath('/today')
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not save profile.' }

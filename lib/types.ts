@@ -59,6 +59,8 @@ export interface Profile {
   id: string;
   display_name: string | null;
   unit: Unit;
+  /** Canonical height in centimetres for circumference calculations. */
+  height_cm: number | null;
   start_date: string | null;
   deload_week: number;
   /** Optional tuned engine weights; null = engine DEFAULT_WEIGHTS. */

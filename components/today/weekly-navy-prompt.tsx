@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { format, parseISO, startOfISOWeek } from 'date-fns'
 import { Ruler } from 'lucide-react'
@@ -16,15 +17,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui'
-import type { BodyMetric, Unit } from '@/lib/types'
 
 export function WeeklyNavyPrompt({
-  entries,
-  unit,
+  heightCm,
   today,
 }: {
-  entries: BodyMetric[]
-  unit: Unit
+  heightCm: number | null
   today: string
 }) {
   const router = useRouter()
@@ -33,11 +31,12 @@ export function WeeklyNavyPrompt({
   const sessionKey = `simplegym:weekly-navy-prompt:${weekStart}`
 
   React.useEffect(() => {
+    if (heightCm == null) return
     if (window.sessionStorage.getItem(sessionKey) !== 'shown') {
       window.sessionStorage.setItem(sessionKey, 'shown')
       setOpen(true)
     }
-  }, [sessionKey])
+  }, [heightCm, sessionKey])
 
   function onOpenChange(nextOpen: boolean) {
     setOpen(nextOpen)
@@ -63,41 +62,50 @@ export function WeeklyNavyPrompt({
                 Weekly body fat due
               </p>
               <p className="text-xs leading-relaxed text-muted">
-                Add this week&apos;s neck and waist tape. This reminder disappears
-                as soon as it is logged.
+                {heightCm == null
+                  ? 'Add your height in Settings before the first weekly tape.'
+                  : 'Add neck and waist in centimeters. This reminder disappears as soon as it is logged.'}
               </p>
             </div>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            className="shrink-0"
-            onClick={() => setOpen(true)}
-          >
-            Log weekly tape
-          </Button>
+          {heightCm == null ? (
+            <Button asChild size="sm" className="shrink-0">
+              <Link href="/settings">Set height</Link>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              className="shrink-0"
+              onClick={() => setOpen(true)}
+            >
+              Log weekly tape
+            </Button>
+          )}
         </CardContent>
       </Card>
 
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent
-          side="bottom"
-          className="mx-auto max-h-[92vh] max-w-lg overflow-y-auto"
-        >
-          <SheetHeader className="mb-4 text-left">
-            <SheetTitle>Weekly Navy body fat</SheetTitle>
-            <SheetDescription>
-              Enter height, neck, and waist. No weight or BIA reading is needed.
-            </SheetDescription>
-          </SheetHeader>
-          <NavyTapeForm
-            unit={unit}
-            entries={entries}
-            measuredOn={today}
-            onDone={onDone}
-          />
-        </SheetContent>
-      </Sheet>
+      {heightCm != null ? (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+          <SheetContent
+            side="bottom"
+            className="mx-auto max-h-[92vh] max-w-lg overflow-y-auto"
+          >
+            <SheetHeader className="mb-4 text-left">
+              <SheetTitle>Weekly Navy body fat</SheetTitle>
+              <SheetDescription>
+                Enter neck and waist in centimeters. No weight or BIA reading is
+                needed.
+              </SheetDescription>
+            </SheetHeader>
+            <NavyTapeForm
+              heightCm={heightCm}
+              measuredOn={today}
+              onDone={onDone}
+            />
+          </SheetContent>
+        </Sheet>
+      ) : null}
     </>
   )
 }

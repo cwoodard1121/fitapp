@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { useTransition } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
@@ -11,7 +12,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   biaBodyFatPct,
-  latestStoredHeightCm,
   navyMeasurementInISOWeek,
 } from '@/lib/body/body-fat'
 import type { BodyMetric, Unit } from '@/lib/types'
@@ -19,6 +19,7 @@ import { upsertBodyMetric } from '@/app/(app)/body/actions'
 
 interface LogFormProps {
   unit: Unit
+  heightCm: number | null
   entries: BodyMetric[]
   /** Default measured_on (yyyy-MM-dd), usually today. */
   defaultDate: string
@@ -27,24 +28,18 @@ interface LogFormProps {
   onDone?: () => void
 }
 
-const CM_PER_INCH = 2.54
-
 function selectOnFocus(e: React.FocusEvent<HTMLInputElement>) {
   e.currentTarget.select()
 }
 
-function displayCircumference(valueCm: number | null | undefined, unit: Unit) {
+function displayCircumference(valueCm: number | null | undefined) {
   if (valueCm == null) return ''
-  const value = unit === 'lb' ? valueCm / CM_PER_INCH : valueCm
-  return String(Math.round(value * 10) / 10)
-}
-
-function circumferenceCm(value: number, unit: Unit) {
-  return unit === 'lb' ? value * CM_PER_INCH : value
+  return String(Math.round(valueCm * 10) / 10)
 }
 
 export function LogForm({
   unit,
+  heightCm,
   entries,
   defaultDate,
   initial,
@@ -62,20 +57,15 @@ export function LogForm({
   const [bodyfat, setBodyfat] = React.useState(
     initialBia != null ? String(initialBia) : '',
   )
-  const savedHeightCm = initial?.height_cm ?? latestStoredHeightCm(entries)
-  const [height, setHeight] = React.useState(
-    displayCircumference(savedHeightCm, unit),
-  )
   const [neck, setNeck] = React.useState(
-    displayCircumference(initial?.neck_cm, unit),
+    displayCircumference(initial?.neck_cm),
   )
   const [waist, setWaist] = React.useState(
-    displayCircumference(initial?.waist_cm, unit),
+    displayCircumference(initial?.waist_cm),
   )
   const [notes, setNotes] = React.useState(initial?.notes ?? '')
 
   const weightRef = React.useRef<HTMLInputElement>(null)
-  const measurementUnit = unit === 'lb' ? 'in' : 'cm'
   const weeklyMeasurement = React.useMemo(
     () => navyMeasurementInISOWeek(entries, measuredOn, initial?.id),
     [entries, measuredOn, initial?.id],
@@ -106,24 +96,21 @@ export function LogForm({
     }
 
     const wantsNavyMeasurement = neck.trim() !== '' || waist.trim() !== ''
-    let heightCm: number | null = null
     let neckCm: number | null = null
     let waistCm: number | null = null
     if (wantsNavyMeasurement) {
-      const parsedHeight = Number.parseFloat(height)
       const parsedNeck = Number.parseFloat(neck)
       const parsedWaist = Number.parseFloat(waist)
-      if (
-        !Number.isFinite(parsedHeight) ||
-        !Number.isFinite(parsedNeck) ||
-        !Number.isFinite(parsedWaist)
-      ) {
-        toast.error('Enter height, neck, and waist for the weekly Navy measurement.')
+      if (!Number.isFinite(parsedNeck) || !Number.isFinite(parsedWaist)) {
+        toast.error('Enter neck and waist in centimeters.')
         return
       }
-      heightCm = circumferenceCm(parsedHeight, unit)
-      neckCm = circumferenceCm(parsedNeck, unit)
-      waistCm = circumferenceCm(parsedWaist, unit)
+      if (heightCm == null) {
+        toast.error('Set your height in Settings before logging the weekly tape.')
+        return
+      }
+      neckCm = parsedNeck
+      waistCm = parsedWaist
       if (waistCm <= neckCm) {
         toast.error('Waist must be larger than neck for the Navy calculation.')
         return
@@ -135,7 +122,6 @@ export function LogForm({
         measured_on: measuredOn,
         bodyweight: w,
         bodyfat_pct: bf,
-        height_cm: heightCm,
         neck_cm: neckCm,
         waist_cm: waistCm,
         notes: notes.trim() || null,
@@ -199,8 +185,15 @@ export function LogForm({
             </span>
           </div>
           <p className="text-xs leading-relaxed text-muted">
-            Height is saved from your latest tape. Measure neck just below the
-            larynx and waist across the navel after a normal exhale.
+            Measure in centimeters: neck just below the larynx and waist across
+            the navel after a normal exhale.{' '}
+            {heightCm != null ? (
+              <>Using your {heightCm} cm height from Settings.</>
+            ) : (
+              <Link href="/settings" className="font-medium text-signal hover:underline">
+                Set your height in Settings first.
+              </Link>
+            )}
           </p>
         </div>
 
@@ -213,31 +206,16 @@ export function LogForm({
             . Edit that entry to change it.
           </p>
         ) : (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="bm-height">Height ({measurementUnit})</Label>
-              <Input
-                id="bm-height"
-                type="number"
-                inputMode="decimal"
-                step="0.1"
-                min="0"
-                placeholder="—"
-                value={height}
-                onFocus={selectOnFocus}
-                onChange={(e) => setHeight(e.target.value)}
-                disabled={isPending}
-                className="h-11 font-mono tabular-nums"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="bm-neck">Neck ({measurementUnit})</Label>
+              <Label htmlFor="bm-neck">Neck (cm)</Label>
               <Input
                 id="bm-neck"
                 type="number"
                 inputMode="decimal"
                 step="0.1"
-                min="0"
+                min="15"
+                max="100"
                 placeholder="—"
                 value={neck}
                 onFocus={selectOnFocus}
@@ -247,13 +225,14 @@ export function LogForm({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="bm-waist">Waist ({measurementUnit})</Label>
+              <Label htmlFor="bm-waist">Waist (cm)</Label>
               <Input
                 id="bm-waist"
                 type="number"
                 inputMode="decimal"
                 step="0.1"
-                min="0"
+                min="30"
+                max="250"
                 placeholder="—"
                 value={waist}
                 onFocus={selectOnFocus}
