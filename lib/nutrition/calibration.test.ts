@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { BodyMetric, NutritionLog } from '@/lib/types'
 import {
-  CALIBRATION_MIN_DAYS,
+  CALIBRATION_ESTIMATE_DAYS,
+  CALIBRATION_MAX_DAYS,
   computeCalibration,
 } from './calibration'
 import { KCAL_PER_STEP } from './deficit'
@@ -49,14 +50,16 @@ function nutritionLog(date: string, calories: number): NutritionLog {
   }
 }
 
-function completeInput({
+function trackedInput({
+  days = CALIBRATION_MAX_DAYS,
   maintenance = 2500,
   weightOutlier = false,
 }: {
+  days?: number
   maintenance?: number | null
   weightOutlier?: boolean
 } = {}) {
-  const analysisDates = dates('2026-06-15', CALIBRATION_MIN_DAYS)
+  const analysisDates = dates('2026-06-07', days)
   const trueMaintenance = 2600
   const weeklyLoss = 1
   const stepsByDate = Object.fromEntries(
@@ -83,14 +86,14 @@ function completeInput({
       weightKg: 70,
       unit: 'lb' as const,
       windowStart: new Date(2026, 5, 1),
-      today: '2026-06-29',
+      today: dates('2026-06-07', days + 1)[days],
     },
     trueMaintenance,
   }
 }
 
 describe('maintenance calibration', () => {
-  it('keeps calibration locked during the first 14 block days', () => {
+  it('uses a six-day water-settling period', () => {
     const result = computeCalibration({
       bodyEntries: [],
       logs: [],
@@ -100,19 +103,35 @@ describe('maintenance calibration', () => {
       weightKg: 70,
       unit: 'lb',
       windowStart: new Date(2026, 5, 1),
-      today: '2026-06-10',
+      today: '2026-06-06',
     })
 
     expect(result.status).toBe('collecting')
-    expect(result.checklist.find((item) => item.key === 'water')?.complete).toBe(false)
+    expect(result.checklist.find((item) => item.key === 'water')).toMatchObject({
+      complete: false,
+      detail: '5/6 days',
+    })
   })
 
-  it('infers maintenance at the fixed step baseline from complete tracking', () => {
-    const { input, trueMaintenance } = completeInput()
+  it('shows a provisional estimate after seven complete post-settling days', () => {
+    const { input, trueMaintenance } = trackedInput({
+      days: CALIBRATION_ESTIMATE_DAYS,
+    })
+    const result = computeCalibration(input)
+
+    expect(result.status).toBe('provisional')
+    expect(result.analysisDays).toBe(7)
+    expect(result.actualWeeklyLoss).toBeCloseTo(1, 6)
+    expect(result.estimatedMaintenance).toBe(trueMaintenance)
+    expect(result.suggestion).toBeNull()
+  })
+
+  it('locks the estimate at fourteen complete post-settling days', () => {
+    const { input, trueMaintenance } = trackedInput()
     const result = computeCalibration(input)
 
     expect(result.status).toBe('ready')
-    expect(result.actualWeeklyLoss).toBeCloseTo(1, 6)
+    expect(result.analysisDays).toBe(14)
     expect(result.estimatedMaintenance).toBe(trueMaintenance)
     expect(result.suggestion).toMatchObject({
       direction: 'raise',
@@ -120,17 +139,8 @@ describe('maintenance calibration', () => {
     })
   })
 
-  it('normalizes alternating high and low step days without moving the baseline', () => {
-    const { input } = completeInput()
-    const result = computeCalibration(input)
-
-    expect(result.avgSteps).toBe(10_000)
-    expect(result.stepBaseline).toBe(10_000)
-    expect(result.estimatedMaintenance).toBe(2600)
-  })
-
-  it('waits when even one calorie or step day is missing', () => {
-    const { input } = completeInput()
+  it('waits when the first seven-day calorie or step window is incomplete', () => {
+    const { input } = trackedInput({ days: CALIBRATION_ESTIMATE_DAYS })
     const missingDate = Object.keys(input.stepsByDate)[0]
     delete input.stepsByDate[missingDate]
     input.logs = input.logs.slice(1)
@@ -138,13 +148,21 @@ describe('maintenance calibration', () => {
     const result = computeCalibration(input)
 
     expect(result.status).toBe('collecting')
-    expect(result.checklist.find((item) => item.key === 'calories')?.complete).toBe(false)
-    expect(result.checklist.find((item) => item.key === 'steps')?.complete).toBe(false)
+    expect(result.checklist.find((item) => item.key === 'tracking')?.complete).toBe(false)
     expect(result.estimatedMaintenance).toBeNull()
   })
 
+  it('normalizes high and low step days around the fixed baseline', () => {
+    const { input } = trackedInput({ days: CALIBRATION_ESTIMATE_DAYS })
+    const result = computeCalibration(input)
+
+    expect(result.avgSteps).toBeCloseTo(9714.29, 2)
+    expect(result.stepBaseline).toBe(10_000)
+    expect(result.estimatedMaintenance).toBe(2600)
+  })
+
   it('uses a robust scale slope that resists one water-weight spike', () => {
-    const { input } = completeInput({ weightOutlier: true })
+    const { input } = trackedInput({ weightOutlier: true })
     const result = computeCalibration(input)
 
     expect(result.status).toBe('ready')
@@ -152,8 +170,19 @@ describe('maintenance calibration', () => {
     expect(result.estimatedMaintenance).toBe(2600)
   })
 
-  it('can establish maintenance when no prior setting exists', () => {
-    const { input } = completeInput({ maintenance: null })
+  it('uses no more than the latest fourteen post-settling days', () => {
+    const { input } = trackedInput({ days: 20 })
+    const result = computeCalibration(input)
+
+    expect(result.status).toBe('ready')
+    expect(result.analysisDays).toBe(14)
+    expect(result.analysisStart).toBe('2026-06-13')
+    expect(result.analysisEnd).toBe('2026-06-26')
+    expect(result.estimatedMaintenance).toBe(2600)
+  })
+
+  it('can establish maintenance once the estimate is locked', () => {
+    const { input } = trackedInput({ maintenance: null })
     const result = computeCalibration(input)
 
     expect(result.status).toBe('ready')

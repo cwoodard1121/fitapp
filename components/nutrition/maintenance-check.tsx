@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import {
   ArrowDown,
   ArrowUp,
+  AlertTriangle,
   Check,
   CheckCircle2,
   Circle,
@@ -66,8 +67,8 @@ export function MaintenanceCheck({
         </CardTitle>
         <CardDescription>
           Infers maintenance at exactly {c.stepBaseline.toLocaleString()} steps/day.
-          Food and step logs are treated as accurate; the remaining error belongs
-          to maintenance.
+          An early estimate appears after 7 complete post-settling days and locks
+          by day 14.
         </CardDescription>
       </CardHeader>
 
@@ -99,15 +100,18 @@ export function MaintenanceCheck({
 
         {c.status === 'collecting' ? (
           <p className="rounded-md border border-border bg-background p-3 text-sm leading-snug text-muted">
-            The estimate unlocks only after every check passes. It uses the latest
-            14–21 complete post-settling days and a robust scale slope, so a single
-            high or low weigh-in cannot set maintenance.
+            The first estimate appears after the 6-day water-settling period, 7
+            complete calorie + step days, and a usable scale rate.
           </p>
-        ) : (
+        ) : null}
+
+        {c.estimatedMaintenance != null ? (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Stat
-                label={`Maint @ ${c.stepBaseline.toLocaleString()} steps`}
+                label={`${
+                  c.status === 'provisional' ? 'Early maint' : 'Maint'
+                } @ ${c.stepBaseline.toLocaleString()} steps`}
                 value={c.estimatedMaintenance}
                 unit="kcal"
                 tone="signal"
@@ -117,7 +121,20 @@ export function MaintenanceCheck({
               <Stat label="Avg steps" value={c.avgSteps} precision={0} />
             </div>
 
-            {c.suggestion ? (
+            {c.status === 'provisional' ? (
+              <p className="flex items-start gap-2 rounded-md border border-gate-yellow/40 bg-gate-yellow/10 p-3 text-sm leading-snug text-foreground">
+                <AlertTriangle
+                  className="mt-0.5 size-4 shrink-0 text-gate-yellow"
+                  aria-hidden
+                />
+                <span>
+                  <strong>Early estimate only.</strong> It is based on{' '}
+                  {c.analysisDays} post-settling days and {c.bodyReadings} weigh-ins.
+                  Water noise can still move it; wait for the 14-day lock before
+                  changing maintenance.
+                </span>
+              </p>
+            ) : c.suggestion ? (
               <div className="space-y-3 rounded-md border border-gate-yellow/40 bg-gate-yellow/10 p-3">
                 <p className="flex items-start gap-2 text-sm leading-snug text-foreground">
                   {c.suggestion.direction === 'lower' ? (
@@ -167,7 +184,7 @@ export function MaintenanceCheck({
               below it). The saved step baseline stays unchanged.
             </p>
           </>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   )

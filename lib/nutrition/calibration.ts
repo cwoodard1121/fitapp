@@ -22,11 +22,13 @@ import {
   kcalPerUnit,
 } from './deficit'
 
-export const CALIBRATION_SETTLE_DAYS = 14
-export const CALIBRATION_MIN_DAYS = 14
-export const CALIBRATION_MAX_DAYS = 21
-export const CALIBRATION_MIN_WEIGH_INS = 10
-export const CALIBRATION_MIN_WEIGHT_SPAN_DAYS = 13
+export const CALIBRATION_SETTLE_DAYS = 6
+export const CALIBRATION_ESTIMATE_DAYS = 7
+export const CALIBRATION_MAX_DAYS = 14
+export const CALIBRATION_ESTIMATE_WEIGH_INS = 5
+export const CALIBRATION_ESTIMATE_WEIGHT_SPAN_DAYS = 6
+export const CALIBRATION_LOCK_WEIGH_INS = 10
+export const CALIBRATION_LOCK_WEIGHT_SPAN_DAYS = 13
 
 export interface CalibrationInput {
   /** body_metrics ascending by measured_on. */
@@ -46,7 +48,7 @@ export interface CalibrationInput {
 }
 
 export interface CalibrationChecklistItem {
-  key: 'water' | 'calories' | 'steps' | 'scale'
+  key: 'water' | 'tracking' | 'scale' | 'lock'
   label: string
   complete: boolean
   detail: string
@@ -60,7 +62,7 @@ export interface CalibrationSuggestion {
 }
 
 export interface Calibration {
-  status: 'collecting' | 'ready'
+  status: 'collecting' | 'provisional' | 'ready'
   checklist: CalibrationChecklistItem[]
   stepBaseline: number
   analysisStart: string | null
@@ -199,52 +201,70 @@ export function computeCalibration(input: CalibrationInput): Calibration {
   const scaleSlope = theilSenSlope(weightPoints)
   const actualWeeklyLoss = scaleSlope == null ? null : -scaleSlope * 7
 
+  const trackingComplete =
+    analysisDays >= CALIBRATION_ESTIMATE_DAYS &&
+    calories.length === analysisDays &&
+    steps.length === analysisDays
+  const scaleEstimateComplete =
+    weightPoints.length >= CALIBRATION_ESTIMATE_WEIGH_INS &&
+    bodySpanDays >= CALIBRATION_ESTIMATE_WEIGHT_SPAN_DAYS &&
+    scaleSlope != null
+  const lockComplete =
+    analysisDays >= CALIBRATION_MAX_DAYS &&
+    calories.length === CALIBRATION_MAX_DAYS &&
+    steps.length === CALIBRATION_MAX_DAYS &&
+    weightPoints.length >= CALIBRATION_LOCK_WEIGH_INS &&
+    bodySpanDays >= CALIBRATION_LOCK_WEIGHT_SPAN_DAYS &&
+    scaleSlope != null
+  const canEstimate = waterComplete && trackingComplete && scaleEstimateComplete
+
   const checklist: CalibrationChecklistItem[] = [
     {
       key: 'water',
       label: 'Water settling',
       complete: waterComplete,
       detail: waterComplete
-        ? 'First 14 block days excluded'
+        ? 'First 6 block days excluded'
         : `${settlingDays}/${CALIBRATION_SETTLE_DAYS} days`,
     },
     {
-      key: 'calories',
-      label: 'Complete calories',
-      complete:
-        analysisDays >= CALIBRATION_MIN_DAYS &&
-        calories.length === analysisDays,
-      detail: `${calories.length}/${Math.max(
-        CALIBRATION_MIN_DAYS,
-        analysisDays,
-      )} completed days`,
-    },
-    {
-      key: 'steps',
-      label: 'Complete steps',
-      complete:
-        analysisDays >= CALIBRATION_MIN_DAYS && steps.length === analysisDays,
-      detail: `${steps.length}/${Math.max(
-        CALIBRATION_MIN_DAYS,
-        analysisDays,
-      )} completed days`,
+      key: 'tracking',
+      label: 'First estimate',
+      complete: trackingComplete,
+      detail: `${Math.min(
+        CALIBRATION_ESTIMATE_DAYS,
+        calories.length,
+        steps.length,
+      )}/${CALIBRATION_ESTIMATE_DAYS} complete calorie + step days`,
     },
     {
       key: 'scale',
-      label: 'Scale trend locked',
-      complete:
-        weightPoints.length >= CALIBRATION_MIN_WEIGH_INS &&
-        bodySpanDays >= CALIBRATION_MIN_WEIGHT_SPAN_DAYS &&
-        scaleSlope != null,
-      detail: `${weightPoints.length}/${CALIBRATION_MIN_WEIGH_INS} weigh-ins · ${bodySpanDays}/${CALIBRATION_MIN_WEIGHT_SPAN_DAYS} days`,
+      label: 'Usable scale rate',
+      complete: scaleEstimateComplete,
+      detail: `${Math.min(
+        CALIBRATION_ESTIMATE_WEIGH_INS,
+        weightPoints.length,
+      )}/${CALIBRATION_ESTIMATE_WEIGH_INS} weigh-ins · ${Math.min(
+        CALIBRATION_ESTIMATE_WEIGHT_SPAN_DAYS,
+        bodySpanDays,
+      )}/${CALIBRATION_ESTIMATE_WEIGHT_SPAN_DAYS} days`,
+    },
+    {
+      key: 'lock',
+      label: 'Estimate locked',
+      complete: lockComplete,
+      detail: `${Math.min(
+        calories.length,
+        steps.length,
+      )}/${CALIBRATION_MAX_DAYS} complete days · ${weightPoints.length}/${CALIBRATION_LOCK_WEIGH_INS} weigh-ins · ${bodySpanDays}/${CALIBRATION_LOCK_WEIGHT_SPAN_DAYS} days`,
     },
   ]
-  const ready = checklist.every((item) => item.complete)
+  const ready = canEstimate && lockComplete
 
   let estimatedMaintenance: number | null = null
   const avgCalories: number | null = mean(calories)
   const avgSteps: number | null = mean(steps)
-  if (ready && actualWeeklyLoss != null) {
+  if (canEstimate && actualWeeklyLoss != null) {
     const kg = weightKg > 0 ? weightKg : DEFAULT_WEIGHT_KG
     const tissueKcalPerDay = (actualWeeklyLoss * kcalPerUnit(unit)) / 7
     const baselineEstimates = dates.map((date) => {
@@ -262,9 +282,9 @@ export function computeCalibration(input: CalibrationInput): Calibration {
     estimatedMaintenance == null || maintenance == null
       ? null
       : estimatedMaintenance - maintenance
-  const aligned = difference != null && Math.abs(difference) < 50
+  const aligned = ready && difference != null && Math.abs(difference) < 50
   const suggestion =
-    estimatedMaintenance == null || aligned
+    !ready || estimatedMaintenance == null || aligned
       ? null
       : {
           direction:
@@ -278,7 +298,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
         }
 
   return {
-    status: ready ? 'ready' : 'collecting',
+    status: ready ? 'ready' : canEstimate ? 'provisional' : 'collecting',
     checklist,
     stepBaseline,
     analysisStart: analysisStart ? dateKey(analysisStart) : null,
