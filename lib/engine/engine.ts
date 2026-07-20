@@ -130,9 +130,12 @@ export interface EngineResult {
 /* e1RM (Epley)                                                        */
 /* ------------------------------------------------------------------ */
 
-/** Estimated 1RM via the Epley formula: load * (1 + reps / 30). Unrounded. */
-export function epley1RM(load: number, reps: number): number {
-  return load * (1 + reps / 30)
+/**
+ * Objective estimated 1RM via Epley. Only performed load and completed reps
+ * belong here; subjective RIR is deliberately excluded.
+ */
+export function epley1RM(load: number, completedReps: number): number {
+  return load * (1 + completedReps / 30)
 }
 
 /** Round a value to one decimal place (used for the displayed e1RM). */

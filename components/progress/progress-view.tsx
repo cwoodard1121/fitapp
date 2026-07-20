@@ -145,7 +145,9 @@ export function ProgressView({ data }: { data: ProgressData }) {
             <LineChart className="size-4 text-signal" aria-hidden />
             Estimated 1RM trend
           </CardTitle>
-          <CardDescription>Epley e1RM from your best set each session.</CardDescription>
+          <CardDescription>
+            Epley e1RM from logged load and completed reps only. RIR is excluded.
+          </CardDescription>
         </CardHeader>
         <CardContent className="pt-2">
           <TrendChart points={current.points} dataKey="e1rm" unit={unit} label="e1RM" />

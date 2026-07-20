@@ -22,10 +22,10 @@ export interface SetAggregate {
 
 /**
  * Collapse a slot's individual sets into the aggregate the engine reads. The
- * "best set" (highest Epley e1RM, falling back to most reps) drives load/reps/RIR
- * so e1RM and the rep-cap / load decisions stay internally consistent; the count
- * of real sets drives the volume signal. Representative RIR = the best set's RIR,
- * else the lowest RIR logged (closest to failure).
+ * "best set" is selected only by objective load × completed reps (highest Epley
+ * e1RM, falling back to most reps). It drives the aggregate load/reps, while the
+ * count of real sets drives volume. RIR is carried separately for progression
+ * decisions and never changes e1RM.
  */
 export function aggregateFromEntries(entries: SetEntryValues[]): SetAggregate {
   const real = entries.filter((e) => e.load != null || e.reps != null)

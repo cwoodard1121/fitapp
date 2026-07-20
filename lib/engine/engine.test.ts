@@ -300,6 +300,33 @@ describe('evaluateSlot — e1rm, tonnage, hitRir', () => {
     expect(res.tonnage).toBe(3000) // 3 * 10 * 100
   })
 
+  it('keeps e1rm identical across subjective RIR ratings', () => {
+    const objectiveSet = {
+      actualLoad: 100,
+      bestReps: 10,
+      actualSets: 3,
+    }
+    const noRir = evaluateSlot(
+      log({ ...objectiveSet, actualRir: null }),
+      slot(),
+      ctx(),
+    )
+    const zeroRir = evaluateSlot(
+      log({ ...objectiveSet, actualRir: 0 }),
+      slot(),
+      ctx(),
+    )
+    const highRir = evaluateSlot(
+      log({ ...objectiveSet, actualRir: 10 }),
+      slot(),
+      ctx(),
+    )
+
+    expect(noRir.e1rm).toBe(133.3)
+    expect(zeroRir.e1rm).toBe(noRir.e1rm)
+    expect(highRir.e1rm).toBe(noRir.e1rm)
+  })
+
   it('returns null e1rm/tonnage when reps are missing', () => {
     const l = log({ actualLoad: 100, bestReps: null, actualSets: 3 })
     const res = evaluateSlot(l, slot(), ctx())
