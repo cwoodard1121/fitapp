@@ -6,6 +6,7 @@ export type WeightBasis = 'latest' | 'block_floor'
 type BodyFatBasis = 'lean_retention' | 'measured' | 'none'
 const DRY_WATER_DROP_PCT = 0.02
 const RECENT_HIGH_DAYS = 21
+const BODY_FAT_WEIGHT_PAIR_DAYS = 7
 
 interface WeightReading {
   date: string
@@ -36,7 +37,12 @@ export interface BodyFatEstimate {
   breakdown: BodyFatEstimateBreakdown | null
 }
 
-type LeanRetentionBaseline = BodyMetric & { bodyweight: number; bodyfat_pct: number }
+interface LeanRetentionBaseline {
+  measured_on: string
+  bodyweight: number
+  bodyweightMeasuredOn: string
+  bodyfat_pct: number
+}
 
 export interface BodyFatEstimateBreakdown {
   date: string | null
@@ -45,9 +51,12 @@ export interface BodyFatEstimateBreakdown {
   leanEstimate: number
   baselineDate: string
   baselineWeight: number
+  baselineWeightDate: string
   baselineBodyfat: number
   baselineLeanMass: number
   recentHighWeight: number
+  observedWeightLoss: number
+  dryWaterAllowanceCap: number
   dryWaterDrop: number
   dryLeanMass: number
 }
@@ -64,48 +73,90 @@ function dateKey(date: string): string {
   return date.slice(0, 10)
 }
 
-function leanRetentionBaseline(entries: BodyMetric[]): LeanRetentionBaseline | null {
-  return (
-    entries.find(
-      (e): e is LeanRetentionBaseline =>
-        e.bodyweight != null &&
-        e.bodyweight > 0 &&
-        e.bodyfat_pct != null &&
-        e.bodyfat_pct > 0 &&
-        e.bodyfat_pct < 80,
-    ) ?? null
-  )
+function validBodyFat(value: number | null | undefined): value is number {
+  return value != null && Number.isFinite(value) && value > 0 && value < 80
 }
 
 /**
- * Keep an active block's projection stable when older wearable history is
- * imported later. Prefer the first valid body-fat anchor in the block; if there
- * is none, use only the nearest valid anchor before it (not the oldest ever).
+ * Resolve actual body-fat measurements into lean-mass anchors. Interpreted
+ * body-fat values can be carried onto later weight-only rows, so only a raw BIA
+ * or Navy reading starts a new anchor. Legacy bodyfat_pct-only rows remain
+ * eligible before structured BIA/Navy data begins.
+ *
+ * A tape-only measurement can use the most recent weight from the prior seven
+ * days. This lets a fresh weekly Navy reading recalibrate the cut estimate
+ * without forcing a second weigh-in on the same row.
  */
-function entriesFromBlockAnchor(
+function leanRetentionAnchors(
   entries: BodyMetric[],
-  block: Pick<Block, 'start_date'> | null | undefined,
-): BodyMetric[] {
-  const startDate = block?.start_date
-  if (!startDate) return entries
-
-  const validAnchor = (entry: BodyMetric) =>
-    entry.bodyweight != null &&
-    entry.bodyweight > 0 &&
-    entry.bodyfat_pct != null &&
-    entry.bodyfat_pct > 0 &&
-    entry.bodyfat_pct < 80
-  const inBlock = entries.find(
-    (entry) => entry.measured_on >= startDate && validAnchor(entry),
+): LeanRetentionBaseline[] {
+  const sorted = [...entries].sort((a, b) =>
+    a.measured_on.localeCompare(b.measured_on),
   )
-  const beforeBlock = [...entries]
-    .reverse()
-    .find((entry) => entry.measured_on < startDate && validAnchor(entry))
-  const anchor = inBlock ?? beforeBlock
+  const firstStructuredSignalDate = sorted.find(
+    (entry) =>
+      validBodyFat(entry.bia_bodyfat_pct) ||
+      validBodyFat(entry.navy_bodyfat_pct),
+  )?.measured_on
+  let latestWeight: { measuredOn: string; value: number } | null = null
+  const anchors: LeanRetentionBaseline[] = []
 
-  return anchor
-    ? entries.filter((entry) => entry.measured_on >= anchor.measured_on)
-    : entries.filter((entry) => entry.measured_on >= startDate)
+  for (const entry of sorted) {
+    if (entry.bodyweight != null && Number.isFinite(entry.bodyweight) && entry.bodyweight > 0) {
+      latestWeight = { measuredOn: entry.measured_on, value: entry.bodyweight }
+    }
+
+    const hasStructuredSignal =
+      validBodyFat(entry.bia_bodyfat_pct) ||
+      validBodyFat(entry.navy_bodyfat_pct)
+    const hasLegacySignal =
+      validBodyFat(entry.bodyfat_pct) &&
+      (firstStructuredSignalDate == null ||
+        entry.measured_on < firstStructuredSignalDate)
+    if (
+      !validBodyFat(entry.bodyfat_pct) ||
+      (!hasStructuredSignal && !hasLegacySignal) ||
+      latestWeight == null
+    ) {
+      continue
+    }
+
+    const weightAge = differenceInCalendarDays(
+      parseISO(entry.measured_on),
+      parseISO(latestWeight.measuredOn),
+    )
+    if (weightAge > BODY_FAT_WEIGHT_PAIR_DAYS) continue
+
+    anchors.push({
+      measured_on: entry.measured_on,
+      bodyweight: latestWeight.value,
+      bodyweightMeasuredOn: latestWeight.measuredOn,
+      bodyfat_pct: entry.bodyfat_pct,
+    })
+  }
+
+  return anchors
+}
+
+/**
+ * Use the freshest real measurement available by `date`. During an active
+ * block, prefer in-block measurements; until one exists, carry only the
+ * nearest pre-block anchor forward.
+ */
+function leanRetentionBaseline(
+  entries: BodyMetric[],
+  date: string | null,
+  blockStartDate?: string | null,
+): LeanRetentionBaseline | null {
+  const eligible = leanRetentionAnchors(entries).filter(
+    (anchor) => !date || anchor.measured_on <= date,
+  )
+  if (!blockStartDate) return eligible.at(-1) ?? null
+
+  const inBlock = eligible.filter(
+    (anchor) => anchor.measured_on >= blockStartDate,
+  )
+  return inBlock.at(-1) ?? eligible.at(-1) ?? null
 }
 
 function recentHighWeight(readings: WeightReading[], date: string | null): number | null {
@@ -124,17 +175,20 @@ function leanBodyFatBreakdown(
   entries: BodyMetric[],
   bodyweight: number,
   date: string | null,
+  blockStartDate?: string | null,
 ): Omit<
   BodyFatEstimateBreakdown,
   'finalEstimate'
 > | null {
-  const baseline = leanRetentionBaseline(entries)
+  const baseline = leanRetentionBaseline(entries, date, blockStartDate)
   if (!baseline) return null
 
   const readings = weightReadings(entries).filter((r) => !date || r.date <= date)
   const high = recentHighWeight(readings, date) ?? baseline.bodyweight
   const baselineLeanMass = baseline.bodyweight * (1 - baseline.bodyfat_pct / 100)
-  const dryWaterDrop = high * DRY_WATER_DROP_PCT
+  const observedWeightLoss = Math.max(0, baseline.bodyweight - bodyweight)
+  const dryWaterAllowanceCap = high * DRY_WATER_DROP_PCT
+  const dryWaterDrop = Math.min(observedWeightLoss, dryWaterAllowanceCap)
   const dryLeanMass = Math.max(0, baselineLeanMass - dryWaterDrop)
   const leanEstimate = clamp(((bodyweight - dryLeanMass) / bodyweight) * 100, 1, 80)
 
@@ -144,9 +198,12 @@ function leanBodyFatBreakdown(
     leanEstimate: round1(leanEstimate),
     baselineDate: dateKey(baseline.measured_on),
     baselineWeight: round1(baseline.bodyweight),
+    baselineWeightDate: dateKey(baseline.bodyweightMeasuredOn),
     baselineBodyfat: round1(baseline.bodyfat_pct),
     baselineLeanMass: round1(baselineLeanMass),
     recentHighWeight: round1(high),
+    observedWeightLoss: round1(observedWeightLoss),
+    dryWaterAllowanceCap: round1(dryWaterAllowanceCap),
     dryWaterDrop: round1(dryWaterDrop),
     dryLeanMass: round1(dryLeanMass),
   }
@@ -316,12 +373,14 @@ export function estimateBodyFatFromLeanRetention(
   entries: BodyMetric[],
   block?: Pick<Block, 'start_date'> | null,
 ): BodyFatEstimate {
-  const calculationEntries = entriesFromBlockAnchor(entries, block)
-  const baseline = leanRetentionBaseline(calculationEntries)
-  const scopedEntries = scopeEntriesFromBlock(entries, block)
+  const sortedEntries = [...entries].sort((a, b) =>
+    a.measured_on.localeCompare(b.measured_on),
+  )
+  const anchors = leanRetentionAnchors(sortedEntries)
+  const scopedEntries = scopeEntriesFromBlock(sortedEntries, block)
   const useBlockFloor = hasBlockStart(block)
 
-  if (!baseline) {
+  if (anchors.length === 0) {
     const latestMeasured = [...scopedEntries]
       .reverse()
       .find((e) => e.bodyfat_pct != null)?.bodyfat_pct ?? null
@@ -335,42 +394,70 @@ export function estimateBodyFatFromLeanRetention(
     }
   }
 
+  let currentWeight: number | null = null
   let floorWeight: number | null = null
-  const points = scopedEntries
-    .filter(
-      (e): e is BodyMetric & { bodyweight: number } =>
-        e.bodyweight != null &&
-        e.bodyweight > 0 &&
-        e.measured_on >= baseline.measured_on,
+  let activeBaselineDate: string | null = null
+  let latestBreakdown: BodyFatEstimateBreakdown | null = null
+  const points: BodyFatEstimatePoint[] = []
+
+  for (const entry of scopedEntries) {
+    if (
+      entry.bodyweight != null &&
+      Number.isFinite(entry.bodyweight) &&
+      entry.bodyweight > 0
+    ) {
+      currentWeight = entry.bodyweight
+      floorWeight =
+        floorWeight == null
+          ? entry.bodyweight
+          : Math.min(floorWeight, entry.bodyweight)
+    }
+
+    const baseline = leanRetentionBaseline(
+      sortedEntries,
+      dateKey(entry.measured_on),
+      block?.start_date,
     )
-    .map((e) => {
-      floorWeight = floorWeight == null ? e.bodyweight : Math.min(floorWeight, e.bodyweight)
-      const estimateWeight = useBlockFloor ? floorWeight : e.bodyweight
-      return {
-        date: e.measured_on,
-        bodyweight: round1(estimateWeight),
-        bodyfat:
-          estimateBodyFatAtWeightFromLeanRetention(
-            calculationEntries,
-            estimateWeight,
-            dateKey(e.measured_on),
-          ) ?? 0,
-      }
+    if (!baseline) continue
+
+    // A new real BIA/Navy reading supersedes the older lean-mass model. Reset
+    // the cut floor at that anchor so an earlier low weigh-in cannot distort a
+    // newer direct measurement.
+    if (baseline.measured_on !== activeBaselineDate) {
+      activeBaselineDate = baseline.measured_on
+      currentWeight = baseline.bodyweight
+      floorWeight = baseline.bodyweight
+    }
+
+    if (currentWeight == null) continue
+    const estimateWeight = useBlockFloor
+      ? (floorWeight ?? currentWeight)
+      : currentWeight
+    const breakdown = leanBodyFatBreakdown(
+      sortedEntries,
+      estimateWeight,
+      dateKey(entry.measured_on),
+      block?.start_date,
+    )
+    if (!breakdown) continue
+
+    latestBreakdown = {
+      ...breakdown,
+      finalEstimate: breakdown.leanEstimate,
+    }
+    points.push({
+      date: entry.measured_on,
+      bodyweight: round1(estimateWeight),
+      bodyfat: latestBreakdown.finalEstimate,
     })
-    .filter((p) => p.bodyfat > 0)
+  }
 
   return {
     latest: points[points.length - 1]?.bodyfat ?? null,
     basis: 'lean_retention',
-    baselineDate: baseline.measured_on,
-    baselineBodyfat: round1(baseline.bodyfat_pct),
+    baselineDate: latestBreakdown?.baselineDate ?? null,
+    baselineBodyfat: latestBreakdown?.baselineBodyfat ?? null,
     points,
-    breakdown: points.length
-      ? estimateBodyFatBreakdown(
-          calculationEntries,
-          points[points.length - 1].bodyweight,
-          points[points.length - 1].date,
-        )
-      : null,
+    breakdown: latestBreakdown,
   }
 }

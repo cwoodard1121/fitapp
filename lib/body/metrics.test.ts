@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BodyMetric } from '@/lib/types'
+import { interpretBodyMetrics } from './body-fat'
 
 import {
+  estimateBodyFatBreakdown,
   estimateBodyFatAtWeightFromLeanRetention,
   estimateBodyFatFromLeanRetention,
   normalizedBodyweight,
@@ -57,6 +59,62 @@ describe('body metric helpers', () => {
     expect(estimate.baselineBodyfat).toBe(20)
     expect(estimate.latest).toBeCloseTo(17.9, 1)
     expect(estimateBodyFatAtWeightFromLeanRetention(entries, 188)).toBeCloseTo(17, 1)
+  })
+
+  it('does not add a water allowance until weight has actually fallen', () => {
+    const entries = [bodyMetric('2026-07-01', 200, 20)]
+
+    expect(estimateBodyFatBreakdown(entries, 200, '2026-07-01')).toMatchObject({
+      finalEstimate: 20,
+      observedWeightLoss: 0,
+      dryWaterDrop: 0,
+    })
+  })
+
+  it('recalibrates a cut projection to fresher Navy and BIA evidence', () => {
+    const oldReading = bodyMetric('2026-07-01', 200, 21.1)
+    const currentReading = bodyMetric('2026-07-10', 195, 20.2)
+    currentReading.navy_bodyfat_pct = 18
+
+    const interpreted = interpretBodyMetrics([oldReading, currentReading])
+    const estimate = estimateBodyFatFromLeanRetention(interpreted, {
+      start_date: '2026-07-01',
+    })
+
+    expect(interpreted.at(-1)?.bodyfat_pct).toBe(18.8)
+    expect(estimate).toMatchObject({
+      latest: 18.8,
+      baselineDate: '2026-07-10',
+      baselineBodyfat: 18.8,
+    })
+    expect(estimate.breakdown).toMatchObject({
+      finalEstimate: 18.8,
+      observedWeightLoss: 0,
+      dryWaterDrop: 0,
+    })
+  })
+
+  it('pairs a tape-only recalibration with the latest recent weigh-in', () => {
+    const weighIn = bodyMetric('2026-07-10', 195, 20.2)
+    const tapeOnly = bodyMetric('2026-07-11', 0, null)
+    tapeOnly.bodyweight = null
+    tapeOnly.navy_bodyfat_pct = 18
+
+    const interpreted = interpretBodyMetrics([weighIn, tapeOnly])
+    const estimate = estimateBodyFatFromLeanRetention(interpreted, {
+      start_date: '2026-07-01',
+    })
+
+    expect(estimate.latest).toBe(18.8)
+    expect(estimate.points.at(-1)).toMatchObject({
+      date: '2026-07-11',
+      bodyweight: 195,
+      bodyfat: 18.8,
+    })
+    expect(estimate.breakdown).toMatchObject({
+      baselineDate: '2026-07-11',
+      baselineWeightDate: '2026-07-10',
+    })
   })
 
   it('scopes body-fat estimate points to the active block after the anchor', () => {

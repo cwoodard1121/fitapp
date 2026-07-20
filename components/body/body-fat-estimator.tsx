@@ -54,12 +54,12 @@ export function BodyFatEstimator({
           Body-fat method
         </CardTitle>
         <CardDescription>
-          Weekly tape is the primary signal. Recent BIA smooths it without
-          overriding the accepted tape trend.
+          Weekly tape is the primary signal. Recent BIA smooths it, and each
+          new measurement recalibrates the active-cut estimate.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat
             label="Navy · 65%"
             value={interpretation?.navyBodyfatPct ?? null}
@@ -73,6 +73,13 @@ export function BodyFatEstimator({
             precision={1}
           />
           <Stat
+            label="Combined"
+            value={interpretation?.bodyfatPct ?? null}
+            unit="%"
+            precision={1}
+            tone="signal"
+          />
+          <Stat
             label="BIA samples"
             value={interpretation?.biaSampleCount ?? 0}
             size="sm"
@@ -83,24 +90,29 @@ export function BodyFatEstimator({
           <div className="rounded-md border border-border bg-background p-3">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <Stat
-                label="Active-cut projection"
+                label="Cut-adjusted estimate"
                 value={breakdown.finalEstimate}
                 unit="%"
                 precision={1}
                 tone="signal"
               />
               <p className="max-w-sm text-xs leading-snug text-muted">
-                Anchored to {breakdown.baselineWeight.toFixed(1)} {unit} at{' '}
-                {breakdown.baselineBodyfat.toFixed(1)}% on {breakdown.baselineDate}.
-                A {breakdown.dryWaterDrop.toFixed(1)} {unit} dry-water allowance
-                keeps early scale loss from being counted as fat.
+                Recalibrated to {breakdown.baselineBodyfat.toFixed(1)}% on{' '}
+                {breakdown.baselineDate}, using {breakdown.baselineWeight.toFixed(1)}{' '}
+                {unit}
+                {breakdown.baselineWeightDate === breakdown.baselineDate
+                  ? ''
+                  : ` from ${breakdown.baselineWeightDate}`}
+                . The water adjustment is limited to{' '}
+                {breakdown.dryWaterDrop.toFixed(1)} {unit} of weight actually lost
+                since that reading.
               </p>
             </div>
           </div>
         ) : (
           <p className="rounded-md border border-border bg-background p-3 text-sm text-muted">
-            The cut projection appears after an active diet block has a
-            bodyweight and body-fat anchor.
+            The cut-adjusted estimate appears after an active diet block has a
+            recent bodyweight plus a BIA or Navy reading.
           </p>
         )}
       </CardContent>
