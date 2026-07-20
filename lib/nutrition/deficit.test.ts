@@ -63,9 +63,21 @@ describe('accumulateDeficit', () => {
       currentDayProgress: 0.375,
     })
 
-    expect(r.totalAdjustment).toBe(110)
+    expect(r.totalAdjustment).toBe(-110)
     expect(r.sumMaint).toBe(940)
     expect(r.deficit).toBe(640)
+  })
+
+  it('adds expenditure above the fixed step baseline', () => {
+    const r = result({
+      logs: [nutritionLog('2026-07-16', 300)],
+      stepsByDate: { '2026-07-16': 5000 },
+      currentDayProgress: 0.375,
+    })
+
+    expect(r.totalAdjustment).toBe(50)
+    expect(r.sumMaint).toBe(1100)
+    expect(r.deficit).toBe(800)
   })
 
   it('counts today in full once its date has passed', () => {

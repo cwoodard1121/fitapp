@@ -3,7 +3,15 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Gauge, ArrowDown, ArrowUp, Check, Minus, FlaskConical } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  CheckCircle2,
+  Circle,
+  Gauge,
+  Scale,
+} from 'lucide-react'
 
 import type { Calibration } from '@/lib/nutrition/calibration'
 import type { Unit } from '@/lib/types'
@@ -14,43 +22,34 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Stat,
 } from '@/components/ui'
 import { setMaintenanceCalories } from '@/app/(app)/nutrition/actions'
 
-interface MaintenanceCheckProps {
-  calibration: Calibration
-  unit: Unit
-  currentMaintenance: number | null
-  stepBaseline: number
-  minCalories: number | null
-}
-
-/**
- * Compares calorie balance with scale movement over the tracked calibration period.
- * This lives in Nutrition because it adjusts the maintenance calorie estimate.
- */
 export function MaintenanceCheck({
   calibration,
   unit,
   currentMaintenance,
-  stepBaseline,
-  minCalories,
-}: MaintenanceCheckProps) {
+}: {
+  calibration: Calibration
+  unit: Unit
+  currentMaintenance: number | null
+}) {
   const router = useRouter()
   const [pending, startTransition] = React.useTransition()
   const c = calibration
-  const actualSub = c.scaleBasis === 'cut_floor' ? 'block floor' : 'from scale'
-  const consistencyPct = Math.round(c.trackingConsistency * 100)
 
-  function applySuggestion() {
-    if (!c.suggestion) return
+  function applyEstimate() {
+    if (c.estimatedMaintenance == null) return
     startTransition(async () => {
       const res = await setMaintenanceCalories({
-        maintenance_calories: c.suggestion!.newMaintenance,
-        step_baseline: stepBaseline,
+        maintenance_calories: c.estimatedMaintenance!,
+        step_baseline: c.stepBaseline,
       })
       if (res.ok) {
-        toast.success(`Maintenance set to ${c.suggestion!.newMaintenance.toLocaleString()} kcal.`)
+        toast.success(
+          `Maintenance set to ${c.estimatedMaintenance!.toLocaleString()} kcal at ${c.stepBaseline.toLocaleString()} steps.`,
+        )
         router.refresh()
       } else {
         toast.error(res.error)
@@ -66,140 +65,136 @@ export function MaintenanceCheck({
           Maintenance calibration
         </CardTitle>
         <CardDescription>
-          Compares your latest seven completed intake days with scale movement.
+          Infers maintenance at exactly {c.stepBaseline.toLocaleString()} steps/day.
+          Food and step logs are treated as accurate; the remaining error belongs
+          to maintenance.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <RateTile
-            label="Predicted"
-            sub="from intake"
-            weeklyLoss={c.predictedWeeklyLoss}
-            unit={unit}
-          />
-          <RateTile
-            label="Actual"
-            sub={actualSub}
-            weeklyLoss={c.actualWeeklyLoss}
-            unit={unit}
-          />
+        <div className="grid gap-2 sm:grid-cols-2">
+          {c.checklist.map((item) => {
+            const Icon = item.complete ? CheckCircle2 : Circle
+            return (
+              <div
+                key={item.key}
+                className="flex items-start gap-2 rounded-md border border-border bg-background p-3"
+              >
+                <Icon
+                  className={
+                    item.complete
+                      ? 'mt-0.5 size-4 shrink-0 text-gate-green'
+                      : 'mt-0.5 size-4 shrink-0 text-muted'
+                  }
+                  aria-hidden
+                />
+                <div>
+                  <p className="text-sm font-medium text-foreground">{item.label}</p>
+                  <p className="text-xs text-muted">{item.detail}</p>
+                </div>
+              </div>
+            )
+          })}
         </div>
 
-        <div className="space-y-2">
-          {minCalories != null ? (
-            <Note tone="muted" icon={<FlaskConical className="size-4 shrink-0" aria-hidden />}>
-              Calibration ignores completed intake days below {minCalories.toLocaleString()} kcal
-              {c.ignoredLowDays > 0
-                ? ` (${c.ignoredLowDays} dropped in the selected window).`
-                : '.'}
-            </Note>
-          ) : null}
-        </div>
-
-        {c.status === 'insufficient' ? (
-          <Note tone="muted" icon={<FlaskConical className="size-4 shrink-0" aria-hidden />}>
-            A maintenance suggestion unlocks after 7 completed days with all 7 reliably logged
-            and at least 2 weigh-ins. So far: {c.bodyReadings} weigh-in
-            {c.bodyReadings === 1 ? '' : 's'}, {c.daysLogged}/{c.intakeWindowDays} reliable days
-            {c.intakeWindowDays > 0 ? ` (${consistencyPct}%)` : ''}.
-          </Note>
-        ) : c.deferredReason === 'early_cut_water' ? (
-          <Note tone="muted" icon={<FlaskConical className="size-4 shrink-0" aria-hidden />}>
-            The seven-day check is active, but faster early-cut scale loss can still be water and
-            glycogen. No maintenance increase will be suggested from that signal yet.
-          </Note>
-        ) : c.suggestion ? (
-          <div className="space-y-3 rounded-md border border-gate-yellow/40 bg-gate-yellow/10 p-3">
-            <p className="flex items-start gap-2 text-sm leading-snug text-foreground">
-              {c.suggestion.direction === 'lower' ? (
-                <ArrowDown className="mt-0.5 size-4 shrink-0 text-gate-yellow" aria-hidden />
-              ) : (
-                <ArrowUp className="mt-0.5 size-4 shrink-0 text-gate-yellow" aria-hidden />
-              )}
-              <span>
-                The scale is moving{' '}
-                <strong>{c.suggestion.direction === 'lower' ? 'slower' : 'faster'}</strong> than
-                your intake predicts. Your maintenance may be about{' '}
-                <strong>{c.suggestion.kcal.toLocaleString()} kcal</strong> too{' '}
-                {c.suggestion.direction === 'lower' ? 'high' : 'low'}
-                {currentMaintenance != null ? (
-                  <>
-                    {' '}
-                    - try <strong>{c.suggestion.newMaintenance.toLocaleString()}</strong> instead
-                    of {currentMaintenance.toLocaleString()}.
-                  </>
-                ) : (
-                  '.'
-                )}
-              </span>
-            </p>
-            <Button onClick={applySuggestion} disabled={pending} size="touch" className="sm:w-auto sm:px-5">
-              <Check className="size-4" aria-hidden />
-              {pending ? 'Saving...' : `Use ${c.suggestion.newMaintenance.toLocaleString()} kcal`}
-            </Button>
-          </div>
+        {c.status === 'collecting' ? (
+          <p className="rounded-md border border-border bg-background p-3 text-sm leading-snug text-muted">
+            The estimate unlocks only after every check passes. It uses the latest
+            14–21 complete post-settling days and a robust scale slope, so a single
+            high or low weigh-in cannot set maintenance.
+          </p>
         ) : (
-          <Note tone="green" icon={<Check className="size-4 shrink-0" aria-hidden />}>
-            Intake and scale movement line up. Maintenance looks dialed in.
-          </Note>
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Stat
+                label={`Maint @ ${c.stepBaseline.toLocaleString()} steps`}
+                value={c.estimatedMaintenance}
+                unit="kcal"
+                tone="signal"
+              />
+              <RateStat value={c.actualWeeklyLoss} unit={unit} />
+              <Stat label="Avg intake" value={c.avgCalories} unit="kcal" />
+              <Stat label="Avg steps" value={c.avgSteps} precision={0} />
+            </div>
+
+            {c.suggestion ? (
+              <div className="space-y-3 rounded-md border border-gate-yellow/40 bg-gate-yellow/10 p-3">
+                <p className="flex items-start gap-2 text-sm leading-snug text-foreground">
+                  {c.suggestion.direction === 'lower' ? (
+                    <ArrowDown className="mt-0.5 size-4 shrink-0 text-gate-yellow" aria-hidden />
+                  ) : (
+                    <ArrowUp className="mt-0.5 size-4 shrink-0 text-gate-yellow" aria-hidden />
+                  )}
+                  <span>
+                    {currentMaintenance == null ? (
+                      <>
+                        The tracked intake, steps, and scale rate imply{' '}
+                        <strong>{c.suggestion.newMaintenance.toLocaleString()} kcal</strong>.
+                      </>
+                    ) : (
+                      <>
+                        The current {currentMaintenance.toLocaleString()} kcal setting is about{' '}
+                        <strong>{c.suggestion.kcal?.toLocaleString()} kcal</strong>{' '}
+                        {c.suggestion.direction === 'lower' ? 'high' : 'low'} at the
+                        fixed step baseline.
+                      </>
+                    )}
+                  </span>
+                </p>
+                <Button
+                  onClick={applyEstimate}
+                  disabled={pending}
+                  size="touch"
+                  className="sm:w-auto sm:px-5"
+                >
+                  <Check className="size-4" aria-hidden />
+                  {pending
+                    ? 'Saving...'
+                    : `Use ${c.suggestion.newMaintenance.toLocaleString()} kcal`}
+                </Button>
+              </div>
+            ) : c.aligned ? (
+              <p className="flex items-start gap-2 rounded-md border border-gate-green/40 bg-gate-green/10 p-3 text-sm leading-snug text-gate-green">
+                <Check className="size-4 shrink-0" aria-hidden />
+                Current maintenance is within 50 kcal of the inferred value at the
+                fixed step baseline.
+              </p>
+            ) : null}
+
+            <p className="text-xs leading-snug text-muted">
+              The calculation adds observed tissue loss to intake, then removes
+              calories attributable to steps above the baseline (or adds them back
+              below it). The saved step baseline stays unchanged.
+            </p>
+          </>
         )}
       </CardContent>
     </Card>
   )
 }
 
-function RateTile({
-  label,
-  sub,
-  weeklyLoss,
+function RateStat({
+  value,
   unit,
 }: {
-  label: string
-  sub: string
-  /** units/week, positive = losing. */
-  weeklyLoss: number
-  unit: string
+  value: number | null
+  unit: Unit
 }) {
-  const losing = weeklyLoss > 0.005
-  const gaining = weeklyLoss < -0.005
-  const Arrow = losing ? ArrowDown : gaining ? ArrowUp : Minus
-  const tone = losing ? 'text-signal' : gaining ? 'text-gate-yellow' : 'text-muted'
-  const word = losing ? 'losing' : gaining ? 'gaining' : 'holding'
+  const losing = (value ?? 0) > 0
+  const Icon = losing ? ArrowDown : (value ?? 0) < 0 ? ArrowUp : Scale
   return (
     <div className="rounded-md border border-border bg-background p-3">
-      <div className="text-[11px] uppercase tracking-wider text-muted">{label}</div>
-      <div className="mt-1 flex items-baseline gap-1">
-        <Arrow className={`size-5 shrink-0 self-center ${tone}`} aria-hidden />
-        <span className="font-mono text-2xl font-semibold tabular-nums leading-none text-foreground">
-          {Math.abs(weeklyLoss).toFixed(2)}
+      <p className="text-[11px] uppercase tracking-wider text-muted">Scale rate</p>
+      <div className="mt-1 flex items-center gap-1">
+        <Icon className="size-4 text-signal" aria-hidden />
+        <span className="font-mono text-xl font-semibold tabular-nums text-foreground">
+          {value == null ? '—' : Math.abs(value).toFixed(2)}
         </span>
-        <span className="text-xs font-normal text-muted">{unit}/wk</span>
+        <span className="text-xs text-muted">{unit}/wk</span>
       </div>
-      <div className="mt-1 text-[11px] text-muted">
-        {word} - {sub}
-      </div>
+      <p className="mt-1 text-[11px] text-muted">
+        {value == null ? 'collecting' : losing ? 'losing' : value < 0 ? 'gaining' : 'holding'}
+      </p>
     </div>
-  )
-}
-
-function Note({
-  tone,
-  icon,
-  children,
-}: {
-  tone: 'muted' | 'green'
-  icon: React.ReactNode
-  children: React.ReactNode
-}) {
-  const toneClass =
-    tone === 'green'
-      ? 'border-gate-green/40 bg-gate-green/10 text-gate-green'
-      : 'border-border bg-background text-muted'
-  return (
-    <p className={`flex items-start gap-2 rounded-md border p-3 text-sm leading-snug ${toneClass}`}>
-      {icon}
-      <span>{children}</span>
-    </p>
   )
 }

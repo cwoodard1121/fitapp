@@ -21,6 +21,13 @@ import {
 
 import type { RecoveryMetric } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 // Charts take literal colors, not tailwind classes.
 const COLORS = {
@@ -32,6 +39,14 @@ const COLORS = {
 }
 
 type View = 'daily' | 'weekly'
+type Range = '30d' | '90d' | '365d' | 'all'
+
+const RANGE_OPTIONS: { value: Range; label: string; rows: number | null }[] = [
+  { value: '30d', label: 'Last 30 days', rows: 30 },
+  { value: '90d', label: 'Last 90 days', rows: 90 },
+  { value: '365d', label: 'Last year', rows: 365 },
+  { value: 'all', label: 'All imported', rows: null },
+]
 
 interface Bucket {
   key: string
@@ -96,13 +111,18 @@ function safeLabel(date: string, fmt: string): string {
 
 export function RecoveryCharts({ rows }: { rows: RecoveryMetric[] }) {
   const [view, setView] = React.useState<View>('daily')
+  const [range, setRange] = React.useState<Range>('30d')
+  const rangeRows = React.useMemo(() => {
+    const count = RANGE_OPTIONS.find((option) => option.value === range)?.rows
+    return count == null ? rows : rows.slice(-count)
+  }, [range, rows])
   const data = React.useMemo(
-    () => (view === 'daily' ? buildDaily(rows) : buildWeekly(rows)),
-    [rows, view],
+    () => (view === 'daily' ? buildDaily(rangeRows) : buildWeekly(rangeRows)),
+    [rangeRows, view],
   )
 
-  const stepsVals = rows.map((r) => r.steps).filter((v): v is number => v != null)
-  const sleepVals = rows
+  const stepsVals = rangeRows.map((r) => r.steps).filter((v): v is number => v != null)
+  const sleepVals = rangeRows
     .map((r) => r.sleep_minutes_asleep)
     .filter((v): v is number => v != null)
   const avgSteps = stepsVals.length ? Math.round(avg(stepsVals)) : null
@@ -128,7 +148,21 @@ export function RecoveryCharts({ rows }: { rows: RecoveryMetric[] }) {
           <Summary label="Avg steps" value={avgSteps != null ? avgSteps.toLocaleString() : '—'} />
           <Summary label="Avg sleep" value={avgSleepLabel} />
         </div>
-        <Toggle view={view} onChange={setView} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={range} onValueChange={(value) => setRange(value as Range)}>
+            <SelectTrigger className="h-9 w-[9.75rem]" aria-label="Recovery chart range">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {RANGE_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Toggle view={view} onChange={setView} />
+        </div>
       </div>
 
       <ChartBlock title={`Steps${perLabel ? ` (${perLabel})` : ''}`} color={COLORS.signal}>

@@ -122,18 +122,18 @@ export function accumulateDeficit(input: DeficitInput): DeficitResult {
     const steps = stepsByDate[l.logged_on]
     const adjustment =
       steps != null
-        ? Math.max(0, stepBaseline * progress - steps) *
+        ? (steps - stepBaseline * progress) *
           KCAL_PER_STEP *
           (weightKg / REF_WEIGHT_KG)
         : 0
-    const dayMaint = baseMaint * progress - adjustment
+    const dayMaint = baseMaint * progress + adjustment
 
     daysLogged += 1
     dayEquivalents += progress
     sumCalories += l.calories
     sumMaint += dayMaint
     deficit += dayMaint - l.calories
-    if (adjustment > 0) {
+    if (adjustment !== 0) {
       adjustedDays += 1
       totalAdjustment += adjustment
     }

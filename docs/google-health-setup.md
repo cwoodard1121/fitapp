@@ -113,6 +113,12 @@ Syncing is **manual**: hit **"Sync now"** in Settings whenever you want fresh
 data (it refreshes the token and re-pulls the last 3 days). That's the intended
 flow — sync after your watch has synced.
 
+Use **"Import 1 year"** for a historical backfill of steps, sleep, nutrition,
+weight, and body fat. The app splits the year into 90-day requests (the Google
+Health per-query maximum) and follows sleep pagination, so the result is not
+silently limited to the newest 25 sleep sessions. Imported history is
+idempotently merged; manually entered nutrition and body rows still win.
+
 > *Optional automation:* if you ever want it hands-off, set `CRON_SECRET` +
 > `SUPABASE_SERVICE_ROLE_KEY` and point an external scheduler (e.g. cron-job.org)
 > at `GET /api/cron/wearable-sync` with header `Authorization: Bearer $CRON_SECRET`

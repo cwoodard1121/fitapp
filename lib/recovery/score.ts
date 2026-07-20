@@ -108,6 +108,7 @@ function clamp(x: number, lo: number, hi: number): number {
 export function computeRecoveryScore(
   history: RecoveryMetric[],
   targetDate: string,
+  options: { baselineStart?: string | null } = {},
 ): RecoveryScore | null {
   const target = history.find((m) => m.metric_date === targetDate)
   if (!target) return null
@@ -115,6 +116,7 @@ export function computeRecoveryScore(
   const targetD = parseISO(targetDate)
   const baseline = history.filter((m) => {
     if (m.metric_date === targetDate) return false
+    if (options.baselineStart && m.metric_date < options.baselineStart) return false
     const age = differenceInCalendarDays(targetD, parseISO(m.metric_date))
     return age > 0 && age <= BASELINE_WINDOW_DAYS
   })

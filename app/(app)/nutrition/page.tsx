@@ -98,11 +98,9 @@ export default async function NutritionPage() {
     maintenance,
     stepBaseline,
     weightKg: weightKg ?? 0,
-    minCalories,
     unit,
     windowStart: calibrationStart,
     today,
-    phase: activeBlock?.phase ?? null,
   })
 
   return (

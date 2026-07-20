@@ -166,11 +166,13 @@ export function ProgressView({ data }: { data: ProgressData }) {
         </CardContent>
       </Card>
 
-      {/* Decision history strip for the focused lift. */}
+      {/* Next-session prescriptions produced by the focused lift's workouts. */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Decision history</CardTitle>
-          <CardDescription>What the engine called, session by session.</CardDescription>
+          <CardTitle className="text-sm">Next-session history</CardTitle>
+          <CardDescription>
+            The prescription each completed workout produced for the next one.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <DecisionStrip series={current} />
@@ -219,7 +221,7 @@ export function ProgressView({ data }: { data: ProgressData }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Decision history strip — the sequence of engine calls.              */
+/* Next-session history — prescriptions produced by logged workouts.   */
 /* ------------------------------------------------------------------ */
 
 function DecisionStrip({ series }: { series: ExerciseSeries }) {

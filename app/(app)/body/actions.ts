@@ -6,17 +6,11 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId } from '@/lib/data'
 import { calculateNavyBodyFatPct } from '@/lib/body/body-fat'
-import type { BaselineLift, BodyMetric } from '@/lib/types'
+import type { BodyMetric } from '@/lib/types'
 
 export type ActionResult =
   | { ok: true; metric: BodyMetric }
   | { ok: false; error: string }
-
-export type BaselineLiftActionResult =
-  | { ok: true; lift: BaselineLift }
-  | { ok: false; error: string }
-
-export type PreferenceActionResult = { ok: true } | { ok: false; error: string }
 
 const ROUTE = '/body'
 
@@ -80,19 +74,8 @@ const navyMeasurementSchema = z
     }
   })
 
-const baselineLiftSchema = z.object({
-  lift_kind: z.enum(['bench', 'squat', 'deadlift', 'press']),
-  exercise_name: z.string().trim().min(1, 'Name the lift.').max(80, 'Keep the lift name short.'),
-  e1rm: z
-    .number({ invalid_type_error: 'Enter an estimated 1RM.' })
-    .positive('Estimated 1RM must be greater than zero.')
-    .max(3000, "That lift doesn't look right."),
-  lifted_on: dateSchema.nullable().optional(),
-})
-
 export type UpsertBodyMetricInput = z.input<typeof upsertSchema>
 export type UpsertNavyMeasurementInput = z.input<typeof navyMeasurementSchema>
-export type UpsertBaselineLiftInput = z.input<typeof baselineLiftSchema>
 
 /**
  * Add or update a weigh-in. Upserts on (user_id, measured_on) so logging
@@ -300,98 +283,6 @@ export async function deleteBodyMetric(
     return {
       ok: false,
       error: err instanceof Error ? err.message : 'Could not delete the weigh-in.',
-    }
-  }
-}
-
-/** Persist whether strength may make a small, capped body-fat adjustment. */
-export async function setBodyFatLiftCompensation(
-  enabled: boolean,
-): Promise<PreferenceActionResult> {
-  if (typeof enabled !== 'boolean') {
-    return { ok: false, error: 'Invalid lift compensation setting.' }
-  }
-
-  try {
-    const supabase = await createClient()
-    const userId = await requireUserId(supabase)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ bodyfat_lift_compensation: enabled })
-      .eq('id', userId)
-
-    if (error) return { ok: false, error: error.message }
-    revalidatePath(ROUTE)
-    revalidatePath('/progress')
-    return { ok: true }
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : 'Could not save lift compensation setting.',
-    }
-  }
-}
-
-/** Add or update a manual baseline lift for body-fat estimate calibration. */
-export async function upsertBaselineLift(
-  input: UpsertBaselineLiftInput,
-): Promise<BaselineLiftActionResult> {
-  const parsed = baselineLiftSchema.safeParse(input)
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid lift.' }
-  }
-  const { lift_kind, exercise_name, e1rm, lifted_on } = parsed.data
-
-  try {
-    const supabase = await createClient()
-    const userId = await requireUserId(supabase)
-
-    const { data, error } = await supabase
-      .from('baseline_lifts')
-      .upsert(
-        {
-          user_id: userId,
-          lift_kind,
-          exercise_name,
-          e1rm,
-          lifted_on: lifted_on ?? null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,lift_kind' },
-      )
-      .select('*')
-      .single()
-
-    if (error) return { ok: false, error: error.message }
-    revalidatePath(ROUTE)
-    revalidatePath('/progress')
-    return { ok: true, lift: data as BaselineLift }
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : 'Could not save the baseline lift.',
-    }
-  }
-}
-
-/** Delete a manual baseline lift by id (RLS scopes this to the current user). */
-export async function deleteBaselineLift(
-  id: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!id) return { ok: false, error: 'Missing baseline lift.' }
-  try {
-    const supabase = await createClient()
-    await requireUserId(supabase)
-
-    const { error } = await supabase.from('baseline_lifts').delete().eq('id', id)
-    if (error) return { ok: false, error: error.message }
-    revalidatePath(ROUTE)
-    revalidatePath('/progress')
-    return { ok: true }
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : 'Could not delete the baseline lift.',
     }
   }
 }

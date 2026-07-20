@@ -72,7 +72,6 @@ export interface Profile {
   /** Deficit outlier filter: ignore completed days under this many kcal. null = off. */
   nutrition_min_calories: number | null;
   /** Whether strength data may make a small, capped body-fat estimate adjustment. */
-  bodyfat_lift_compensation: boolean;
   created_at: string;
 }
 
@@ -185,18 +184,6 @@ export interface BodyMetric {
   /** 'manual' (app entry) | 'wearable' (imported). Manual is never overwritten. */
   source: string;
   created_at: string;
-}
-
-/** baseline_lifts - manual strength anchors for body-fat estimate calibration */
-export interface BaselineLift {
-  id: string;
-  user_id: string;
-  lift_kind: "bench" | "squat" | "deadlift" | "press";
-  exercise_name: string;
-  e1rm: number;
-  lifted_on: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 /** blocks — training or diet phases on a timeline */
@@ -398,7 +385,5 @@ export interface SlotView {
   /** Individual sets logged for this slot (ordered by set_number). */
   entries: SetEntry[];
   targets: SlotTargets;
-  /** Incoming soreness adjustment shown before the first work set, when present. */
-  readinessNote: string | null;
   result: import("@/lib/engine/engine").EngineResult;
 }

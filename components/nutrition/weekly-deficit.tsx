@@ -229,9 +229,8 @@ export function DeficitTracker({
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted">
-            Enter your maintenance calories and this tracks your real balance vs
-            maintenance — adjusted for how much you actually moved (steps from your watch),
-            so a low-step day counts for less.
+            Define maintenance at one step count. Daily watch steps adjust
+            expenditure around that fixed reference.
           </p>
           <div className="mt-3">
             <Button variant="outline" onClick={() => setEditing(true)}>
@@ -265,7 +264,7 @@ export function DeficitTracker({
               className="font-mono tabular-nums"
             />
             <p className="text-xs text-muted">
-              The intake that holds your weight steady on a typical day.
+              The intake that holds weight steady at the step count below.
             </p>
           </div>
           <div className="space-y-1.5">
@@ -280,8 +279,8 @@ export function DeficitTracker({
               className="font-mono tabular-nums"
             />
             <p className="text-xs text-muted">
-              The activity your maintenance assumes. Days under this many steps get
-              trimmed automatically from your watch data.
+              This reference stays fixed. Higher-step days add expenditure and
+              lower-step days subtract it.
             </p>
           </div>
           <div className="flex gap-2">
@@ -310,7 +309,10 @@ export function DeficitTracker({
   // --- Maintenance known: compute the selected window's deficit. ---
   const maint = maintenance as number
   const wk = weightKg && weightKg > 0 ? weightKg : DEFAULT_WEIGHT_KG
-  const baseline = stepBaseline && stepBaseline > 0 ? stepBaseline : DEFAULT_STEP_BASELINE
+  const baseline =
+    stepBaseline != null && stepBaseline >= 0
+      ? stepBaseline
+      : DEFAULT_STEP_BASELINE
   // With an active block, every window is clamped to its start, so a separate
   // "All" would just equal "Block" — drop it.
   const windows: Win[] = blockStart ? ['week', 'month', 'block'] : ['week', 'month', 'all']
@@ -334,15 +336,16 @@ export function DeficitTracker({
   const estChange = r.deficit / kcalPerUnit
   // Signed vs maintenance: negative = under maintenance (a deficit), shown as -X.
   const avgDaily = r.dayEquivalents ? Math.round(-r.deficit / r.dayEquivalents) : 0
-  // The selected window's average activity-adjusted maintenance/day. If low
-  // steps trimmed it, show the trim inline: "2,400 (-200) kcal".
+  // The selected window's average activity-adjusted maintenance/day. The saved
+  // maintenance remains defined at one fixed step baseline; daily steps move
+  // expenditure symmetrically above or below it.
   const avgAdjustedMaint = r.dayEquivalents ? Math.round(r.sumMaint / r.dayEquivalents) : maint
   const avgMaintAdjustment = r.dayEquivalents
     ? Math.round(r.totalAdjustment / r.dayEquivalents)
     : 0
   const adjustedMaintDisplay =
-    avgMaintAdjustment > 0
-      ? `${avgAdjustedMaint.toLocaleString()} (${fmtSigned(-avgMaintAdjustment)})`
+    avgMaintAdjustment !== 0
+      ? `${avgAdjustedMaint.toLocaleString()} (${fmtSigned(avgMaintAdjustment)})`
       : avgAdjustedMaint.toLocaleString()
   const surplus = -r.deficit // total intake − adjusted maintenance over the window
   const losing = r.deficit > 0 // tissue direction (down = losing)
@@ -531,10 +534,11 @@ export function DeficitTracker({
             {r.adjustedDays > 0 ? (
               <p className="flex items-center gap-1.5 text-xs text-muted">
                 <Footprints className="size-3.5 shrink-0 text-signal" aria-hidden />
-                Adjusted maintenance averaged {avgAdjustedMaint.toLocaleString()} kcal/day (base{' '}
-                {maint.toLocaleString()}, {fmtSigned(-avgMaintAdjustment)}/day from low steps). Total trim:{' '}
-                {Math.round(r.totalAdjustment).toLocaleString()} kcal across {r.adjustedDays} low-step{' '}
-                {r.adjustedDays === 1 ? 'day' : 'days'}.
+                Maintenance is fixed at {maint.toLocaleString()} kcal for{' '}
+                {baseline.toLocaleString()} steps. Actual steps shifted expenditure by{' '}
+                {fmtSigned(avgMaintAdjustment)} kcal/day in this window ({fmtSigned(
+                  Math.round(r.totalAdjustment),
+                )} total across {r.adjustedDays} logged {r.adjustedDays === 1 ? 'day' : 'days'}).
               </p>
             ) : null}
 
@@ -555,6 +559,3 @@ export function DeficitTracker({
     </Card>
   )
 }
-
-/** @deprecated old name — kept so existing imports don't break. */
-export const WeeklyDeficit = DeficitTracker

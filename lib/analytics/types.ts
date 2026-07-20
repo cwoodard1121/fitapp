@@ -28,7 +28,7 @@ export interface LiftAnalytic {
   latestReps: number | null
   /** 'new' when there is too little data for a trend. */
   trend: 'up' | 'flat' | 'down' | 'new'
-  /** The engine's most recent decision label for this lift. */
+  /** The most recent next-session decision produced for this lift. */
   lastDecision: string | null
   stalled: boolean
 }

@@ -126,18 +126,6 @@ export interface EngineResult {
   flags: Record<string, boolean>
 }
 
-export interface PlannedTargets {
-  load: number | null
-  sets: number | null
-  reps: number | null
-  rir: number | null
-}
-
-export interface ReadinessPlan {
-  targets: PlannedTargets
-  note: string | null
-}
-
 /* ------------------------------------------------------------------ */
 /* e1RM (Epley)                                                        */
 /* ------------------------------------------------------------------ */
@@ -194,65 +182,12 @@ export function targetLoad(
   return prevNextLoad ?? slot.seedLoad ?? 0
 }
 
-/**
- * Apply incoming soreness to today's prescription before sets are performed.
- * Mild residual soreness is normal; high soreness prevents another progression,
- * while 10/10 trims the dose. Week 1 calls out novel DOMS instead of pretending
- * it proves the whole program is over-dosed.
- */
-export function adjustTargetsForReadiness(
-  targets: PlannedTargets,
-  log: SetLogInput,
-  slot: SlotConfig,
-  ctx: Pick<EngineContext, 'week'>,
-  previous: SetLogInput | null,
-): ReadinessPlan {
-  const soreness = log.soreness
-  if (soreness == null || soreness < 8) return { targets, note: null }
-
-  const severe = soreness >= 10
-  const performingStrong = log.recovery != null && log.recovery >= 7 && log.performance === 'Up'
-  const priorSets = previous?.actualSets ?? targets.sets ?? slot.baseSets
-  const setCap = severe ? Math.max(1, priorSets - 1) : priorSets
-  const priorLoad = previous?.actualLoad
-  const priorReps = previous?.bestReps
-
-  let load = priorLoad == null ? targets.load : Math.min(targets.load ?? priorLoad, priorLoad)
-  if (severe && !performingStrong && !slot.isBodyweight && load != null) {
-    load = Math.max(0, load - slot.loadIncrement)
-  }
-
-  const adjusted: PlannedTargets = {
-    ...targets,
-    load,
-    sets: targets.sets == null ? setCap : Math.min(targets.sets, setCap),
-    reps: priorReps == null ? targets.reps : Math.min(targets.reps ?? priorReps, priorReps),
-  }
-
-  if (severe) {
-    return {
-      targets: adjusted,
-      note:
-        ctx.week === 1
-          ? '10/10 soreness may be novel first-week DOMS, but it is still too high to push through. Trim today by a set and reassess after performance.'
-          : '10/10 soreness signals unresolved fatigue from the last muscle exposure. Trim today by a set and avoid progressing the load.',
-    }
-  }
-
-  return {
-    targets: adjusted,
-    note: performingStrong
-      ? 'You are performing strongly despite high soreness. Repeat the last dose today, but do not add load, reps, or sets yet.'
-      : 'High incoming soreness means the last muscle exposure may not be recovered. Repeat at most the last dose and let performance decide.',
-  }
-}
-
 /* ------------------------------------------------------------------ */
 /* The autoregulation evaluation                                       */
 /* ------------------------------------------------------------------ */
 
 /**
- * Evaluate one exercise slot for one session and return the engine's call:
+ * Evaluate one exercise slot and return the next-session prescription it creates:
  * the decision, a display label, a one-line reason, the growth score, the
  * recovery gate, derived metrics (hit-RIR, e1RM, tonnage), the carry-forward
  * next targets, and the raw boolean flags so the UI can explain itself.

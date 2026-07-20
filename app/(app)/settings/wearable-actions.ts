@@ -46,8 +46,8 @@ export async function syncWearableNow(): Promise<WearableActionResult> {
   }
 }
 
-/** Days of history a manual backfill pulls (covers data from ~June 20 on). */
-const BACKFILL_DAYS = 60
+/** One year matches the longest named trend range without making routine syncs heavier. */
+const BACKFILL_DAYS = 365
 
 /** Pull a wider window of history (steps/sleep/nutrition/weight/body-fat). */
 export async function backfillWearableNow(): Promise<WearableActionResult> {

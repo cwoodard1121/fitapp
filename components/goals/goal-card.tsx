@@ -15,6 +15,7 @@ import {
   MoreVertical,
   Pencil,
   RotateCcw,
+  Sparkles,
   Trash2,
   XCircle,
 } from 'lucide-react'
@@ -47,6 +48,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import type { GoalAdvice } from '@/lib/types'
 import { setGoalStatus, deleteGoal } from '@/app/(app)/goals/actions'
 import type { GoalWithCurrent } from './types'
 import {
@@ -78,6 +80,7 @@ function fmtRate(n: number | null, unit: string | null): string | null {
 
 interface GoalCardProps {
   goal: GoalWithCurrent
+  advice?: GoalAdvice | null
   onEdit: (goal: GoalWithCurrent) => void
 }
 
@@ -95,7 +98,7 @@ function daysMeta(targetDate: string | null) {
   return { days, date: d }
 }
 
-export function GoalCard({ goal, onEdit }: GoalCardProps) {
+export function GoalCard({ goal, advice, onEdit }: GoalCardProps) {
   const [pending, startTransition] = useTransition()
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -343,6 +346,21 @@ export function GoalCard({ goal, onEdit }: GoalCardProps) {
                   </div>
                 )}
               </div>
+            </div>
+          ) : null}
+
+          {isActive && advice ? (
+            <div className="rounded-md border border-signal/30 bg-signal/5 px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-signal">
+                <Sparkles className="size-3.5" aria-hidden />
+                Coach
+              </div>
+              <p className="mt-1 text-sm leading-snug text-foreground">
+                {advice.recommendation}
+              </p>
+              {advice.note && advice.note !== advice.recommendation ? (
+                <p className="mt-1 text-xs leading-snug text-muted">{advice.note}</p>
+              ) : null}
             </div>
           ) : null}
 

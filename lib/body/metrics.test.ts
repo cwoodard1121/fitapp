@@ -4,7 +4,6 @@ import type { BodyMetric } from '@/lib/types'
 
 import {
   estimateBodyFatAtWeightFromLeanRetention,
-  estimateBodyFatBreakdown,
   estimateBodyFatFromLeanRetention,
   normalizedBodyweight,
   normalizedDeltaOver,
@@ -90,21 +89,22 @@ describe('body metric helpers', () => {
     expect(estimate.latest).toBeCloseTo(17.9, 1)
   })
 
-  it('caps a single-lift body-fat adjustment instead of treating strength as a measurement', () => {
-    const entries = [
-      bodyMetric('2026-06-20', 174.4, 20),
-      bodyMetric('2026-07-04', 170, null),
+  it('does not let newly imported pre-block history replace the current block anchor', () => {
+    const currentEntries = [
+      bodyMetric('2026-06-20', 200, 20),
+      bodyMetric('2026-07-04', 190, null),
     ]
-    const strength = [
-      { date: '2026-07-02', exerciseName: 'Barbell bench press', e1rm: 290 },
-    ]
+    const historicalEntry = bodyMetric('2025-08-01', 240, 35)
+    const block = { start_date: '2026-06-20' }
 
-    const withoutLift = estimateBodyFatBreakdown(entries, 170, '2026-07-04')
-    const withLift = estimateBodyFatBreakdown(entries, 170, '2026-07-04', strength)
+    const beforeImport = estimateBodyFatFromLeanRetention(currentEntries, block)
+    const afterImport = estimateBodyFatFromLeanRetention(
+      [historicalEntry, ...currentEntries],
+      block,
+    )
 
-    expect(withoutLift?.leanEstimate).toBeCloseTo(20, 1)
-    expect(withLift?.strengthAdjustment).toBe(0.3)
-    expect(withLift?.finalEstimate).toBeCloseTo(19.7, 1)
-    expect((withoutLift?.finalEstimate ?? 0) - (withLift?.finalEstimate ?? 0)).toBeLessThan(0.5)
+    expect(afterImport.baselineDate).toBe('2026-06-20')
+    expect(afterImport.latest).toBe(beforeImport.latest)
   })
+
 })

@@ -1,6 +1,5 @@
 import type {
   ExerciseSlot,
-  Program,
   Session,
   SetEntry,
   SetLog,
@@ -9,7 +8,6 @@ import type {
 } from '@/lib/types'
 import type { EngineContext, ReadinessWeights } from '@/lib/engine/engine'
 import {
-  adjustTargetsForReadiness,
   evaluateSlot,
   targetLoad,
   targetSets,
@@ -21,7 +19,6 @@ import {
   derivePrevTargets,
   setLogInputFromRow,
   slotConfigFromRow,
-  type PrevTargets,
 } from '@/lib/data/mappers'
 
 /**
@@ -157,32 +154,9 @@ export async function getSetEntriesForSession(
 }
 
 /**
- * Previous-week set_log for a single slot (week - 1). Null if none.
- */
-async function getPrevWeekLog(
-  slotId: string,
-  week: number,
-): Promise<SetLog | null> {
-  if (week <= 1) return null
-  const supabase = await createClient()
-  const userId = await requireUserId(supabase)
-  const { data, error } = await supabase
-    .from('set_logs')
-    .select('*')
-    .eq('slot_id', slotId)
-    .eq('week', week - 1)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (error) throw error
-  return (data as SetLog | null) ?? null
-}
-
-/**
- * Most recent performed log for each exercise name before this session. Slot ids
- * are deliberately ignored: the same named exercise shares history across days,
- * programs, and casing differences.
+ * Most recent log from a finished session for each exercise name before this
+ * session. Slot ids are deliberately ignored: the same named exercise shares
+ * history across days, programs, and casing differences.
  */
 async function getPriorLogsByExercise(
   session: Session,
@@ -213,12 +187,28 @@ async function getPriorLogsByExercise(
     .map((log) => log.created_at)
     .filter(Boolean)
   const cutoff = currentLogTimes.sort()[0] ?? session.performed_at ?? new Date().toISOString()
+  const { data: completedSessions, error: sessionError } = await supabase
+    .from('sessions')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'done')
+    .neq('id', session.id)
+    .not('performed_at', 'is', null)
+    .lt('performed_at', cutoff)
+    .order('performed_at', { ascending: false })
+    .limit(500)
+  if (sessionError) throw sessionError
+  const completedSessionIds = (completedSessions ?? []).map(
+    (row: { id: string }) => row.id,
+  )
+  if (completedSessionIds.length === 0) return result
+
   const { data: priorRows, error: logError } = await supabase
     .from('set_logs')
     .select('*')
     .eq('user_id', userId)
     .in('slot_id', matchingSlotIds)
-    .neq('session_id', session.id)
+    .in('session_id', completedSessionIds)
     .lt('created_at', cutoff)
     .order('created_at', { ascending: false })
     .limit(1000)
@@ -239,55 +229,6 @@ async function getPriorLogsByExercise(
   }
 
   return result
-}
-
-/**
- * Carry-forward targets implied by the previous week's logged set for a slot.
- * Computed on read by running the engine for week-1 (decisions are not stored).
- */
-export async function getPrevDecisionForSlot(
-  slotId: string,
-  week: number,
-): Promise<PrevTargets> {
-  const supabase = await createClient()
-  const userId = await requireUserId(supabase)
-
-  const { data: slot, error: sErr } = await supabase
-    .from('exercise_slots')
-    .select('*')
-    .eq('id', slotId)
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (sErr) throw sErr
-  if (!slot) {
-    return { prevNextLoad: null, prevNextSets: null, prevNextReps: null }
-  }
-  const slotRow = slot as ExerciseSlot
-
-  const deloadWeek = await getDeloadWeekForDay(slotRow.day_id)
-  const prevLog = await getPrevWeekLog(slotId, week)
-
-  return derivePrevTargets(slotConfigFromRow(slotRow), prevLog, week - 1, deloadWeek)
-}
-
-/**
- * Per-week targets for a slot using targetLoad/targetSets + the prior week.
- */
-export async function computeSlotTargets(
-  slot: ExerciseSlot,
-  week: number,
-  deloadWeek: number,
-): Promise<SlotTargets> {
-  const config = slotConfigFromRow(slot)
-  const prevLog = await getPrevWeekLog(slot.id, week)
-  const prev = derivePrevTargets(config, prevLog, week - 1, deloadWeek)
-
-  return {
-    load: targetLoad(week, deloadWeek, config, prev.prevNextLoad),
-    sets: targetSets(week, deloadWeek, config, prev.prevNextSets),
-    reps: week === 1 ? config.repLow : prev.prevNextReps ?? config.repLow,
-    rir: config.targetRir,
-  }
 }
 
 /**
@@ -321,15 +262,6 @@ export async function buildTodayView(
       reps: targetWeek === 1 ? config.repLow : prev.prevNextReps ?? config.repLow,
       rir: config.targetRir,
     }
-    const readinessPlan = adjustTargetsForReadiness(
-      baseTargets,
-      setLogInputFromRow(log),
-      config,
-      { week },
-      priorLog ? setLogInputFromRow(priorLog) : null,
-    )
-    const targets: SlotTargets = readinessPlan.targets
-
     const ctx: EngineContext = {
       week,
       deloadWeek,
@@ -340,32 +272,6 @@ export async function buildTodayView(
     }
     const result = evaluateSlot(setLogInputFromRow(log), config, ctx)
 
-    return { slot, log, entries, targets, readinessNote: readinessPlan.note, result }
+    return { slot, log, entries, targets: baseTargets, result }
   })
-}
-
-/**
- * Resolve the deload_week for the program that owns a given day.
- */
-async function getDeloadWeekForDay(dayId: string): Promise<number> {
-  const supabase = await createClient()
-  const userId = await requireUserId(supabase)
-
-  const { data: day, error: dErr } = await supabase
-    .from('program_days')
-    .select('program_id')
-    .eq('id', dayId)
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (dErr) throw dErr
-  if (!day) return 5
-
-  const { data: program, error: pErr } = await supabase
-    .from('programs')
-    .select('deload_week')
-    .eq('id', (day as { program_id: string }).program_id)
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (pErr) throw pErr
-  return (program as Pick<Program, 'deload_week'> | null)?.deload_week ?? 5
 }
