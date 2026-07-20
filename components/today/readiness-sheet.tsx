@@ -132,7 +132,7 @@ export function ReadinessSheet({
         notes: notes.trim() === '' ? null : notes.trim(),
       })
       if (res.ok) {
-        toast.success('Readiness saved.')
+        toast.success('Feedback saved.')
         setOpen(false)
       } else {
         toast.error(res.error)
@@ -153,7 +153,7 @@ export function ReadinessSheet({
           )}
         >
           <HeartPulse className="size-4" aria-hidden />
-          Readiness
+          Feedback
           {hasReadiness ? (
             <span
               className="size-1.5 rounded-full bg-signal"
@@ -173,8 +173,8 @@ export function ReadinessSheet({
             {exerciseName}
           </SheetTitle>
           <SheetDescription>
-            Rate soreness before working sets. Add pump, performance, and enjoyment
-            afterward so the engine can judge both recovery and stimulus.
+            Add soreness, pump, performance, and enjoyment from this workout.
+            The engine uses them to set the next session.
           </SheetDescription>
         </SheetHeader>
 
@@ -190,7 +190,7 @@ export function ReadinessSheet({
             <RatingSlider
               id={`soreness-${slotId}`}
               label="Soreness"
-              hint="How sore this muscle feels coming in. Mild DOMS is okay; 8+ caps progression and 10 trims today's dose."
+              hint="How sore this muscle felt coming in. High soreness makes the next exposure more conservative."
               value={soreness}
               onChange={setSoreness}
             />

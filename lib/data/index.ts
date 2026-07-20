@@ -22,8 +22,6 @@ export {
   getSessionForDay,
   getSetLogsForSession,
   getSetEntriesForSession,
-  getPrevDecisionForSlot,
-  computeSlotTargets,
   buildTodayView,
 } from '@/lib/data/sessions'
 export {

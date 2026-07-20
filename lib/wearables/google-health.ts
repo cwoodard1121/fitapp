@@ -18,6 +18,8 @@
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const HEALTH_BASE = 'https://health.googleapis.com/v4'
+/** Google Health rejects most data-type queries spanning more than 90 days. */
+const MAX_QUERY_RANGE_DAYS = 90
 
 /** Short-lived CSRF cookie holding the OAuth `state` between connect + callback. */
 export const OAUTH_STATE_COOKIE = 'gh_oauth_state'
@@ -307,13 +309,37 @@ interface Window {
 
 /** A closed-open UTC window covering the last `days` calendar days incl. today. */
 function lookbackWindow(now: Date, days: number): Window {
+  const safeDays = Math.max(1, Math.floor(days))
   const start = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (days - 1)),
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() - (safeDays - 1),
+    ),
   )
   const end = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
   )
   return { start, end }
+}
+
+/**
+ * Split a long lookback into Google Health's supported query windows. Windows
+ * are oldest -> newest, closed-open, adjacent, and never overlap.
+ */
+function lookbackWindows(now: Date, days: number): Window[] {
+  const whole = lookbackWindow(now, days)
+  const out: Window[] = []
+
+  for (let start = whole.start; start < whole.end; ) {
+    const maxEnd = new Date(start)
+    maxEnd.setUTCDate(maxEnd.getUTCDate() + MAX_QUERY_RANGE_DAYS)
+    const end = maxEnd < whole.end ? maxEnd : whole.end
+    out.push({ start, end })
+    start = end
+  }
+
+  return out
 }
 
 async function authedJson(
@@ -381,64 +407,78 @@ async function fetchSleep(
 ): Promise<Map<string, SleepDay>> {
   const out = new Map<string, SleepDay>()
   const filter = `sleep.interval.end_time >= "${win.start.toISOString()}" AND sleep.interval.end_time < "${win.end.toISOString()}"`
-  const url = `${HEALTH_BASE}/users/me/dataTypes/sleep/dataPoints?pageSize=25&filter=${encodeURIComponent(filter)}`
-  const data = (await authedJson(url, accessToken)) as {
-    dataPoints?: Array<{ sleep?: Record<string, unknown> }>
-  }
+  let pageToken: string | null = null
+  const seenPageTokens = new Set<string>()
 
-  for (const p of data.dataPoints ?? []) {
-    const s = p.sleep
-    if (!s) continue
-    const interval = s.interval as { endTime?: string } | undefined
-    if (!interval?.endTime) continue
-    const wake = new Date(interval.endTime)
-    if (Number.isNaN(wake.getTime())) continue
-    const date = dayStr(wake)
-
-    const summary = (s.summary ?? {}) as Record<string, unknown>
-    const minutesAsleep = pickInt(summary, ['minutesAsleep'])
-    const minutesInPeriod = pickInt(summary, [
-      'minutesInSleepPeriod',
-      'minutesInBed',
-    ])
-
-    // Stage minutes from the stages[] array (durations summed per type).
-    const stageMin: Record<string, number> = {}
-    const stages = (s.stages as Array<Record<string, unknown>> | undefined) ?? []
-    for (const st of stages) {
-      const type = String(st.type ?? '').toUpperCase()
-      const a = typeof st.startTime === 'string' ? new Date(st.startTime).getTime() : NaN
-      const b = typeof st.endTime === 'string' ? new Date(st.endTime).getTime() : NaN
-      if (Number.isNaN(a) || Number.isNaN(b) || b <= a) continue
-      const mins = Math.round((b - a) / 60000)
-      stageMin[type] = (stageMin[type] ?? 0) + mins
+  do {
+    const params = new URLSearchParams({ pageSize: '25', filter })
+    if (pageToken) params.set('pageToken', pageToken)
+    const url = `${HEALTH_BASE}/users/me/dataTypes/sleep/dataPoints?${params.toString()}`
+    const data = (await authedJson(url, accessToken)) as {
+      dataPoints?: Array<{ sleep?: Record<string, unknown> }>
+      nextPageToken?: string
     }
-    const get = (...types: string[]) => {
-      let sum = 0
-      let any = false
-      for (const t of types) {
-        if (stageMin[t] != null) {
-          sum += stageMin[t]
-          any = true
-        }
+
+    for (const p of data.dataPoints ?? []) {
+      const s = p.sleep
+      if (!s) continue
+      const interval = s.interval as { endTime?: string } | undefined
+      if (!interval?.endTime) continue
+      const wake = new Date(interval.endTime)
+      if (Number.isNaN(wake.getTime())) continue
+      const date = dayStr(wake)
+
+      const summary = (s.summary ?? {}) as Record<string, unknown>
+      const minutesAsleep = pickInt(summary, ['minutesAsleep'])
+      const minutesInPeriod = pickInt(summary, [
+        'minutesInSleepPeriod',
+        'minutesInBed',
+      ])
+
+      // Stage minutes from the stages[] array (durations summed per type).
+      const stageMin: Record<string, number> = {}
+      const stages = (s.stages as Array<Record<string, unknown>> | undefined) ?? []
+      for (const st of stages) {
+        const type = String(st.type ?? '').toUpperCase()
+        const a = typeof st.startTime === 'string' ? new Date(st.startTime).getTime() : NaN
+        const b = typeof st.endTime === 'string' ? new Date(st.endTime).getTime() : NaN
+        if (Number.isNaN(a) || Number.isNaN(b) || b <= a) continue
+        const mins = Math.round((b - a) / 60000)
+        stageMin[type] = (stageMin[type] ?? 0) + mins
       }
-      return any ? sum : null
+      const get = (...types: string[]) => {
+        let sum = 0
+        let any = false
+        for (const t of types) {
+          if (stageMin[t] != null) {
+            sum += stageMin[t]
+            any = true
+          }
+        }
+        return any ? sum : null
+      }
+
+      const day: SleepDay = {
+        minutesAsleep,
+        minutesInPeriod,
+        lightMin: get('LIGHT'),
+        deepMin: get('DEEP'),
+        remMin: get('REM'),
+        awakeMin: get('AWAKE', 'RESTLESS'),
+      }
+
+      // If multiple sessions land on one wake date, keep the main sleep (longest).
+      const existing = out.get(date)
+      const score = (d: SleepDay) => d.minutesInPeriod ?? d.minutesAsleep ?? 0
+      if (!existing || score(day) > score(existing)) out.set(date, day)
     }
 
-    const day: SleepDay = {
-      minutesAsleep,
-      minutesInPeriod,
-      lightMin: get('LIGHT'),
-      deepMin: get('DEEP'),
-      remMin: get('REM'),
-      awakeMin: get('AWAKE', 'RESTLESS'),
-    }
+    const next = data.nextPageToken?.trim() || null
+    if (!next || seenPageTokens.has(next)) break
+    seenPageTokens.add(next)
+    pageToken = next
+  } while (pageToken)
 
-    // If multiple sessions land on one wake date, keep the main sleep (longest).
-    const existing = out.get(date)
-    const score = (d: SleepDay) => d.minutesInPeriod ?? d.minutesAsleep ?? 0
-    if (!existing || score(day) > score(existing)) out.set(date, day)
-  }
   return out
 }
 
@@ -452,7 +492,7 @@ async function fetchHeartMetrics(
   async function listDaily(dataType: string): Promise<Array<Record<string, unknown>>> {
     try {
       const filter = `${dataType}.interval.end_time >= "${win.start.toISOString()}" AND ${dataType}.interval.end_time < "${win.end.toISOString()}"`
-      const url = `${HEALTH_BASE}/users/me/dataTypes/${dataType}/dataPoints?pageSize=100&filter=${encodeURIComponent(filter)}`
+      const url = `${HEALTH_BASE}/users/me/dataTypes/${dataType}/dataPoints?pageSize=10000&filter=${encodeURIComponent(filter)}`
       const data = (await authedJson(url, accessToken)) as {
         dataPoints?: Array<Record<string, unknown>>
       }
@@ -509,31 +549,34 @@ export async function fetchRecovery(
   days = 3,
   now: Date = new Date(),
 ): Promise<DailyRecovery[]> {
-  const win = lookbackWindow(now, days)
-  const [steps, sleep, heart] = await Promise.all([
-    fetchSteps(accessToken, win),
-    fetchSleep(accessToken, win),
-    fetchHeartMetrics(accessToken, win),
-  ])
-
-  const dates = new Set<string>([...steps.keys(), ...sleep.keys(), ...heart.keys()])
   const result: DailyRecovery[] = []
-  for (const date of dates) {
-    const s = sleep.get(date)
-    const h = heart.get(date)
-    result.push({
-      date,
-      steps: steps.get(date) ?? null,
-      sleepMinutesAsleep: s?.minutesAsleep ?? null,
-      sleepMinutesInPeriod: s?.minutesInPeriod ?? null,
-      sleepLightMin: s?.lightMin ?? null,
-      sleepDeepMin: s?.deepMin ?? null,
-      sleepRemMin: s?.remMin ?? null,
-      sleepAwakeMin: s?.awakeMin ?? null,
-      restingHr: h?.restingHr ?? null,
-      hrvMs: h?.hrvMs ?? null,
-    })
+
+  for (const win of lookbackWindows(now, days)) {
+    const [steps, sleep, heart] = await Promise.all([
+      fetchSteps(accessToken, win),
+      fetchSleep(accessToken, win),
+      fetchHeartMetrics(accessToken, win),
+    ])
+
+    const dates = new Set<string>([...steps.keys(), ...sleep.keys(), ...heart.keys()])
+    for (const date of dates) {
+      const s = sleep.get(date)
+      const h = heart.get(date)
+      result.push({
+        date,
+        steps: steps.get(date) ?? null,
+        sleepMinutesAsleep: s?.minutesAsleep ?? null,
+        sleepMinutesInPeriod: s?.minutesInPeriod ?? null,
+        sleepLightMin: s?.lightMin ?? null,
+        sleepDeepMin: s?.deepMin ?? null,
+        sleepRemMin: s?.remMin ?? null,
+        sleepAwakeMin: s?.awakeMin ?? null,
+        restingHr: h?.restingHr ?? null,
+        hrvMs: h?.hrvMs ?? null,
+      })
+    }
   }
+
   result.sort((a, b) => a.date.localeCompare(b.date))
   return result
 }
@@ -549,54 +592,57 @@ export async function fetchNutrition(
   days = 3,
   now: Date = new Date(),
 ): Promise<DailyNutrition[]> {
-  const win = lookbackWindow(now, days)
-  const body = {
-    range: { start: civilDateTime(win.start), end: civilDateTime(win.end) },
-    windowSizeDays: 1,
-  }
-  const data = (await authedJson(
-    `${HEALTH_BASE}/users/me/dataTypes/nutrition-log/dataPoints:dailyRollUp`,
-    accessToken,
-    { method: 'POST', body: JSON.stringify(body) },
-  )) as { rollupDataPoints?: Array<Record<string, unknown>> }
-
   const out: DailyNutrition[] = []
-  for (const p of data.rollupDataPoints ?? []) {
-    const date = civilToDateStr(p.civilStartTime)
-    if (!date) continue
-    const nl = (p.nutritionLog ?? p.nutrition_log) as Record<string, unknown> | undefined
-    if (!nl) continue
 
-    // Real REST shape: energy.kcalSum (kcal); carbs + fat are TOP-LEVEL totals
-    // (totalCarbohydrate/totalFat .gramsSum); protein lives in the nutrients[]
-    // array as { nutrient, quantity:{ gramsSum } }.
-    const calories = pickInt(nl.energy, ['kcalSum', 'kilocaloriesSum', 'kilocalories_sum', 'sum', 'value'])
-
-    const gramKeys = ['gramsSum', 'grams', 'quantityGrams', 'sum', 'value']
-    let carbs = pickNum(nl.totalCarbohydrate ?? nl.total_carbohydrate, gramKeys)
-    let fat = pickNum(nl.totalFat ?? nl.total_fat, gramKeys)
-    let protein = pickNum(nl.totalProtein ?? nl.protein, gramKeys)
-
-    const nutrients = (nl.nutrients ??
-      nl.nutrientQuantityRollups ??
-      nl.nutrient_quantity_rollups) as Array<Record<string, unknown>> | undefined
-    for (const n of nutrients ?? []) {
-      const type = String(n.nutrient ?? '').toUpperCase()
-      const grams = pickNum(n.quantity ?? n, gramKeys)
-      if (grams == null) continue
-      if (type === 'PROTEIN' && protein == null) protein = grams
-      else if ((type === 'TOTAL_CARBOHYDRATE' || type === 'CARBOHYDRATE') && carbs == null) carbs = grams
-      else if (type === 'TOTAL_FAT' && fat == null) fat = grams
+  for (const win of lookbackWindows(now, days)) {
+    const body = {
+      range: { start: civilDateTime(win.start), end: civilDateTime(win.end) },
+      windowSizeDays: 1,
     }
+    const data = (await authedJson(
+      `${HEALTH_BASE}/users/me/dataTypes/nutrition-log/dataPoints:dailyRollUp`,
+      accessToken,
+      { method: 'POST', body: JSON.stringify(body) },
+    )) as { rollupDataPoints?: Array<Record<string, unknown>> }
 
-    out.push({
-      date,
-      calories,
-      protein: protein != null ? Math.round(protein) : null,
-      carbs: carbs != null ? Math.round(carbs) : null,
-      fat: fat != null ? Math.round(fat) : null,
-    })
+    for (const p of data.rollupDataPoints ?? []) {
+      const date = civilToDateStr(p.civilStartTime)
+      if (!date) continue
+      const nl = (p.nutritionLog ?? p.nutrition_log) as Record<string, unknown> | undefined
+      if (!nl) continue
+
+      // Real REST shape: energy.kcalSum (kcal); carbs + fat are TOP-LEVEL totals
+      // (totalCarbohydrate/totalFat .gramsSum); protein lives in the nutrients[]
+      // array as { nutrient, quantity:{ gramsSum } }.
+      const calories = pickInt(nl.energy, ['kcalSum', 'kilocaloriesSum', 'kilocalories_sum', 'sum', 'value'])
+
+      const gramKeys = ['gramsSum', 'grams', 'quantityGrams', 'sum', 'value']
+      let carbs = pickNum(nl.totalCarbohydrate ?? nl.total_carbohydrate, gramKeys)
+      let fat = pickNum(nl.totalFat ?? nl.total_fat, gramKeys)
+      let protein = pickNum(nl.totalProtein ?? nl.protein, gramKeys)
+
+      const nutrients = (nl.nutrients ??
+        nl.nutrientQuantityRollups ??
+        nl.nutrient_quantity_rollups) as Array<Record<string, unknown>> | undefined
+      for (const n of nutrients ?? []) {
+        const type = String(n.nutrient ?? '').toUpperCase()
+        const grams = pickNum(n.quantity ?? n, gramKeys)
+        if (grams == null) continue
+        if (type === 'PROTEIN' && protein == null) protein = grams
+        else if ((type === 'TOTAL_CARBOHYDRATE' || type === 'CARBOHYDRATE') && carbs == null) carbs = grams
+        else if (type === 'TOTAL_FAT' && fat == null) fat = grams
+      }
+
+      out.push({
+        date,
+        calories,
+        protein: protein != null ? Math.round(protein) : null,
+        carbs: carbs != null ? Math.round(carbs) : null,
+        fat: fat != null ? Math.round(fat) : null,
+      })
+    }
   }
+
   out.sort((a, b) => a.date.localeCompare(b.date))
   return out
 }
@@ -630,16 +676,6 @@ export async function fetchBody(
   days = 7,
   now: Date = new Date(),
 ): Promise<DailyBody[]> {
-  const win = lookbackWindow(now, days)
-  const safe = async (dt: string) => {
-    try {
-      return await rollupPoints(accessToken, dt, win)
-    } catch {
-      return [] as Array<Record<string, unknown>>
-    }
-  }
-  const [weightPts, bfPts] = await Promise.all([safe('weight'), safe('body-fat')])
-
   const map = new Map<string, DailyBody>()
   const ensure = (date: string) => {
     const cur = map.get(date) ?? { date, weightKg: null, bodyFatPct: null }
@@ -647,29 +683,40 @@ export async function fetchBody(
     return cur
   }
 
-  for (const p of weightPts) {
-    const date = civilToDateStr(p.civilStartTime)
-    if (!date) continue
-    const wv = (p.weight ?? p['weight']) as Record<string, unknown> | undefined
-    // Google returns GRAMS (weightGramsAvg); fall back to kilogram variants. Do
-    // NOT use a generic numeric fallback here or grams get misread as kilograms.
-    const grams = pickNum(wv, ['weightGramsAvg', 'gramsAvg', 'grams_avg', 'grams'])
-    const kg =
-      grams != null ? grams / 1000 : pickNum(wv, ['kilogramsAvg', 'kilograms_avg', 'kilograms'])
-    if (kg != null) ensure(date).weightKg = kg
-  }
-  for (const p of bfPts) {
-    const date = civilToDateStr(p.civilStartTime)
-    if (!date) continue
-    const pct = pickNum(p.bodyFat ?? p['body_fat'], [
-      'bodyFatPercentageAvg',
-      'body_fat_percentage_avg',
-      'percentageAvg',
-      'percentage',
-      'avg',
-      'value',
-    ])
-    if (pct != null) ensure(date).bodyFatPct = pct
+  for (const win of lookbackWindows(now, days)) {
+    const safe = async (dt: string) => {
+      try {
+        return await rollupPoints(accessToken, dt, win)
+      } catch {
+        return [] as Array<Record<string, unknown>>
+      }
+    }
+    const [weightPts, bfPts] = await Promise.all([safe('weight'), safe('body-fat')])
+
+    for (const p of weightPts) {
+      const date = civilToDateStr(p.civilStartTime)
+      if (!date) continue
+      const wv = (p.weight ?? p['weight']) as Record<string, unknown> | undefined
+      // Google returns GRAMS (weightGramsAvg); fall back to kilogram variants. Do
+      // NOT use a generic numeric fallback here or grams get misread as kilograms.
+      const grams = pickNum(wv, ['weightGramsAvg', 'gramsAvg', 'grams_avg', 'grams'])
+      const kg =
+        grams != null ? grams / 1000 : pickNum(wv, ['kilogramsAvg', 'kilograms_avg', 'kilograms'])
+      if (kg != null) ensure(date).weightKg = kg
+    }
+    for (const p of bfPts) {
+      const date = civilToDateStr(p.civilStartTime)
+      if (!date) continue
+      const pct = pickNum(p.bodyFat ?? p['body_fat'], [
+        'bodyFatPercentageAvg',
+        'body_fat_percentage_avg',
+        'percentageAvg',
+        'percentage',
+        'avg',
+        'value',
+      ])
+      if (pct != null) ensure(date).bodyFatPct = pct
+    }
   }
 
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date))

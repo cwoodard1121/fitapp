@@ -166,13 +166,11 @@ export function NutritionClient({
         initialDayProgress={initialDayProgress}
       />
 
-      {calibration && calibration.status !== 'no_maintenance' ? (
+      {calibration ? (
         <MaintenanceCheck
           calibration={calibration}
           unit={unit}
           currentMaintenance={maintenance}
-          stepBaseline={stepBaseline}
-          minCalories={minCalories}
         />
       ) : null}
 

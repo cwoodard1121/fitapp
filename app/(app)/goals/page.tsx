@@ -8,10 +8,8 @@ import { latestBodyFatInterpretation } from '@/lib/body/body-fat'
 import { exerciseNameKey } from '@/lib/exercises/identity'
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getLatestAnalysis } from '@/lib/ai/analysis'
-import { gatherAnalytics } from '@/lib/analytics'
 import type { Block, BodyMetric, Goal } from '@/lib/types'
 import { GoalsBoard } from '@/components/goals/goals-board'
-import { GoalAnalyticsPanel } from '@/components/goals/goal-analytics'
 import type { GoalWithCurrent } from '@/components/goals/types'
 
 export const metadata = { title: 'Goals · simplegym' }
@@ -170,31 +168,22 @@ export default async function GoalsPage() {
 
   const unit = profile?.unit ?? 'lb'
 
-  // Deterministic goal pacing — ALWAYS computed (no LLM / allowlist needed).
-  const analytics = await gatherAnalytics()
-
-  // AI goal advice, gated to allowed accounts. Skips the query when not allowed;
-  // the panel renders nothing AI-related when advice / summary are absent.
+  // AI guidance is gated to allowed accounts and attaches directly to the
+  // deterministic pacing already rendered inside each goal card.
   const { allowed } = await getAnalysisAccess()
   const analysis = allowed ? await getLatestAnalysis() : null
-
-  // Pace only the active goals, in the board's order.
-  const activeIds = new Set(
-    enriched.filter((g) => g.status === 'active').map((g) => g.id),
-  )
-  const goalPacing = analytics.goals.filter((g) => activeIds.has(g.id))
 
   const goalAdvice = analysis?.payload.goals.items ?? []
   const aiSummary = analysis?.payload.goals.summary ?? null
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 sm:pb-10">
-      <GoalAnalyticsPanel
-        goals={goalPacing}
+      <GoalsBoard
+        goals={enriched}
+        unit={unit}
         advice={goalAdvice}
         aiSummary={aiSummary}
       />
-      <GoalsBoard goals={enriched} unit={unit} />
     </div>
   )
 }

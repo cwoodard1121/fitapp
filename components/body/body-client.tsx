@@ -19,8 +19,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import type { BaselineLift, Block, BodyMetric, Unit } from '@/lib/types'
-import type { StrengthEstimatePoint, StrengthLiftKind } from '@/lib/body/metrics'
+import type { Block, BodyMetric, Unit } from '@/lib/types'
 import { hasNavyMeasurement } from '@/lib/body/body-fat'
 
 import { BodyFatEstimator } from './body-fat-estimator'
@@ -37,10 +36,6 @@ interface BodyClientProps {
   unit: Unit
   heightCm: number | null
   activeDietBlock: Pick<Block, 'phase' | 'start_date'> | null
-  strengthPoints: StrengthEstimatePoint[]
-  baselineLifts: BaselineLift[]
-  suggestedBaselineLiftNames: Partial<Record<StrengthLiftKind, string>>
-  liftCompensationEnabled: boolean
   /** yyyy-MM-dd for "today" (computed server-side for stable SSR). */
   today: string
 }
@@ -50,24 +45,13 @@ export function BodyClient({
   unit,
   heightCm,
   activeDietBlock,
-  strengthPoints,
-  baselineLifts,
-  suggestedBaselineLiftNames,
-  liftCompensationEnabled: initialLiftCompensationEnabled,
   today,
 }: BodyClientProps) {
   const [open, setOpen] = React.useState(false)
   const [navyOpen, setNavyOpen] = React.useState(false)
-  const [liftCompensationEnabled, setLiftCompensationEnabled] = React.useState(
-    initialLiftCompensationEnabled,
-  )
   // The entry the form is bound to: null = brand-new weigh-in.
   const [editing, setEditing] = React.useState<BodyMetric | null>(null)
   const [editingNavy, setEditingNavy] = React.useState<BodyMetric | null>(null)
-
-  React.useEffect(() => {
-    setLiftCompensationEnabled(initialLiftCompensationEnabled)
-  }, [initialLiftCompensationEnabled])
 
   const todayEntry = React.useMemo(
     () => entries.find((e) => e.measured_on === today) ?? null,
@@ -190,11 +174,6 @@ export function BodyClient({
             entries={entries}
             unit={unit}
             activeDietBlock={activeDietBlock}
-            strengthPoints={strengthPoints}
-            baselineLifts={baselineLifts}
-            suggestedBaselineLiftNames={suggestedBaselineLiftNames}
-            liftCompensationEnabled={liftCompensationEnabled}
-            onLiftCompensationChange={setLiftCompensationEnabled}
           />
 
           <Card>

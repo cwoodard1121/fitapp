@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { toast } from 'sonner'
-import { Check, Loader2, Plus, X } from 'lucide-react'
+import { Check, Loader2, Plus, Sparkles, X } from 'lucide-react'
 
 import type { SlotView, Unit } from '@/lib/types'
 import { Card } from '@/components/ui/card'
@@ -203,12 +203,6 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
         <Stat size="sm" label="Reps" value={targets.reps} placeholder="—" />
         <Stat size="sm" label="RIR" value={targets.rir} />
       </div>
-      {view.readinessNote ? (
-        <p className="mx-4 mb-3 rounded-md border border-gate-yellow/40 bg-gate-yellow/10 px-3 py-2 text-xs leading-relaxed text-gate-yellow">
-          {view.readinessNote}
-        </p>
-      ) : null}
-
       <Separator />
 
       {/* Per-set entry */}
@@ -294,19 +288,36 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
       </div>
 
       {/* Decision readout — the signature element */}
-      <div className="flex items-center justify-between gap-3 border-t border-border bg-background/40 px-4 py-3">
+      <div className="border-t border-border bg-background/40 px-4 py-3">
         {hasData ? (
-          <>
-            <DecisionBadge
-              decision={result.decision}
-              label={result.decisionLabel}
-              reason={result.reason}
-              className="min-w-0"
-            />
-            <div className="flex shrink-0 items-center gap-4">
+          <div className="space-y-3">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-signal">
+              <Sparkles className="size-3.5" aria-hidden />
+              Next-session preview
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <DecisionBadge
+                decision={result.decision}
+                label={result.decisionLabel}
+                reason={result.reason}
+                className="min-w-0"
+              />
+              <div className="flex shrink-0 items-end gap-4">
+                <Stat
+                  size="sm"
+                  label="Load"
+                  value={result.nextLoad}
+                  unit={unit}
+                  precision={1}
+                />
+                <Stat size="sm" label="Sets" value={result.nextSets} />
+                <Stat size="sm" label="Reps" value={result.nextReps} />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Stat
                 size="sm"
-                label="e1RM"
+                label="Session e1RM"
                 value={result.e1rm}
                 unit={unit}
                 tone="signal"
@@ -316,10 +327,14 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
                 <Badge variant={GATE_BADGE[result.gate]}>{result.gate}</Badge>
               ) : null}
             </div>
-          </>
+            <p className="text-[11px] text-muted">
+              Your logged sets, RIR, pump, soreness, and performance affect the
+              next completed session—not today&apos;s target.
+            </p>
+          </div>
         ) : (
           <p className="text-sm text-muted">
-            Log a set to get the engine&apos;s call.
+            Log your sets and feedback to preview the next session.
           </p>
         )}
       </div>

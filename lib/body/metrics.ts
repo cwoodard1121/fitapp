@@ -6,19 +6,10 @@ export type WeightBasis = 'latest' | 'block_floor'
 type BodyFatBasis = 'lean_retention' | 'measured' | 'none'
 const DRY_WATER_DROP_PCT = 0.02
 const RECENT_HIGH_DAYS = 21
-const STRENGTH_LOOKBACK_DAYS = 180
-const STRENGTH_INFLUENCE = 0.1
 
 interface WeightReading {
   date: string
   weight: number
-}
-
-export interface StrengthEstimatePoint {
-  date: string
-  exerciseName: string
-  e1rm: number | null
-  source?: 'logged' | 'baseline'
 }
 
 export interface NormalizedBodyweight {
@@ -46,25 +37,6 @@ export interface BodyFatEstimate {
 }
 
 type LeanRetentionBaseline = BodyMetric & { bodyweight: number; bodyfat_pct: number }
-export type StrengthLiftKind = 'bench' | 'squat' | 'deadlift' | 'press'
-
-export interface BodyFatStrengthLift {
-  kind: StrengthLiftKind
-  exerciseName: string
-  date: string
-  source: 'logged' | 'baseline'
-  e1rm: number
-  ratio: number
-  signalBodyfat: number
-}
-
-export interface BodyFatStrengthSignal {
-  bodyfat: number
-  influence: number
-  adjustmentCap: number
-  liftCount: number
-  lifts: BodyFatStrengthLift[]
-}
 
 export interface BodyFatEstimateBreakdown {
   date: string | null
@@ -78,38 +50,6 @@ export interface BodyFatEstimateBreakdown {
   recentHighWeight: number
   dryWaterDrop: number
   dryLeanMass: number
-  strengthSignal: BodyFatStrengthSignal | null
-  strengthAdjustment: number
-}
-
-const STRENGTH_BODYFAT_SIGNALS: Record<
-  StrengthLiftKind,
-  { ratio: number; bodyfat: number }[]
-> = {
-  bench: [
-    { ratio: 1.75, bodyfat: 15 },
-    { ratio: 1.6, bodyfat: 17 },
-    { ratio: 1.45, bodyfat: 20 },
-    { ratio: 1.3, bodyfat: 23 },
-  ],
-  squat: [
-    { ratio: 2.25, bodyfat: 15 },
-    { ratio: 2, bodyfat: 18 },
-    { ratio: 1.75, bodyfat: 21 },
-    { ratio: 1.5, bodyfat: 24 },
-  ],
-  deadlift: [
-    { ratio: 2.5, bodyfat: 15 },
-    { ratio: 2.25, bodyfat: 18 },
-    { ratio: 2, bodyfat: 21 },
-    { ratio: 1.75, bodyfat: 24 },
-  ],
-  press: [
-    { ratio: 1.1, bodyfat: 15 },
-    { ratio: 1, bodyfat: 18 },
-    { ratio: 0.85, bodyfat: 21 },
-    { ratio: 0.7, bodyfat: 24 },
-  ],
 }
 
 function round1(n: number): number {
@@ -137,6 +77,37 @@ function leanRetentionBaseline(entries: BodyMetric[]): LeanRetentionBaseline | n
   )
 }
 
+/**
+ * Keep an active block's projection stable when older wearable history is
+ * imported later. Prefer the first valid body-fat anchor in the block; if there
+ * is none, use only the nearest valid anchor before it (not the oldest ever).
+ */
+function entriesFromBlockAnchor(
+  entries: BodyMetric[],
+  block: Pick<Block, 'start_date'> | null | undefined,
+): BodyMetric[] {
+  const startDate = block?.start_date
+  if (!startDate) return entries
+
+  const validAnchor = (entry: BodyMetric) =>
+    entry.bodyweight != null &&
+    entry.bodyweight > 0 &&
+    entry.bodyfat_pct != null &&
+    entry.bodyfat_pct > 0 &&
+    entry.bodyfat_pct < 80
+  const inBlock = entries.find(
+    (entry) => entry.measured_on >= startDate && validAnchor(entry),
+  )
+  const beforeBlock = [...entries]
+    .reverse()
+    .find((entry) => entry.measured_on < startDate && validAnchor(entry))
+  const anchor = inBlock ?? beforeBlock
+
+  return anchor
+    ? entries.filter((entry) => entry.measured_on >= anchor.measured_on)
+    : entries.filter((entry) => entry.measured_on >= startDate)
+}
+
 function recentHighWeight(readings: WeightReading[], date: string | null): number | null {
   if (readings.length === 0) return null
   const end = date ? parseISO(date) : parseISO(readings[readings.length - 1].date)
@@ -155,7 +126,7 @@ function leanBodyFatBreakdown(
   date: string | null,
 ): Omit<
   BodyFatEstimateBreakdown,
-  'finalEstimate' | 'strengthSignal' | 'strengthAdjustment'
+  'finalEstimate'
 > | null {
   const baseline = leanRetentionBaseline(entries)
   if (!baseline) return null
@@ -181,102 +152,19 @@ function leanBodyFatBreakdown(
   }
 }
 
-export function strengthLiftKind(name: string): StrengthLiftKind | null {
-  const lower = name.toLowerCase()
-  if (/\b(db|dumbbell|machine|smith)\b/.test(lower)) return null
-  if (lower.includes('romanian deadlift') || lower.includes('rdl')) return null
-  if (lower.includes('bench')) return 'bench'
-  if (lower.includes('squat')) return 'squat'
-  if (lower.includes('deadlift')) return 'deadlift'
-  if (lower.includes('overhead press') || lower.includes('military press')) return 'press'
-  return null
-}
-
-function strengthBodyFatSignal(
-  strengthPoints: StrengthEstimatePoint[] | null | undefined,
-  bodyweight: number,
-  date: string | null,
-): BodyFatStrengthSignal | null {
-  if (!strengthPoints?.length || bodyweight <= 0) return null
-
-  const end = date ? parseISO(date) : null
-  const start = end ? addDays(end, -STRENGTH_LOOKBACK_DAYS) : null
-  const bestByKind = new Map<
-    StrengthLiftKind,
-    { ratio: number; point: StrengthEstimatePoint & { e1rm: number } }
-  >()
-
-  for (const point of strengthPoints) {
-    if (point.e1rm == null || point.e1rm <= 0) continue
-    const kind = strengthLiftKind(point.exerciseName)
-    if (!kind) continue
-
-    if ((point.source ?? 'logged') !== 'baseline' && end && start) {
-      const liftedAt = parseISO(point.date)
-      if (liftedAt > end || liftedAt < start) continue
-    }
-
-    const ratio = point.e1rm / bodyweight
-    const prev = bestByKind.get(kind)?.ratio ?? 0
-    if (ratio > prev) {
-      bestByKind.set(kind, { ratio, point: { ...point, e1rm: point.e1rm } })
-    }
-  }
-
-  const lifts = [...bestByKind.entries()]
-    .map(([kind, { point, ratio }]) => {
-      const tier = STRENGTH_BODYFAT_SIGNALS[kind].find((t) => ratio >= t.ratio)
-      if (!tier) return null
-      return {
-        kind,
-        exerciseName: point.exerciseName,
-        date: dateKey(point.date),
-        source: point.source ?? 'logged',
-        e1rm: round1(point.e1rm),
-        ratio: round1(ratio),
-        signalBodyfat: tier.bodyfat,
-      }
-    })
-    .filter((v): v is BodyFatStrengthLift => v != null)
-
-  if (lifts.length === 0) return null
-  const averageSignal =
-    lifts.reduce((sum, lift) => sum + lift.signalBodyfat, 0) / lifts.length
-  const adjustmentCap = lifts.length >= 3 ? 0.75 : lifts.length >= 2 ? 0.5 : 0.3
-  return {
-    bodyfat: round1(averageSignal),
-    influence: STRENGTH_INFLUENCE,
-    adjustmentCap,
-    liftCount: lifts.length,
-    lifts,
-  }
-}
-
 export function estimateBodyFatBreakdown(
   entries: BodyMetric[],
   bodyweight: number | null,
   date: string | null = null,
-  strengthPoints?: StrengthEstimatePoint[] | null,
 ): BodyFatEstimateBreakdown | null {
   if (bodyweight == null || bodyweight <= 0) return null
 
   const base = leanBodyFatBreakdown(entries, bodyweight, date)
   if (!base) return null
 
-  const strengthSignal = strengthBodyFatSignal(strengthPoints, bodyweight, date)
-  const strengthAdjustment = strengthSignal
-    ? Math.min(
-        strengthSignal.adjustmentCap,
-        Math.max(0, base.leanEstimate - strengthSignal.bodyfat) * strengthSignal.influence,
-      )
-    : 0
-  const finalEstimate = base.leanEstimate - strengthAdjustment
-
   return {
     ...base,
-    finalEstimate: round1(clamp(finalEstimate, 1, 80)),
-    strengthSignal,
-    strengthAdjustment: round1(strengthAdjustment),
+    finalEstimate: base.leanEstimate,
   }
 }
 
@@ -284,9 +172,8 @@ export function estimateBodyFatAtWeightFromLeanRetention(
   entries: BodyMetric[],
   bodyweight: number | null,
   date: string | null = null,
-  strengthPoints?: StrengthEstimatePoint[] | null,
 ): number | null {
-  return estimateBodyFatBreakdown(entries, bodyweight, date, strengthPoints)?.finalEstimate ?? null
+  return estimateBodyFatBreakdown(entries, bodyweight, date)?.finalEstimate ?? null
 }
 
 function isCutBlock(block: Pick<Block, 'phase' | 'start_date'> | null | undefined) {
@@ -428,9 +315,9 @@ export function blockFloorWeeklyRate(
 export function estimateBodyFatFromLeanRetention(
   entries: BodyMetric[],
   block?: Pick<Block, 'start_date'> | null,
-  strengthPoints?: StrengthEstimatePoint[] | null,
 ): BodyFatEstimate {
-  const baseline = leanRetentionBaseline(entries)
+  const calculationEntries = entriesFromBlockAnchor(entries, block)
+  const baseline = leanRetentionBaseline(calculationEntries)
   const scopedEntries = scopeEntriesFromBlock(entries, block)
   const useBlockFloor = hasBlockStart(block)
 
@@ -464,10 +351,9 @@ export function estimateBodyFatFromLeanRetention(
         bodyweight: round1(estimateWeight),
         bodyfat:
           estimateBodyFatAtWeightFromLeanRetention(
-            entries,
+            calculationEntries,
             estimateWeight,
             dateKey(e.measured_on),
-            strengthPoints,
           ) ?? 0,
       }
     })
@@ -481,10 +367,9 @@ export function estimateBodyFatFromLeanRetention(
     points,
     breakdown: points.length
       ? estimateBodyFatBreakdown(
-          entries,
+          calculationEntries,
           points[points.length - 1].bodyweight,
           points[points.length - 1].date,
-          strengthPoints,
         )
       : null,
   }

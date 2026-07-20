@@ -6,7 +6,6 @@ import {
   epley1RM,
   detectStall,
   DEFAULT_WEIGHTS,
-  adjustTargetsForReadiness,
   type SlotConfig,
   type SetLogInput,
   type EngineContext,
@@ -478,32 +477,7 @@ describe('smart layer — incoming soreness and DOMS', () => {
     expect(res.decision).toBe('Add 1 rep')
   })
 
-  it('caps progression when soreness is high even if performance is strong', () => {
-    const plan = adjustTargetsForReadiness(
-      { load: 85, sets: 4, reps: 13, rir: 3 },
-      log({ soreness: 8, recovery: 8, performance: 'Up' }),
-      slot(),
-      { week: 2 },
-      log({ actualLoad: 80, actualSets: 3, bestReps: 12 }),
-    )
-
-    expect(plan.targets).toMatchObject({ load: 80, sets: 3, reps: 12 })
-    expect(plan.note).toMatch(/performing strongly/i)
-  })
-
-  it('trims a set for 10/10 first-week DOMS without treating mild DOMS as failure', () => {
-    const plan = adjustTargetsForReadiness(
-      { load: 80, sets: 3, reps: 10, rir: 3 },
-      log({ soreness: 10, recovery: 8, performance: 'Up' }),
-      slot(),
-      { week: 1 },
-      null,
-    )
-
-    expect(plan.targets.sets).toBe(2)
-    expect(plan.targets.load).toBe(80)
-    expect(plan.note).toMatch(/first-week DOMS/i)
-
+  it('holds the next session after 10/10 soreness', () => {
     const result = evaluateSlot(strongLog({ soreness: 10 }), slot(), ctx({ week: 1 }))
     expect(result.gate).toBe('Red')
     expect(result.decision).toBe('Hold/reduce')

@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BodyMetric, NutritionLog } from '@/lib/types'
+import {
+  CALIBRATION_MIN_DAYS,
+  computeCalibration,
+} from './calibration'
+import { KCAL_PER_STEP } from './deficit'
 
-import { computeCalibration } from './calibration'
+function dates(start: string, count: number): string[] {
+  const first = new Date(`${start}T00:00:00.000Z`)
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(first)
+    date.setUTCDate(date.getUTCDate() + index)
+    return date.toISOString().slice(0, 10)
+  })
+}
 
 function bodyMetric(date: string, bodyweight: number): BodyMetric {
   return {
@@ -37,281 +49,118 @@ function nutritionLog(date: string, calories: number): NutritionLog {
   }
 }
 
-describe('maintenance calibration', () => {
-  it('unlocks at exactly seven fully logged completed days and not six', () => {
-    const dates = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date('2026-06-20T00:00:00.000Z')
-      date.setUTCDate(date.getUTCDate() + index)
-      return date.toISOString().slice(0, 10)
-    })
-    const base = {
-      bodyEntries: [
-        bodyMetric('2026-06-20', 200),
-        bodyMetric('2026-06-26', 199),
-      ],
-      stepsByDate: {},
-      maintenance: 2500,
-      stepBaseline: 10000,
-      weightKg: 90,
-      minCalories: 1200,
-      unit: 'lb' as const,
-      windowStart: new Date('2026-06-20T00:00:00.000Z'),
-      today: '2026-06-27',
-      phase: 'cut' as const,
-    }
-
-    const sevenDays = computeCalibration({
-      ...base,
-      logs: dates.map((date) => nutritionLog(date, 2000)),
-    })
-    const sixDays = computeCalibration({
-      ...base,
-      logs: dates.slice(0, -1).map((date) => nutritionLog(date, 2000)),
-    })
-
-    expect(sevenDays.status).toBe('ok')
-    expect(sevenDays.daysLogged).toBe(7)
-    expect(sixDays.status).toBe('insufficient')
-    expect(sixDays.daysLogged).toBe(6)
+function completeInput({
+  maintenance = 2500,
+  weightOutlier = false,
+}: {
+  maintenance?: number | null
+  weightOutlier?: boolean
+} = {}) {
+  const analysisDates = dates('2026-06-15', CALIBRATION_MIN_DAYS)
+  const trueMaintenance = 2600
+  const weeklyLoss = 1
+  const stepsByDate = Object.fromEntries(
+    analysisDates.map((date, index) => [date, index % 2 ? 12_000 : 8_000]),
+  )
+  const logs = analysisDates.map((date) => {
+    const stepDelta = (stepsByDate[date] - 10_000) * KCAL_PER_STEP
+    return nutritionLog(date, trueMaintenance + stepDelta - 500)
   })
+  const bodyEntries = analysisDates.map((date, index) =>
+    bodyMetric(
+      date,
+      200 - (weeklyLoss * index) / 7 + (weightOutlier && index === 6 ? 5 : 0),
+    ),
+  )
 
-  it('does not suggest a maintenance change during the initial cut water flush', () => {
-    const dates = [
-      '2026-06-20',
-      '2026-06-21',
-      '2026-06-22',
-      '2026-06-23',
-      '2026-06-24',
-      '2026-06-25',
-      '2026-06-26',
-      '2026-06-27',
-      '2026-06-28',
-      '2026-06-29',
-      '2026-06-30',
-      '2026-07-01',
-      '2026-07-02',
-      '2026-07-03',
-      '2026-07-04',
-    ]
-
-    const calibration = computeCalibration({
-      bodyEntries: [
-        bodyMetric('2026-06-20', 200),
-        bodyMetric('2026-06-23', 198.7),
-        bodyMetric('2026-06-27', 197),
-        bodyMetric('2026-07-01', 195.3),
-        bodyMetric('2026-07-04', 194),
-      ],
-      logs: dates.map((date) => nutritionLog(date, 2000)),
-      stepsByDate: {},
-      maintenance: 2500,
-      stepBaseline: 10000,
-      weightKg: 90,
-      minCalories: 1200,
-      unit: 'lb',
-      windowStart: new Date('2026-06-20T00:00:00.000Z'),
-      today: '2026-07-04',
-      phase: 'cut',
-    })
-
-    expect(calibration.status).toBe('ok')
-    expect(calibration.waterWeight.earlyDietOffset).toBe(0)
-    expect(calibration.suggestion).toBeNull()
-    expect(calibration.deferredReason).toBe('early_cut_water')
-  })
-
-  it('waits for consistent post-flush intake instead of assuming perfect tracking', () => {
-    const calibration = computeCalibration({
-      bodyEntries: [
-        bodyMetric('2026-06-27', 200),
-        bodyMetric('2026-07-01', 199.4),
-        bodyMetric('2026-07-05', 198.8),
-        bodyMetric('2026-07-09', 198.2),
-        bodyMetric('2026-07-13', 198),
-      ],
-      logs: [
-        nutritionLog('2026-06-27', 2000),
-        nutritionLog('2026-06-29', 2000),
-        nutritionLog('2026-07-01', 2000),
-        nutritionLog('2026-07-03', 2000),
-        nutritionLog('2026-07-05', 2000),
-        nutritionLog('2026-07-07', 2000),
-        nutritionLog('2026-07-09', 2000),
-        nutritionLog('2026-07-11', 2000),
-      ],
-      stepsByDate: {},
-      maintenance: 2500,
-      stepBaseline: 10000,
-      weightKg: 90,
-      minCalories: 1200,
-      unit: 'lb',
-      windowStart: new Date('2026-06-20T00:00:00.000Z'),
-      today: '2026-07-14',
-      phase: 'cut',
-    })
-
-    expect(calibration.status).toBe('insufficient')
-    expect(calibration.daysLogged).toBe(3)
-    expect(calibration.trackingConsistency).toBeLessThan(1)
-    expect(calibration.suggestion).toBeNull()
-  })
-
-  it('drops under-logged calorie days from predicted deficit', () => {
-    const dates = Array.from({ length: 17 }, (_, i) => {
-      const d = new Date('2026-06-20T00:00:00.000Z')
-      d.setUTCDate(d.getUTCDate() + i)
-      return d.toISOString().slice(0, 10)
-    })
-    const bodyEntries = [
-      bodyMetric('2026-06-20', 200),
-      bodyMetric('2026-06-23', 199.5),
-      bodyMetric('2026-06-27', 199),
-      bodyMetric('2026-07-02', 198.4),
-      bodyMetric('2026-07-06', 198),
-    ]
-    const logs = dates.map((date) => nutritionLog(date, date === '2026-07-03' ? 500 : 2000))
-
-    const base = {
+  return {
+    input: {
       bodyEntries,
       logs,
-      stepsByDate: {},
-      maintenance: 2500,
-      stepBaseline: 10000,
-      weightKg: 90,
+      stepsByDate,
+      maintenance,
+      stepBaseline: 10_000,
+      weightKg: 70,
       unit: 'lb' as const,
-      windowStart: new Date('2026-06-20T00:00:00.000Z'),
-      today: '2026-07-07',
-    }
+      windowStart: new Date(2026, 5, 1),
+      today: '2026-06-29',
+    },
+    trueMaintenance,
+  }
+}
 
-    const unfiltered = computeCalibration({ ...base, minCalories: null })
-    const filtered = computeCalibration({ ...base, minCalories: 1200 })
-
-    expect(unfiltered.daysLogged).toBe(7)
-    expect(filtered.daysLogged).toBe(6)
-    expect(filtered.ignoredLowDays).toBe(1)
-  })
-
-  it('uses only the latest seven completed intake days', () => {
-    const dates = Array.from({ length: 22 }, (_, i) => {
-      const d = new Date('2026-06-27T00:00:00.000Z')
-      d.setUTCDate(d.getUTCDate() + i)
-      return d.toISOString().slice(0, 10)
-    })
-
-    const calibration = computeCalibration({
-      bodyEntries: [
-        bodyMetric('2026-06-27', 200),
-        bodyMetric('2026-07-01', 199.4),
-        bodyMetric('2026-07-05', 198.8),
-        bodyMetric('2026-07-09', 198.2),
-        bodyMetric('2026-07-13', 197.1),
-      ],
-      logs: dates.map((date) => nutritionLog(date, date === '2026-07-05' ? 3500 : 2000)),
+describe('maintenance calibration', () => {
+  it('keeps calibration locked during the first 14 block days', () => {
+    const result = computeCalibration({
+      bodyEntries: [],
+      logs: [],
       stepsByDate: {},
       maintenance: 2500,
-      stepBaseline: 10000,
-      weightKg: 90,
-      minCalories: 1200,
+      stepBaseline: 10_000,
+      weightKg: 70,
       unit: 'lb',
-      windowStart: new Date('2026-06-20T00:00:00.000Z'),
-      today: '2026-07-19',
-      phase: 'cut',
+      windowStart: new Date(2026, 5, 1),
+      today: '2026-06-10',
     })
 
-    expect(calibration.status).toBe('ok')
-    expect(calibration.predictedWeeklyLoss).toBeGreaterThan(0.95)
-    expect(calibration.predictedWeeklyLoss).toBeLessThan(1.05)
+    expect(result.status).toBe('collecting')
+    expect(result.checklist.find((item) => item.key === 'water')?.complete).toBe(false)
   })
 
-  it('uses the cut block floor so one heavier morning does not lower maintenance', () => {
-    const dates = [
-      '2026-06-20',
-      '2026-06-21',
-      '2026-06-22',
-      '2026-06-23',
-      '2026-06-24',
-      '2026-06-25',
-      '2026-06-26',
-      '2026-06-27',
-      '2026-06-28',
-      '2026-06-29',
-      '2026-06-30',
-      '2026-07-01',
-      '2026-07-02',
-      '2026-07-03',
-      '2026-07-04',
-      '2026-07-05',
-    ]
+  it('infers maintenance at the fixed step baseline from complete tracking', () => {
+    const { input, trueMaintenance } = completeInput()
+    const result = computeCalibration(input)
 
-    const calibration = computeCalibration({
-      bodyEntries: [
-        bodyMetric('2026-06-27', 200),
-        bodyMetric('2026-06-30', 199.4),
-        bodyMetric('2026-07-03', 198.8),
-        bodyMetric('2026-07-06', 198),
-        bodyMetric('2026-07-13', 199.7),
-      ],
-      logs: [
-        ...dates,
-        '2026-07-06',
-        '2026-07-07',
-        '2026-07-08',
-        '2026-07-09',
-        '2026-07-10',
-        '2026-07-11',
-        '2026-07-12',
-      ].map((date) => nutritionLog(date, 2000)),
-      stepsByDate: {},
-      maintenance: 2500,
-      stepBaseline: 10000,
-      weightKg: 90,
-      minCalories: 1200,
-      unit: 'lb',
-      windowStart: new Date('2026-06-20T00:00:00.000Z'),
-      today: '2026-07-13',
-      phase: 'cut',
+    expect(result.status).toBe('ready')
+    expect(result.actualWeeklyLoss).toBeCloseTo(1, 6)
+    expect(result.estimatedMaintenance).toBe(trueMaintenance)
+    expect(result.suggestion).toMatchObject({
+      direction: 'raise',
+      newMaintenance: trueMaintenance,
     })
-
-    expect(calibration.status).toBe('ok')
-    expect(calibration.scaleBasis).toBe('cut_floor')
-    expect(calibration.waterWeight.adjustedReadings).toBe(0)
-    expect(calibration.predictedWeeklyLoss).toBeGreaterThan(0.95)
-    expect(calibration.predictedWeeklyLoss).toBeLessThan(1.05)
-    expect(calibration.actualWeeklyLoss).toBeGreaterThan(0.85)
-    expect(calibration.actualWeeklyLoss).toBeLessThan(0.9)
-    expect(calibration.suggestion).toBeNull()
   })
 
-  it('lets an old cut block floor age down when no new lows happen', () => {
-    const dates = Array.from({ length: 29 }, (_, i) => {
-      const d = new Date('2026-06-27T00:00:00.000Z')
-      d.setUTCDate(d.getUTCDate() + i)
-      return d.toISOString().slice(0, 10)
-    })
+  it('normalizes alternating high and low step days without moving the baseline', () => {
+    const { input } = completeInput()
+    const result = computeCalibration(input)
 
-    const calibration = computeCalibration({
-      bodyEntries: [
-        bodyMetric('2026-06-27', 200),
-        bodyMetric('2026-07-04', 198),
-        bodyMetric('2026-07-11', 199),
-        bodyMetric('2026-07-18', 199.5),
-        bodyMetric('2026-07-25', 199.6),
-      ],
-      logs: dates.map((date) => nutritionLog(date, 2000)),
-      stepsByDate: {},
-      maintenance: 2500,
-      stepBaseline: 10000,
-      weightKg: 90,
-      minCalories: 1200,
-      unit: 'lb',
-      windowStart: new Date('2026-06-20T00:00:00.000Z'),
-      today: '2026-07-25',
-      phase: 'cut',
-    })
+    expect(result.avgSteps).toBe(10_000)
+    expect(result.stepBaseline).toBe(10_000)
+    expect(result.estimatedMaintenance).toBe(2600)
+  })
 
-    expect(calibration.status).toBe('ok')
-    expect(calibration.actualWeeklyLoss).toBeGreaterThan(0.45)
-    expect(calibration.actualWeeklyLoss).toBeLessThan(0.55)
-    expect(calibration.suggestion?.direction).toBe('lower')
+  it('waits when even one calorie or step day is missing', () => {
+    const { input } = completeInput()
+    const missingDate = Object.keys(input.stepsByDate)[0]
+    delete input.stepsByDate[missingDate]
+    input.logs = input.logs.slice(1)
+
+    const result = computeCalibration(input)
+
+    expect(result.status).toBe('collecting')
+    expect(result.checklist.find((item) => item.key === 'calories')?.complete).toBe(false)
+    expect(result.checklist.find((item) => item.key === 'steps')?.complete).toBe(false)
+    expect(result.estimatedMaintenance).toBeNull()
+  })
+
+  it('uses a robust scale slope that resists one water-weight spike', () => {
+    const { input } = completeInput({ weightOutlier: true })
+    const result = computeCalibration(input)
+
+    expect(result.status).toBe('ready')
+    expect(result.actualWeeklyLoss).toBeCloseTo(1, 6)
+    expect(result.estimatedMaintenance).toBe(2600)
+  })
+
+  it('can establish maintenance when no prior setting exists', () => {
+    const { input } = completeInput({ maintenance: null })
+    const result = computeCalibration(input)
+
+    expect(result.status).toBe('ready')
+    expect(result.suggestion).toEqual({
+      direction: 'set',
+      kcal: null,
+      newMaintenance: 2600,
+    })
   })
 })

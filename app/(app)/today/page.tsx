@@ -159,11 +159,26 @@ export default async function TodayPage({
   const payload = allowed ? (await getLatestAnalysis())?.payload ?? null : null
   const focus = payload?.focus ?? []
 
-  // Most recent wearable readout + a baseline-relative recovery score, gated like
-  // the AI. Pull a month of history so the score has a baseline to compare against.
+  // Most recent wearable readout + a baseline-relative recovery score. Its
+  // baseline starts with the current training block, so each phase establishes
+  // its own normal.
   let latestRecovery: RecoveryMetric | null = null
   let recoveryScore: RecoveryScore | null = null
   if (allowed) {
+    const { data: trainingBlockRows, error: trainingBlockError } = await supabase
+      .from('blocks')
+      .select('program_id,phase,start_date')
+      .eq('user_id', userId)
+      .eq('kind', 'training')
+      .eq('is_active', true)
+      .order('start_date', { ascending: false })
+    if (trainingBlockError) throw trainingBlockError
+    const trainingBlock =
+      trainingBlockRows?.find((block) => block.program_id === program.id) ??
+      trainingBlockRows?.find((block) => block.program_id == null) ??
+      trainingBlockRows?.[0] ??
+      null
+    const recoveryBaselineStart = trainingBlock?.start_date ?? program.start_date
     const recent = await getRecoveryRange(supabase, userId, 35)
     for (let i = recent.length - 1; i >= 0; i--) {
       if (recent[i].steps != null || recent[i].sleep_minutes_asleep != null) {
@@ -172,7 +187,9 @@ export default async function TodayPage({
       }
     }
     if (latestRecovery) {
-      recoveryScore = computeRecoveryScore(recent, latestRecovery.metric_date)
+      recoveryScore = computeRecoveryScore(recent, latestRecovery.metric_date, {
+        baselineStart: recoveryBaselineStart,
+      })
     }
   }
 

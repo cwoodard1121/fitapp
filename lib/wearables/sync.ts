@@ -52,8 +52,7 @@ export interface SyncResult {
 /**
  * Sync one user's wearable. Never throws — returns a structured result.
  * Pass `opts.lookbackDays` to widen the window for a one-time history backfill
- * (steps/nutrition/weight/body-fat use daily rollups, fine over a long range;
- * sleep is a list capped at the most recent ~25 nights without pagination).
+ * (long ranges are split into API-safe chunks and sleep is paginated).
  */
 export async function syncUserWearable(
   supabase: SupabaseClient,

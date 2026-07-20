@@ -42,7 +42,9 @@ export default async function OverviewPage() {
   if (allowed) {
     const sb = await createClient()
     const uid = await requireUserId(sb)
-    recovery = await getRecoveryRange(sb, uid, 30)
+    // Keep enough imported history available for the chart's range picker.
+    // Today/recovery scoring remains on its separate 35-day query.
+    recovery = await getRecoveryRange(sb, uid, 1000)
   }
 
   return (
@@ -56,7 +58,8 @@ export default async function OverviewPage() {
                 Recovery
               </CardTitle>
               <CardDescription>
-                Steps &amp; sleep from your wearable — switch between daily and weekly.
+                Steps &amp; sleep from your wearable — recent by default, with longer
+                history on demand.
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -6,7 +6,7 @@ import type { WeightBasis } from "@/lib/body/metrics"
  * client chart components. No engine/Supabase imports leak across the boundary.
  */
 
-/** One logged set for one exercise, with the engine's call attached. */
+/** One logged set with the next-session prescription it produced. */
 export interface ExercisePoint {
   /** ISO timestamp of the set_log (created_at). */
   date: string

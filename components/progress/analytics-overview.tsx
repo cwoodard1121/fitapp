@@ -3,19 +3,14 @@ import { format, parseISO } from 'date-fns'
 import {
   Activity,
   CalendarClock,
-  Dumbbell,
   Flame,
   Scale,
   Target,
-  TrendingDown,
-  TrendingUp,
-  Minus,
 } from 'lucide-react'
 
 import type { Unit } from '@/lib/types'
 import type {
   GoalAnalytic,
-  LiftAnalytic,
   TrainingAnalytics,
 } from '@/lib/analytics/types'
 import {
@@ -28,13 +23,12 @@ import {
   Progress,
   Stat,
 } from '@/components/ui'
-import { cn } from '@/lib/utils'
 
 /**
  * AnalyticsOverview — the deterministic numbers surface. Everything here is
  * computed in code (lib/analytics), NEVER by the LLM. It is the "analytics the
  * site uses" and renders something useful even in Week 1: mesocycle position,
- * per-lift pacing, goal pacing with required-vs-actual rate + projected ETA,
+ * goal pacing with required-vs-actual rate + projected ETA,
  * muscle volume balance, body trajectory, and nutrition adherence.
  */
 export function AnalyticsOverview({
@@ -44,12 +38,11 @@ export function AnalyticsOverview({
   analytics: TrainingAnalytics
   unit: Unit
 }) {
-  const { meso, lifts, goals, body, volume, nutrition } = analytics
+  const { meso, goals, body, volume, nutrition } = analytics
 
   return (
     <div className="space-y-4">
       <MesoCard meso={meso} />
-      <LiftsCard lifts={lifts} unit={unit} />
       {goals.length > 0 ? <GoalsCard goals={goals} /> : null}
       {volume.length > 0 ? <VolumeCard volume={volume} unit={unit} /> : null}
       {body.readings > 0 ? <BodyCard body={body} unit={unit} /> : null}
@@ -99,120 +92,6 @@ function MesoCard({ meso }: { meso: TrainingAnalytics['meso'] }) {
         <Progress value={pct} aria-label="Mesocycle progress" />
       </CardContent>
     </Card>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/* Per-lift pacing                                                     */
-/* ------------------------------------------------------------------ */
-
-function LiftsCard({ lifts, unit }: { lifts: LiftAnalytic[]; unit: Unit }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <Dumbbell className="size-4 text-signal" aria-hidden />
-          Lift pacing
-        </CardTitle>
-        <CardDescription>
-          Latest e1RM, change, and weekly rate per lift — straight from the engine.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {lifts.length === 0 ? (
-          <p className="text-sm text-muted">No lifts logged yet.</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {lifts.map((l) => (
-              <LiftRow key={l.exercise} lift={l} unit={unit} />
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function LiftRow({ lift, unit }: { lift: LiftAnalytic; unit: Unit }) {
-  return (
-    <li className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0 space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-sm font-medium text-foreground">
-            {lift.exercise}
-          </span>
-          {lift.muscleArea ? (
-            <Badge
-              variant="outline"
-              className="font-mono text-[10px] uppercase tracking-wide"
-            >
-              {lift.muscleArea}
-            </Badge>
-          ) : null}
-          {lift.stalled ? <Badge variant="warning">Stalled</Badge> : null}
-        </div>
-        <p className="text-[11px] text-muted">
-          {lift.sessions} {lift.sessions === 1 ? 'session' : 'sessions'}
-          {lift.latestLoad != null ? (
-            <>
-              {' · '}
-              {num(lift.latestLoad, 1)} {unit}
-              {lift.latestReps != null ? ` × ${num(lift.latestReps)}` : ''}
-            </>
-          ) : null}
-          {lift.lastDecision ? <> {' · '}{lift.lastDecision}</> : null}
-        </p>
-      </div>
-
-      <div className="flex shrink-0 items-end gap-4">
-        <Stat
-          label="e1RM"
-          value={lift.latestE1rm}
-          unit={unit}
-          precision={1}
-          size="sm"
-          tone="signal"
-          placeholder="—"
-        />
-        <div className="flex flex-col items-end gap-0.5">
-          <TrendDelta lift={lift} />
-          <span className="font-mono text-[11px] tabular-nums text-muted">
-            {lift.weeklyE1rmRate != null
-              ? `${signed(lift.weeklyE1rmRate, 1)}/wk`
-              : 'new'}
-          </span>
-        </div>
-      </div>
-    </li>
-  )
-}
-
-function TrendDelta({ lift }: { lift: LiftAnalytic }) {
-  const tone =
-    lift.trend === 'up'
-      ? 'text-gate-green'
-      : lift.trend === 'down'
-        ? 'text-gate-red'
-        : 'text-muted'
-  const Icon =
-    lift.trend === 'up'
-      ? TrendingUp
-      : lift.trend === 'down'
-        ? TrendingDown
-        : Minus
-
-  if (lift.e1rmChange == null) {
-    return <span className="text-[11px] text-muted">No trend yet</span>
-  }
-
-  return (
-    <span
-      className={cn('flex items-center gap-1 font-mono text-xs tabular-nums', tone)}
-    >
-      <Icon className="size-3.5" aria-hidden />
-      {signed(lift.e1rmChange, 1)}
-      {lift.e1rmChangePct != null ? ` (${signed(lift.e1rmChangePct, 1)}%)` : ''}
-    </span>
   )
 }
 

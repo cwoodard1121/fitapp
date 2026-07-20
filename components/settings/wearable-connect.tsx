@@ -71,7 +71,7 @@ export function WearableConnect({ data }: { data: WearableConnectData }) {
     startTransition(async () => {
       const res = await backfillWearableNow()
       if (res.ok) {
-        toast.success(`History imported — ${res.daysWritten ?? 0} day${res.daysWritten === 1 ? '' : 's'} of steps/sleep updated.`)
+        toast.success(`History imported — up to one year checked, with ${res.daysWritten ?? 0} day${res.daysWritten === 1 ? '' : 's'} of steps/sleep updated.`)
         router.refresh()
       } else {
         toast.error(res.error)
@@ -141,6 +141,12 @@ export function WearableConnect({ data }: { data: WearableConnectData }) {
 
             <RecentRecovery rows={data.recent} />
 
+            <p className="text-xs text-muted">
+              Importing older data fills the longer chart ranges. Live recovery,
+              coaching, and active-block calculations keep their existing recent
+              windows.
+            </p>
+
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={handleSync} disabled={pending}>
                 <RefreshCw className={`size-3.5 ${pending ? 'animate-spin' : ''}`} aria-hidden />
@@ -148,7 +154,7 @@ export function WearableConnect({ data }: { data: WearableConnectData }) {
               </Button>
               <Button variant="outline" size="sm" onClick={handleBackfill} disabled={pending}>
                 <History className="size-3.5" aria-hidden />
-                Import history
+                Import 1 year
               </Button>
               <Button asChild variant="outline" size="sm">
                 <a href={CONNECT_HREF}>

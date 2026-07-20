@@ -80,7 +80,7 @@ export function SlotReadout({
 
   return (
     <div className="rounded-lg border border-border bg-surface">
-      {/* Header: exercise + the engine's call */}
+      {/* Header: exercise + the next-session prescription it produced. */}
       <div className="flex items-start justify-between gap-3 p-4">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
@@ -107,12 +107,17 @@ export function SlotReadout({
             <p className="text-xs text-muted">{slot.muscle_area}</p>
           ) : null}
         </div>
-        <DecisionBadge
-          decision={result.decision}
-          label={result.decisionLabel}
-          reason={result.reason}
-          className="max-w-[55%] text-right [&>span:last-child]:text-right"
-        />
+        <div className="max-w-[55%] text-right">
+          <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted">
+            Next session
+          </p>
+          <DecisionBadge
+            decision={result.decision}
+            label={result.decisionLabel}
+            reason={result.reason}
+            className="text-right [&>span:last-child]:text-right"
+          />
+        </div>
       </div>
 
       <Separator />

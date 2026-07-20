@@ -5,7 +5,7 @@ import { Plus, Target } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import type { Unit } from '@/lib/types'
+import type { GoalAdvice, Unit } from '@/lib/types'
 import { GoalForm } from './goal-form'
 import { GoalCard } from './goal-card'
 import type { GoalWithCurrent } from './types'
@@ -13,9 +13,20 @@ import type { GoalWithCurrent } from './types'
 interface GoalsBoardProps {
   goals: GoalWithCurrent[]
   unit: Unit
+  advice?: GoalAdvice[]
+  aiSummary?: string | null
 }
 
-export function GoalsBoard({ goals, unit }: GoalsBoardProps) {
+function norm(value: string) {
+  return value.trim().toLowerCase()
+}
+
+export function GoalsBoard({
+  goals,
+  unit,
+  advice = [],
+  aiSummary = null,
+}: GoalsBoardProps) {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<GoalWithCurrent | null>(null)
 
@@ -36,6 +47,10 @@ export function GoalsBoard({ goals, unit }: GoalsBoardProps) {
   }
 
   const hasAny = goals.length > 0
+  const adviceByTitle = useMemo(
+    () => new Map(advice.map((item) => [norm(item.title), item])),
+    [advice],
+  )
 
   return (
     <div className="space-y-6">
@@ -55,6 +70,12 @@ export function GoalsBoard({ goals, unit }: GoalsBoardProps) {
           New goal
         </Button>
       </div>
+
+      {aiSummary?.trim() ? (
+        <p className="rounded-md border border-signal/30 bg-signal/5 px-3 py-2.5 text-sm leading-snug text-foreground">
+          {aiSummary.trim()}
+        </p>
+      ) : null}
 
       {!hasAny ? (
         <EmptyState onCreate={openCreate} />
@@ -83,7 +104,12 @@ export function GoalsBoard({ goals, unit }: GoalsBoardProps) {
             ) : (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 {active.map((g) => (
-                  <GoalCard key={g.id} goal={g} onEdit={openEdit} />
+                  <GoalCard
+                    key={g.id}
+                    goal={g}
+                    advice={adviceByTitle.get(norm(g.title)) ?? null}
+                    onEdit={openEdit}
+                  />
                 ))}
               </div>
             )}
