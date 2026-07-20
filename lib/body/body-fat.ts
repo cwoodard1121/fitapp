@@ -12,6 +12,7 @@ import type { BodyMetric } from '@/lib/types'
 export const NAVY_BODY_FAT_WEIGHT = 0.65
 export const BIA_MEDIAN_WEIGHT = 0.35
 export const BIA_MEDIAN_WINDOW_DAYS = 7
+export const NAVY_OUTLIER_RELATIVE_THRESHOLD = 0.2
 
 const CM_PER_INCH = 2.54
 
@@ -23,11 +24,13 @@ export interface BodyFatInterpretation {
   basis: BodyFatBasis
   navyBodyfatPct: number | null
   navyMeasuredOn: string | null
+  navySampleCount: number
+  navyExcludedSampleCount: number
   biaMedianPct: number | null
   biaSampleCount: number
 }
 
-type BodyFatEntry = Pick<
+export type BodyFatEntry = Pick<
   BodyMetric,
   | 'id'
   | 'measured_on'
@@ -38,6 +41,24 @@ type BodyFatEntry = Pick<
   | 'waist_cm'
   | 'navy_bodyfat_pct'
 >
+
+export interface NavyBodyFatSample {
+  id: string
+  measuredOn: string
+  bodyfatPct: number
+  referenceBodyfatPct: number | null
+  accepted: boolean
+}
+
+export interface NavyBodyFatWeekSummary {
+  weekStart: string
+  weekEnd: string
+  bodyfatPct: number | null
+  acceptedSampleCount: number
+  excludedSampleCount: number
+  totalSampleCount: number
+  samples: NavyBodyFatSample[]
+}
 
 function round1(value: number): number {
   return Math.round((value + Number.EPSILON) * 10) / 10
@@ -101,6 +122,11 @@ export function median(values: number[]): number | null {
     : round1(sorted[middle])
 }
 
+function mean(values: number[]): number | null {
+  if (values.length === 0) return null
+  return round1(values.reduce((sum, value) => sum + value, 0) / values.length)
+}
+
 function storedNavyBodyFatPct(entry: BodyFatEntry): number | null {
   if (validBodyFat(entry.navy_bodyfat_pct)) return entry.navy_bodyfat_pct
   if (entry.height_cm == null || entry.neck_cm == null || entry.waist_cm == null) {
@@ -117,13 +143,146 @@ export function hasNavyMeasurement(entry: BodyFatEntry): boolean {
   return storedNavyBodyFatPct(entry) != null
 }
 
+function biaValuesInWindow(entries: BodyFatEntry[], date: string): number[] {
+  const windowStart = format(
+    addDays(parseISO(date), -(BIA_MEDIAN_WINDOW_DAYS - 1)),
+    'yyyy-MM-dd',
+  )
+  return entries
+    .filter(
+      (candidate) =>
+        candidate.measured_on >= windowStart && candidate.measured_on <= date,
+    )
+    .map(biaBodyFatPct)
+    .filter((value): value is number => value != null)
+}
+
+/**
+ * The ordinary, non-Navy comparison value used to vet a tape estimate. Prefer
+ * the trailing seven-day BIA median; if there are no recent readings, retain
+ * the latest earlier BIA reading as the athlete's baseline.
+ */
+export function nonNavyBodyFatReference(
+  entries: BodyFatEntry[],
+  date: string,
+): number | null {
+  const recentMedian = median(biaValuesInWindow(entries, date))
+  if (recentMedian != null) return recentMedian
+
+  const latest = [...entries]
+    .filter((entry) => entry.measured_on <= date)
+    .sort((a, b) => b.measured_on.localeCompare(a.measured_on))
+    .map(biaBodyFatPct)
+    .find((value): value is number => value != null)
+  return latest ?? null
+}
+
+export function navyMeasurementsInISOWeek(
+  entries: BodyFatEntry[],
+  date: string,
+  excludeId?: string,
+): BodyFatEntry[] {
+  const parsed = parseISO(date)
+  if (!isValid(parsed)) return []
+  const start = format(startOfISOWeek(parsed), 'yyyy-MM-dd')
+  const end = format(endOfISOWeek(parsed), 'yyyy-MM-dd')
+  return entries
+    .filter(
+      (entry) =>
+        entry.id !== excludeId &&
+        entry.measured_on >= start &&
+        entry.measured_on <= end &&
+        hasNavyMeasurement(entry),
+    )
+    .sort((a, b) => a.measured_on.localeCompare(b.measured_on))
+}
+
+function summarizeNavyWeek(
+  entries: BodyFatEntry[],
+  weekDate: string,
+  throughDate: string,
+): NavyBodyFatWeekSummary | null {
+  const parsed = parseISO(weekDate)
+  if (!isValid(parsed)) return null
+  const weekStart = format(startOfISOWeek(parsed), 'yyyy-MM-dd')
+  const weekEnd = format(endOfISOWeek(parsed), 'yyyy-MM-dd')
+  const measurements = navyMeasurementsInISOWeek(entries, weekDate).filter(
+    (entry) => entry.measured_on <= throughDate,
+  )
+  if (measurements.length === 0) return null
+
+  const samples = measurements.flatMap((entry): NavyBodyFatSample[] => {
+    const bodyfatPct = storedNavyBodyFatPct(entry)
+    if (bodyfatPct == null) return []
+    const referenceBodyfatPct = nonNavyBodyFatReference(entries, entry.measured_on)
+    const accepted =
+      referenceBodyfatPct == null ||
+      Math.abs(bodyfatPct - referenceBodyfatPct) / referenceBodyfatPct <=
+        NAVY_OUTLIER_RELATIVE_THRESHOLD
+    return [
+      {
+        id: entry.id,
+        measuredOn: entry.measured_on,
+        bodyfatPct,
+        referenceBodyfatPct,
+        accepted,
+      },
+    ]
+  })
+  const acceptedValues = samples
+    .filter((sample) => sample.accepted)
+    .map((sample) => sample.bodyfatPct)
+
+  return {
+    weekStart,
+    weekEnd,
+    bodyfatPct: mean(acceptedValues),
+    acceptedSampleCount: acceptedValues.length,
+    excludedSampleCount: samples.length - acceptedValues.length,
+    totalSampleCount: samples.length,
+    samples,
+  }
+}
+
+/**
+ * Average the Navy measurements in the requested ISO week through `date`.
+ * Samples more than 20% away from their non-Navy BIA reference stay stored but
+ * are excluded from the average.
+ */
+export function navyBodyFatSummaryInISOWeek(
+  entries: BodyFatEntry[],
+  date: string,
+): NavyBodyFatWeekSummary | null {
+  return summarizeNavyWeek(entries, date, date)
+}
+
+function latestAcceptedNavySummary(
+  entries: BodyFatEntry[],
+  date: string,
+): NavyBodyFatWeekSummary | null {
+  const weekStarts = [
+    ...new Set(
+      entries
+        .filter((entry) => entry.measured_on <= date && hasNavyMeasurement(entry))
+        .map((entry) => format(startOfISOWeek(parseISO(entry.measured_on)), 'yyyy-MM-dd')),
+    ),
+  ].sort((a, b) => b.localeCompare(a))
+
+  for (const weekStart of weekStarts) {
+    const summary = summarizeNavyWeek(entries, weekStart, date)
+    if (summary?.bodyfatPct != null) return summary
+  }
+  return null
+}
+
 /**
  * Build the interpreted body-fat series on each logged body-metric date.
  *
- * Once a weekly Navy measurement exists it remains the anchor until the next
- * one. The BIA component is the median of readings from that date and the prior
- * six calendar days. Before the first Navy measurement, legacy/raw BIA values
- * pass through unchanged.
+ * Each week's accepted Navy measurements are averaged, and that weekly average
+ * remains the anchor until a later week has an accepted sample. The BIA
+ * component is the median of readings from that date and the prior six
+ * calendar days. Before the first accepted Navy measurement, legacy/raw BIA
+ * values pass through unchanged.
  */
 export function buildBodyFatInterpretations(
   entries: BodyFatEntry[],
@@ -132,26 +291,14 @@ export function buildBodyFatInterpretations(
 
   return sorted.map((entry) => {
     const date = entry.measured_on
-    const windowStart = format(
-      addDays(parseISO(date), -(BIA_MEDIAN_WINDOW_DAYS - 1)),
-      'yyyy-MM-dd',
-    )
-    const biaValues = sorted
-      .filter(
-        (candidate) =>
-          candidate.measured_on >= windowStart && candidate.measured_on <= date,
-      )
-      .map(biaBodyFatPct)
-      .filter((value): value is number => value != null)
+    const biaValues = biaValuesInWindow(sorted, date)
     const biaMedianPct = median(biaValues)
 
-    const navyEntry = [...sorted]
-      .reverse()
-      .find(
-        (candidate) =>
-          candidate.measured_on <= date && storedNavyBodyFatPct(candidate) != null,
-      )
-    const navyBodyfatPct = navyEntry ? storedNavyBodyFatPct(navyEntry) : null
+    const navySummary = latestAcceptedNavySummary(sorted, date)
+    const navyBodyfatPct = navySummary?.bodyfatPct ?? null
+    const latestAcceptedNavySample = navySummary?.samples
+      .filter((sample) => sample.accepted)
+      .at(-1)
 
     if (navyBodyfatPct != null && biaMedianPct != null) {
       return {
@@ -161,7 +308,9 @@ export function buildBodyFatInterpretations(
         ),
         basis: 'blended',
         navyBodyfatPct,
-        navyMeasuredOn: navyEntry?.measured_on ?? null,
+        navyMeasuredOn: latestAcceptedNavySample?.measuredOn ?? null,
+        navySampleCount: navySummary?.acceptedSampleCount ?? 0,
+        navyExcludedSampleCount: navySummary?.excludedSampleCount ?? 0,
         biaMedianPct,
         biaSampleCount: biaValues.length,
       }
@@ -173,7 +322,9 @@ export function buildBodyFatInterpretations(
         bodyfatPct: navyBodyfatPct,
         basis: 'navy',
         navyBodyfatPct,
-        navyMeasuredOn: navyEntry?.measured_on ?? null,
+        navyMeasuredOn: latestAcceptedNavySample?.measuredOn ?? null,
+        navySampleCount: navySummary?.acceptedSampleCount ?? 0,
+        navyExcludedSampleCount: navySummary?.excludedSampleCount ?? 0,
         biaMedianPct: null,
         biaSampleCount: 0,
       }
@@ -186,6 +337,8 @@ export function buildBodyFatInterpretations(
       basis: rawBia == null ? 'none' : 'bia',
       navyBodyfatPct: null,
       navyMeasuredOn: null,
+      navySampleCount: 0,
+      navyExcludedSampleCount: 0,
       biaMedianPct,
       biaSampleCount: biaValues.length,
     }
@@ -210,25 +363,5 @@ export function latestBodyFatInterpretation(
     [...buildBodyFatInterpretations(entries)]
       .reverse()
       .find((point) => point.bodyfatPct != null) ?? null
-  )
-}
-
-export function navyMeasurementInISOWeek(
-  entries: BodyFatEntry[],
-  date: string,
-  excludeId?: string,
-): BodyFatEntry | null {
-  const parsed = parseISO(date)
-  if (!isValid(parsed)) return null
-  const start = format(startOfISOWeek(parsed), 'yyyy-MM-dd')
-  const end = format(endOfISOWeek(parsed), 'yyyy-MM-dd')
-  return (
-    entries.find(
-      (entry) =>
-        entry.id !== excludeId &&
-        entry.measured_on >= start &&
-        entry.measured_on <= end &&
-        hasNavyMeasurement(entry),
-    ) ?? null
   )
 }

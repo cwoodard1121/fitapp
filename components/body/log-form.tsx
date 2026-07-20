@@ -10,17 +10,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  biaBodyFatPct,
-  navyMeasurementInISOWeek,
-} from '@/lib/body/body-fat'
+import { biaBodyFatPct } from '@/lib/body/body-fat'
 import type { BodyMetric, Unit } from '@/lib/types'
 import { upsertBodyMetric } from '@/app/(app)/body/actions'
 
 interface LogFormProps {
   unit: Unit
   heightCm: number | null
-  entries: BodyMetric[]
   /** Default measured_on (yyyy-MM-dd), usually today. */
   defaultDate: string
   /** Existing entry to edit; null when logging a fresh weigh-in. */
@@ -40,7 +36,6 @@ function displayCircumference(valueCm: number | null | undefined) {
 export function LogForm({
   unit,
   heightCm,
-  entries,
   defaultDate,
   initial,
   onDone,
@@ -66,11 +61,6 @@ export function LogForm({
   const [notes, setNotes] = React.useState(initial?.notes ?? '')
 
   const weightRef = React.useRef<HTMLInputElement>(null)
-  const weeklyMeasurement = React.useMemo(
-    () => navyMeasurementInISOWeek(entries, measuredOn, initial?.id),
-    [entries, measuredOn, initial?.id],
-  )
-
   // One-tap fast: focus + select the weight field as soon as the form mounts.
   React.useEffect(() => {
     const t = window.setTimeout(() => {
@@ -179,9 +169,9 @@ export function LogForm({
       <div className="space-y-3 rounded-md border border-border bg-background/50 p-3">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <Label>Weekly Navy tape</Label>
+            <Label>Navy tape</Label>
             <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
-              once per week
+              one per day
             </span>
           </div>
           <p className="text-xs leading-relaxed text-muted">
@@ -197,52 +187,42 @@ export function LogForm({
           </p>
         </div>
 
-        {weeklyMeasurement ? (
-          <p className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
-            Navy tape already logged this week on{' '}
-            <span className="font-mono text-foreground">
-              {weeklyMeasurement.measured_on}
-            </span>
-            . Edit that entry to change it.
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="bm-neck">Neck (cm)</Label>
-              <Input
-                id="bm-neck"
-                type="number"
-                inputMode="decimal"
-                step="0.1"
-                min="15"
-                max="100"
-                placeholder="—"
-                value={neck}
-                onFocus={selectOnFocus}
-                onChange={(e) => setNeck(e.target.value)}
-                disabled={isPending}
-                className="h-11 font-mono tabular-nums"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="bm-waist">Waist (cm)</Label>
-              <Input
-                id="bm-waist"
-                type="number"
-                inputMode="decimal"
-                step="0.1"
-                min="30"
-                max="250"
-                placeholder="—"
-                value={waist}
-                onFocus={selectOnFocus}
-                onChange={(e) => setWaist(e.target.value)}
-                disabled={isPending}
-                className="h-11 font-mono tabular-nums"
-              />
-            </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="bm-neck">Neck (cm)</Label>
+            <Input
+              id="bm-neck"
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              min="15"
+              max="100"
+              placeholder="—"
+              value={neck}
+              onFocus={selectOnFocus}
+              onChange={(e) => setNeck(e.target.value)}
+              disabled={isPending}
+              className="h-11 font-mono tabular-nums"
+            />
           </div>
-        )}
+          <div className="space-y-1.5">
+            <Label htmlFor="bm-waist">Waist (cm)</Label>
+            <Input
+              id="bm-waist"
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              min="30"
+              max="250"
+              placeholder="—"
+              value={waist}
+              onFocus={selectOnFocus}
+              onChange={(e) => setWaist(e.target.value)}
+              disabled={isPending}
+              className="h-11 font-mono tabular-nums"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="space-y-1.5">

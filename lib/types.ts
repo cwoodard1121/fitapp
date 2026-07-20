@@ -175,7 +175,7 @@ export interface BodyMetric {
   bodyfat_pct: number | null;
   /** Raw bioelectrical-impedance body-fat reading. */
   bia_bodyfat_pct: number | null;
-  /** Weekly Navy tape inputs, normalized to centimetres. */
+  /** Navy tape inputs for this day, normalized to centimetres. */
   height_cm: number | null;
   neck_cm: number | null;
   waist_cm: number | null;

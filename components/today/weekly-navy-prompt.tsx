@@ -64,7 +64,7 @@ export function WeeklyNavyPrompt({
               <p className="text-xs leading-relaxed text-muted">
                 {heightCm == null
                   ? 'Add your height in Settings before the first weekly tape.'
-                  : 'Add neck and waist in centimeters. This reminder disappears as soon as it is logged.'}
+                  : 'Add neck and waist in centimeters. A reading more than 20% from your BIA reference is ignored, so you can measure again.'}
               </p>
             </div>
           </div>
@@ -94,8 +94,8 @@ export function WeeklyNavyPrompt({
             <SheetHeader className="mb-4 text-left">
               <SheetTitle>Weekly Navy body fat</SheetTitle>
               <SheetDescription>
-                Enter neck and waist in centimeters. No weight or BIA reading is
-                needed.
+                Enter neck and waist in centimeters. Add more readings during
+                the week from the Body page; accepted readings are averaged.
               </SheetDescription>
             </SheetHeader>
             <NavyTapeForm

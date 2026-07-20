@@ -165,8 +165,9 @@ export function BodyFatEstimator({
           Body-fat interpretation
         </CardTitle>
         <CardDescription>
-          Navy tape carries 65%; the trailing seven-day BIA median carries 35%.
-          BIA-only history stays unchanged until the first tape.
+          The accepted weekly Navy average carries 65%; the trailing seven-day
+          BIA median carries 35%. BIA-only history stays unchanged until the
+          first accepted tape.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -179,7 +180,7 @@ export function BodyFatEstimator({
             tone="signal"
           />
           <Stat
-            label="Navy · 65%"
+            label="Navy avg · 65%"
             value={interpretation?.navyBodyfatPct ?? null}
             unit="%"
             precision={1}

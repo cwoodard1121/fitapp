@@ -1,6 +1,5 @@
 'use server'
 
-import { endOfISOWeek, format, parseISO, startOfISOWeek } from 'date-fns'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
@@ -49,7 +48,7 @@ const upsertSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['neck_cm'],
-      message: 'Enter neck and waist together for the weekly Navy measurement.',
+      message: 'Enter neck and waist together for the Navy measurement.',
     })
   }
   if (
@@ -149,28 +148,6 @@ export async function upsertBodyMetric(
       }
     }
 
-    if (hasTape) {
-      const measuredDate = parseISO(measured_on)
-      const weekStart = format(startOfISOWeek(measuredDate), 'yyyy-MM-dd')
-      const weekEnd = format(endOfISOWeek(measuredDate), 'yyyy-MM-dd')
-      const { data: weeklyRows, error: weeklyError } = await supabase
-        .from('body_metrics')
-        .select('measured_on,navy_bodyfat_pct')
-        .eq('user_id', userId)
-        .gte('measured_on', weekStart)
-        .lte('measured_on', weekEnd)
-        .not('navy_bodyfat_pct', 'is', null)
-
-      if (weeklyError) return { ok: false, error: weeklyError.message }
-      const existingWeekly = weeklyRows?.find((row) => row.measured_on !== measured_on)
-      if (existingWeekly) {
-        return {
-          ok: false,
-          error: `Navy measurements are weekly. This week is already logged on ${existingWeekly.measured_on}.`,
-        }
-      }
-    }
-
     const { data, error } = await supabase
       .from('body_metrics')
       .upsert(
@@ -210,7 +187,7 @@ export async function upsertBodyMetric(
 }
 
 /**
- * Add the weekly Navy tape without requiring or replacing a weigh-in. When a
+ * Add a Navy tape reading without requiring or replacing a weigh-in. When a
  * body-metric row already exists for the date, its weight, BIA, notes, and
  * source are carried forward unchanged.
  */
@@ -255,27 +232,6 @@ export async function upsertNavyMeasurement(
         error: "Those tape measurements don't produce a valid Navy body-fat estimate.",
       }
     }
-    const measuredDate = parseISO(measured_on)
-    const weekStart = format(startOfISOWeek(measuredDate), 'yyyy-MM-dd')
-    const weekEnd = format(endOfISOWeek(measuredDate), 'yyyy-MM-dd')
-
-    const { data: weeklyRows, error: weeklyError } = await supabase
-      .from('body_metrics')
-      .select('measured_on,navy_bodyfat_pct')
-      .eq('user_id', userId)
-      .gte('measured_on', weekStart)
-      .lte('measured_on', weekEnd)
-      .not('navy_bodyfat_pct', 'is', null)
-
-    if (weeklyError) return { ok: false, error: weeklyError.message }
-    const existingWeekly = weeklyRows?.find((row) => row.measured_on !== measured_on)
-    if (existingWeekly) {
-      return {
-        ok: false,
-        error: `Navy measurements are weekly. This week is already logged on ${existingWeekly.measured_on}.`,
-      }
-    }
-
     const { data: existingRow, error: existingError } = await supabase
       .from('body_metrics')
       .select('*')
@@ -318,7 +274,7 @@ export async function upsertNavyMeasurement(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : 'Could not save the weekly tape.',
+      error: err instanceof Error ? err.message : 'Could not save the Navy tape.',
     }
   }
 }

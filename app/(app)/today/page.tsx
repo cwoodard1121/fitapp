@@ -20,7 +20,7 @@ import type {
   Session,
   SessionStatus,
 } from '@/lib/types'
-import { navyMeasurementInISOWeek } from '@/lib/body/body-fat'
+import { navyBodyFatSummaryInISOWeek } from '@/lib/body/body-fat'
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getLatestAnalysis } from '@/lib/ai/analysis'
 import { createClient } from '@/lib/supabase/server'
@@ -68,7 +68,7 @@ export default async function TodayPage({
   if (bodyError) throw bodyError
   const bodyEntries = (bodyRows ?? []) as BodyMetric[]
   const weeklyNavyDue =
-    navyMeasurementInISOWeek(bodyEntries, today) == null
+    (navyBodyFatSummaryInISOWeek(bodyEntries, today)?.acceptedSampleCount ?? 0) === 0
 
   // No program -> friendly empty state with the next action.
   if (!program) {

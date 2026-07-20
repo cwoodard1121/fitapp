@@ -7,7 +7,8 @@ import {
   calculateNavyBodyFatPct,
   interpretBodyMetrics,
   median,
-  navyMeasurementInISOWeek,
+  navyBodyFatSummaryInISOWeek,
+  navyMeasurementsInISOWeek,
 } from './body-fat'
 
 function bodyMetric(
@@ -95,9 +96,9 @@ describe('body-fat interpretation', () => {
     })
   })
 
-  it('uses calendar days for the BIA window and carries Navy until next week', () => {
+  it('uses calendar days for the BIA window and carries the Navy average forward', () => {
     const points = buildBodyFatInterpretations([
-      bodyMetric('2026-07-01', { bia: 30 }),
+      bodyMetric('2026-06-30', { bia: 30 }),
       bodyMetric('2026-07-07', { bia: 20, navy: 18 }),
       bodyMetric('2026-07-08', { bia: 22 }),
     ])
@@ -110,14 +111,92 @@ describe('body-fat interpretation', () => {
     })
   })
 
-  it('finds an existing Navy measurement only within the same ISO week', () => {
-    const priorWeek = bodyMetric('2026-07-12', { navy: 19 })
-    const thisWeek = bodyMetric('2026-07-13', { navy: 18.5 })
-    const entries = [priorWeek, thisWeek]
+  it('averages all accepted Navy readings in an ISO week', () => {
+    const entries = [
+      bodyMetric('2026-07-13', { bia: 20 }),
+      bodyMetric('2026-07-14', { navy: 18 }),
+      bodyMetric('2026-07-16', { navy: 22 }),
+    ]
 
-    expect(navyMeasurementInISOWeek(entries, '2026-07-18')?.id).toBe(thisWeek.id)
+    expect(navyBodyFatSummaryInISOWeek(entries, '2026-07-18')).toMatchObject({
+      bodyfatPct: 20,
+      acceptedSampleCount: 2,
+      excludedSampleCount: 0,
+      totalSampleCount: 2,
+    })
+    expect(buildBodyFatInterpretations(entries).at(-1)).toMatchObject({
+      navyBodyfatPct: 20,
+      navySampleCount: 2,
+      navyExcludedSampleCount: 0,
+    })
+  })
+
+  it('excludes Navy readings more than 20% from the non-Navy BIA reference', () => {
+    const entries = [
+      bodyMetric('2026-07-13', { bia: 20 }),
+      bodyMetric('2026-07-14', { navy: 24 }),
+      bodyMetric('2026-07-15', { navy: 24.1 }),
+      bodyMetric('2026-07-16', { navy: 18 }),
+    ]
+
+    const summary = navyBodyFatSummaryInISOWeek(entries, '2026-07-18')
+    expect(summary).toMatchObject({
+      bodyfatPct: 21,
+      acceptedSampleCount: 2,
+      excludedSampleCount: 1,
+      totalSampleCount: 3,
+    })
+    expect(summary?.samples.map((sample) => sample.accepted)).toEqual([
+      true,
+      false,
+      true,
+    ])
+  })
+
+  it('does not let an excluded reading replace the prior accepted weekly anchor', () => {
+    const points = buildBodyFatInterpretations([
+      bodyMetric('2026-07-06', { bia: 20 }),
+      bodyMetric('2026-07-07', { navy: 19 }),
+      bodyMetric('2026-07-13', { navy: 30 }),
+    ])
+
+    expect(points.at(-1)).toMatchObject({
+      bodyfatPct: 19,
+      basis: 'navy',
+      navyBodyfatPct: 19,
+      navySampleCount: 1,
+    })
+  })
+
+  it('averages Navy readings when no non-Navy reference exists', () => {
+    const summary = navyBodyFatSummaryInISOWeek(
+      [
+        bodyMetric('2026-07-14', { navy: 16 }),
+        bodyMetric('2026-07-16', { navy: 24 }),
+      ],
+      '2026-07-18',
+    )
+
+    expect(summary).toMatchObject({
+      bodyfatPct: 20,
+      acceptedSampleCount: 2,
+      excludedSampleCount: 0,
+    })
+  })
+
+  it('finds all Navy measurements only within the same ISO week', () => {
+    const priorWeek = bodyMetric('2026-07-12', { navy: 19 })
+    const monday = bodyMetric('2026-07-13', { navy: 18.5 })
+    const friday = bodyMetric('2026-07-17', { navy: 18 })
+    const entries = [priorWeek, monday, friday]
+
     expect(
-      navyMeasurementInISOWeek(entries, '2026-07-18', thisWeek.id),
-    ).toBeNull()
+      navyMeasurementsInISOWeek(entries, '2026-07-18').map((entry) => entry.id),
+    ).toEqual([monday.id, friday.id])
+    expect(
+      navyMeasurementsInISOWeek(entries, '2026-07-18', monday.id).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual([friday.id])
   })
 })
