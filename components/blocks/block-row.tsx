@@ -1,7 +1,13 @@
 "use client"
 
 import { useTransition } from "react"
-import { MoreVertical, Pencil, Trash2, Check } from "lucide-react"
+import {
+  ChartNoAxesCombined,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Check,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -37,9 +43,10 @@ const stateMeta: Record<
 interface BlockRowProps {
   block: Block
   onEdit: (block: Block) => void
+  onViewStats: (block: Block) => void
 }
 
-export function BlockRow({ block, onEdit }: BlockRowProps) {
+export function BlockRow({ block, onEdit, onViewStats }: BlockRowProps) {
   const [pending, startTransition] = useTransition()
   const p = computeProgress(block)
   const phase = phaseLabel(block.kind, block.phase)
@@ -112,6 +119,16 @@ export function BlockRow({ block, onEdit }: BlockRowProps) {
             {block.fat_target != null ? ` · ${block.fat_target}F` : ""}
           </p>
         ) : null}
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2 h-7 px-2 text-xs text-signal hover:text-signal"
+          onClick={() => onViewStats(block)}
+        >
+          <ChartNoAxesCombined aria-hidden />
+          View stats
+        </Button>
       </div>
 
       <div className="flex shrink-0 flex-col items-end justify-between">

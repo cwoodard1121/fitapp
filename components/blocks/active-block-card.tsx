@@ -7,6 +7,7 @@ import {
   Link2,
   Pencil,
   CalendarRange,
+  ChartNoAxesCombined,
   MoreVertical,
   Trash2,
 } from "lucide-react"
@@ -40,6 +41,7 @@ interface ActiveBlockCardProps {
   programName: string | null
   onEdit: (block: Block) => void
   onCreate: () => void
+  onViewStats: (block: Block) => void
 }
 
 export function ActiveBlockCard({
@@ -48,6 +50,7 @@ export function ActiveBlockCard({
   programName,
   onEdit,
   onCreate,
+  onViewStats,
 }: ActiveBlockCardProps) {
   const [pending, startTransition] = useTransition()
   const isDiet = kind === "diet"
@@ -212,6 +215,13 @@ export function ActiveBlockCard({
           </div>
         </>
       ) : null}
+
+      <div className="mt-4 flex justify-end">
+        <Button variant="outline" size="sm" onClick={() => onViewStats(block)}>
+          <ChartNoAxesCombined aria-hidden />
+          View block stats
+        </Button>
+      </div>
     </Card>
   )
 }

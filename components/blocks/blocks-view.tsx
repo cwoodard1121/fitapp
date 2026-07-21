@@ -7,13 +7,16 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import type { Block, BlockKind, Unit } from "@/lib/types"
+import type { BlockStats } from "@/lib/blocks/stats"
 import { ActiveBlockCard } from "@/components/blocks/active-block-card"
 import { BlockRow } from "@/components/blocks/block-row"
 import { BlockForm } from "@/components/blocks/block-form"
+import { BlockStatsDialog } from "@/components/blocks/block-stats-dialog"
 import { computeProgress } from "@/components/blocks/utils"
 
 interface BlocksViewProps {
   blocks: Block[]
+  statsByBlock: Record<string, BlockStats>
   activeProgram: { id: string; name: string } | null
   unit: Unit
 }
@@ -37,11 +40,17 @@ function sortTimeline(a: Block, b: Block): number {
   return sa.localeCompare(sb)
 }
 
-export function BlocksView({ blocks, activeProgram }: BlocksViewProps) {
+export function BlocksView({
+  blocks,
+  statsByBlock,
+  activeProgram,
+  unit,
+}: BlocksViewProps) {
   const [tab, setTab] = useState<BlockKind>("training")
   const [formOpen, setFormOpen] = useState(false)
   const [formKind, setFormKind] = useState<BlockKind>("training")
   const [editing, setEditing] = useState<Block | null>(null)
+  const [statsBlock, setStatsBlock] = useState<Block | null>(null)
 
   const byKind = useMemo(() => {
     const training = blocks.filter((b) => b.kind === "training")
@@ -100,6 +109,7 @@ export function BlocksView({ blocks, activeProgram }: BlocksViewProps) {
             activeProgramName={activeProgram?.name ?? null}
             onCreate={() => openCreate("training")}
             onEdit={openEdit}
+            onViewStats={setStatsBlock}
           />
         </TabsContent>
 
@@ -110,6 +120,7 @@ export function BlocksView({ blocks, activeProgram }: BlocksViewProps) {
             activeProgramName={activeProgram?.name ?? null}
             onCreate={() => openCreate("diet")}
             onEdit={openEdit}
+            onViewStats={setStatsBlock}
           />
         </TabsContent>
       </Tabs>
@@ -129,6 +140,15 @@ export function BlocksView({ blocks, activeProgram }: BlocksViewProps) {
         block={editing}
         activeProgram={activeProgram}
       />
+
+      <BlockStatsDialog
+        block={statsBlock}
+        stats={statsBlock ? (statsByBlock[statsBlock.id] ?? null) : null}
+        unit={unit}
+        onOpenChange={(open) => {
+          if (!open) setStatsBlock(null)
+        }}
+      />
     </div>
   )
 }
@@ -139,6 +159,7 @@ interface KindSectionProps {
   activeProgramName: string | null
   onCreate: () => void
   onEdit: (block: Block) => void
+  onViewStats: (block: Block) => void
 }
 
 function KindSection({
@@ -147,6 +168,7 @@ function KindSection({
   activeProgramName,
   onCreate,
   onEdit,
+  onViewStats,
 }: KindSectionProps) {
   const active = list.find((b) => b.is_active) ?? null
   const rest = list.filter((b) => b.id !== active?.id).sort(sortTimeline)
@@ -159,6 +181,7 @@ function KindSection({
         programName={activeProgramName}
         onEdit={onEdit}
         onCreate={onCreate}
+        onViewStats={onViewStats}
       />
 
       <div>
@@ -190,7 +213,12 @@ function KindSection({
         ) : (
           <div className="space-y-2">
             {rest.map((block) => (
-              <BlockRow key={block.id} block={block} onEdit={onEdit} />
+              <BlockRow
+                key={block.id}
+                block={block}
+                onEdit={onEdit}
+                onViewStats={onViewStats}
+              />
             ))}
           </div>
         )}
