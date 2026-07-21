@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { NutritionLog } from '@/lib/types'
-import { accumulateDeficit, fractionOfDayElapsed } from './deficit'
+import {
+  accumulateDeficit,
+  estimateWeeklyTissueChange,
+  fractionOfDayElapsed,
+} from './deficit'
 
 function nutritionLog(loggedOn: string, calories: number): NutritionLog {
   return {
@@ -95,5 +99,19 @@ describe('accumulateDeficit', () => {
 describe('fractionOfDayElapsed', () => {
   it('returns the elapsed fraction of the local calendar day', () => {
     expect(fractionOfDayElapsed(new Date(2026, 6, 16, 9))).toBeCloseTo(0.375, 6)
+  })
+})
+
+describe('estimateWeeklyTissueChange', () => {
+  it('normalizes a partial window to a weekly loss rate', () => {
+    expect(estimateWeeklyTissueChange(3500, 3.5, 'lb')).toBe(2)
+  })
+
+  it('uses metric tissue conversion and preserves gain direction', () => {
+    expect(estimateWeeklyTissueChange(-3850, 7, 'kg')).toBe(-0.5)
+  })
+
+  it('returns zero when there are no logged day-equivalents', () => {
+    expect(estimateWeeklyTissueChange(3500, 0, 'lb')).toBe(0)
   })
 })

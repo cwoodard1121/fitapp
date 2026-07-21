@@ -19,10 +19,10 @@ import {
   accumulateDeficit,
   DEFAULT_STEP_BASELINE,
   DEFAULT_WEIGHT_KG,
-  KCAL_PER_KG,
-  KCAL_PER_LB,
   TRACKING_START,
+  estimateWeeklyTissueChange,
   fractionOfDayElapsed,
+  kcalPerUnit,
 } from '@/lib/nutrition/deficit'
 
 type Win = 'week' | 'month' | 'block' | 'all'
@@ -332,8 +332,8 @@ export function DeficitTracker({
     currentDayProgress,
   )
   const inDeficit = r.deficit > 0
-  const kcalPerUnit = unit === 'kg' ? KCAL_PER_KG : KCAL_PER_LB
-  const estChange = r.deficit / kcalPerUnit
+  const estChange = r.deficit / kcalPerUnit(unit)
+  const avgWeeklyEstChange = estimateWeeklyTissueChange(r.deficit, r.dayEquivalents, unit)
   // Signed vs maintenance: negative = under maintenance (a deficit), shown as -X.
   const avgDaily = r.dayEquivalents ? Math.round(-r.deficit / r.dayEquivalents) : 0
   // The selected window's average activity-adjusted maintenance/day. The saved
@@ -500,6 +500,14 @@ export function DeficitTracker({
               <Stat
                 label={losing ? 'Est. tissue loss' : 'Est. tissue gain'}
                 value={Math.abs(estChange)}
+                unit={unit}
+                precision={2}
+                size="lg"
+                tone={onTrack ? 'signal' : 'red'}
+              />
+              <Stat
+                label={losing ? 'Avg est. tissue loss/wk' : 'Avg est. tissue gain/wk'}
+                value={Math.abs(avgWeeklyEstChange)}
                 unit={unit}
                 precision={2}
                 size="lg"
