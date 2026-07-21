@@ -66,6 +66,19 @@ export function kcalPerUnit(unit: 'lb' | 'kg'): number {
   return unit === 'kg' ? KCAL_PER_KG : KCAL_PER_LB
 }
 
+/**
+ * Convert an accumulated deficit into its average weekly tissue change.
+ * Positive values represent estimated loss; negative values represent gain.
+ */
+export function estimateWeeklyTissueChange(
+  deficit: number,
+  dayEquivalents: number,
+  unit: 'lb' | 'kg',
+): number {
+  if (dayEquivalents <= 0) return 0
+  return (deficit / dayEquivalents) * 7 / kcalPerUnit(unit)
+}
+
 /** Fraction of the current local calendar day that has elapsed (DST-safe). */
 export function fractionOfDayElapsed(now: Date): number {
   const start = new Date(now)
