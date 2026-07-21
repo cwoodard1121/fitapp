@@ -5,6 +5,7 @@ import type {
   BodyMetric,
   ExerciseSlot,
   NutritionLog,
+  RecoveryMetric,
   Session,
   SetEntry,
   SetLog,
@@ -139,6 +140,25 @@ function body(
   }
 }
 
+function recovery(date: string, steps: number): RecoveryMetric {
+  return {
+    id: `recovery-${date}`,
+    user_id: "user",
+    metric_date: date,
+    steps,
+    sleep_minutes_asleep: null,
+    sleep_minutes_in_period: null,
+    sleep_light_min: null,
+    sleep_deep_min: null,
+    sleep_rem_min: null,
+    sleep_awake_min: null,
+    resting_hr: null,
+    hrv_ms: null,
+    source: "wearable",
+    synced_at: `${date}T12:00:00.000Z`,
+  }
+}
+
 const slots: ExerciseSlot[] = [
   {
     id: "bench",
@@ -208,6 +228,14 @@ describe("computeBlockStats", () => {
         entry("e2", "s2", 2, 100, 6, 1),
       ],
       slots,
+      recoveryMetrics: [
+        recovery("2026-07-01", 8000),
+        recovery("2026-07-02", 10_000),
+        recovery("2026-07-04", 12_000),
+        recovery("2026-07-21", 100),
+        recovery("2026-06-30", 20_000),
+      ],
+      stepBaseline: 10_000,
       nutritionLogs: [
         nutrition("2026-07-01", 2000, 150),
         nutrition("2026-07-02", 2300, 130),
@@ -224,7 +252,7 @@ describe("computeBlockStats", () => {
       status: "observed",
       observedDays: 21,
       observedWeeks: 3,
-      dataDays: 6,
+      dataDays: 7,
       training: {
         sessions: 3,
         trainingDays: 3,
@@ -238,6 +266,14 @@ describe("computeBlockStats", () => {
         daysLogged: 3,
         longestLoggingStreak: 2,
         proteinTargetHitPct: 50,
+      },
+      activity: {
+        stepBaseline: 10_000,
+        daysLogged: 3,
+        avgSteps: 10_000,
+        totalSteps: 30_000,
+        minSteps: 8000,
+        maxSteps: 12_000,
       },
       body: {
         checkIns: 2,
@@ -253,6 +289,9 @@ describe("computeBlockStats", () => {
     expect(stats.nutrition.avgCalories).toBeCloseTo(2033.333)
     expect(stats.nutrition.avgProtein).toBe(140)
     expect(stats.nutrition.calorieTargetHitPct).toBeCloseTo(66.667)
+    expect(stats.activity.coveragePct).toBeCloseTo((3 / 21) * 100)
+    expect(stats.activity.avgStepsVsBaseline).toBe(0)
+    expect(stats.activity.baselineHitPct).toBeCloseTo(66.667)
   })
 
   it("includes every program for a diet block", () => {
@@ -266,6 +305,8 @@ describe("computeBlockStats", () => {
       setLogs: [],
       setEntries: [],
       slots: [],
+      recoveryMetrics: [],
+      stepBaseline: 10_000,
       nutritionLogs: [],
       bodyMetrics: [],
     })
@@ -280,6 +321,8 @@ describe("computeBlockStats", () => {
       setLogs: [],
       setEntries: [],
       slots: [],
+      recoveryMetrics: [],
+      stepBaseline: 10_000,
       nutritionLogs: [],
       bodyMetrics: [],
     }

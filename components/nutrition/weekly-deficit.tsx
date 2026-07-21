@@ -21,7 +21,6 @@ import {
   DEFAULT_WEIGHT_KG,
   TRACKING_START,
   estimateWeeklyTissueChange,
-  fractionOfDayElapsed,
   kcalPerUnit,
 } from '@/lib/nutrition/deficit'
 
@@ -56,8 +55,6 @@ interface DeficitTrackerProps {
   phase: string | null
   /** Active diet block start date (YYYY-MM-DD), for the "Block" window. */
   blockStart: string | null
-  /** Server-rendered fraction of today elapsed; kept live client-side. */
-  initialDayProgress: number
 }
 
 function fmtSigned(n: number): string {
@@ -67,7 +64,6 @@ function fmtSigned(n: number): string {
 
 interface WindowResult {
   daysLogged: number
-  dayEquivalents: number
   ignoredLowDays: number
   deficit: number
   sumCalories: number
@@ -89,7 +85,6 @@ function computeWindow(
   ignoreLow: boolean,
   minCal: number,
   stepBaseline: number,
-  currentDayProgress: number,
 ): WindowResult {
   const todayD = parseISO(today)
   let start: Date
@@ -129,28 +124,8 @@ function computeWindow(
     start,
     end: todayD,
     today,
-    currentDayProgress,
   })
   return { ...r, start }
-}
-
-/** Keep today's contribution moving gradually, even while the page stays open. */
-function useCurrentDayProgress(today: string, initialDayProgress: number): number {
-  const [progress, setProgress] = React.useState(initialDayProgress)
-
-  React.useEffect(() => {
-    function update() {
-      const now = new Date()
-      // Once the date rolls over, the day represented by `today` is complete.
-      setProgress(format(now, 'yyyy-MM-dd') === today ? fractionOfDayElapsed(now) : 1)
-    }
-
-    update()
-    const timer = window.setInterval(update, 60_000)
-    return () => window.clearInterval(timer)
-  }, [today])
-
-  return progress
 }
 
 const WIN_LABEL: Record<Win, string> = {
@@ -172,7 +147,6 @@ export function DeficitTracker({
   minCalories,
   phase,
   blockStart,
-  initialDayProgress,
 }: DeficitTrackerProps) {
   const mode = deriveMode(phase)
   const cardTitle =
@@ -188,7 +162,6 @@ export function DeficitTracker({
   // Outlier filter, seeded from the profile (null = off) so it syncs across devices.
   const [ignoreLow, setIgnoreLow] = React.useState(minCalories != null)
   const [minCal, setMinCal] = React.useState(minCalories ?? 1200)
-  const currentDayProgress = useCurrentDayProgress(today, initialDayProgress)
 
   /** Persist the outlier filter to the profile (null = off). Fire-and-forget. */
   function persistOutlier(min: number | null) {
@@ -329,19 +302,18 @@ export function DeficitTracker({
     ignoreLow,
     minCal,
     baseline,
-    currentDayProgress,
   )
   const inDeficit = r.deficit > 0
   const estChange = r.deficit / kcalPerUnit(unit)
-  const avgWeeklyEstChange = estimateWeeklyTissueChange(r.deficit, r.dayEquivalents, unit)
+  const avgWeeklyEstChange = estimateWeeklyTissueChange(r.deficit, r.daysLogged, unit)
   // Signed vs maintenance: negative = under maintenance (a deficit), shown as -X.
-  const avgDaily = r.dayEquivalents ? Math.round(-r.deficit / r.dayEquivalents) : 0
+  const avgDaily = r.daysLogged ? Math.round(-r.deficit / r.daysLogged) : 0
   // The selected window's average activity-adjusted maintenance/day. The saved
   // maintenance remains defined at one fixed step baseline; daily steps move
   // expenditure symmetrically above or below it.
-  const avgAdjustedMaint = r.dayEquivalents ? Math.round(r.sumMaint / r.dayEquivalents) : maint
-  const avgMaintAdjustment = r.dayEquivalents
-    ? Math.round(r.totalAdjustment / r.dayEquivalents)
+  const avgAdjustedMaint = r.daysLogged ? Math.round(r.sumMaint / r.daysLogged) : maint
+  const avgMaintAdjustment = r.daysLogged
+    ? Math.round(r.totalAdjustment / r.daysLogged)
     : 0
   const adjustedMaintDisplay =
     avgMaintAdjustment !== 0
@@ -391,7 +363,7 @@ export function DeficitTracker({
             tone: 'text-gate-yellow',
           }
     } else if (calorieTarget != null) {
-      const targetForLogged = calorieTarget * r.dayEquivalents
+      const targetForLogged = calorieTarget * r.daysLogged
       const overTarget = r.sumCalories - targetForLogged
       if (overTarget > 0 && inDeficit) {
         targetNote = {

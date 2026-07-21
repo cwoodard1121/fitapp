@@ -5,6 +5,7 @@ import {
   Activity,
   CalendarDays,
   Dumbbell,
+  Footprints,
   Salad,
   Scale,
 } from "lucide-react"
@@ -104,6 +105,7 @@ export function BlockStatsDialog({
 
   const phase = phaseLabel(block.kind, block.phase)
   const training = stats.training
+  const activity = stats.activity
   const nutrition = stats.nutrition
   const body = stats.body
 
@@ -143,7 +145,7 @@ export function BlockStatsDialog({
             <StatsSection
               icon={<Activity className="size-4" aria-hidden />}
               title="Coverage"
-              description="Elapsed block time and days with at least one training, nutrition, or body entry."
+              description="Elapsed block time and days with at least one training, steps, nutrition, or body entry."
             >
               <Metric label="Days observed" value={stats.observedDays} tone="signal" />
               <Metric label="Started weeks" value={stats.observedWeeks} />
@@ -196,6 +198,56 @@ export function BlockStatsDialog({
                 unit={unit}
               />
               <Metric label="Avg set RIR" value={rounded(training.avgRir)} />
+            </StatsSection>
+
+            <StatsSection
+              icon={<Footprints className="size-4" aria-hidden />}
+              title="Steps"
+              description={`Completed-day activity inside the block. Baseline is ${activity.stepBaseline.toLocaleString()} steps/day.`}
+            >
+              <Metric label="Days with steps" value={activity.daysLogged} />
+              <Metric
+                label="Step coverage"
+                value={rounded(activity.coveragePct, 0)}
+                unit="%"
+              />
+              <Metric
+                label="Avg steps/day"
+                value={
+                  activity.avgSteps == null ? null : grouped(activity.avgSteps)
+                }
+                tone="signal"
+              />
+              <Metric
+                label="Total steps"
+                value={grouped(activity.totalSteps)}
+              />
+              <Metric
+                label="Lowest day"
+                value={
+                  activity.minSteps == null ? null : grouped(activity.minSteps)
+                }
+              />
+              <Metric
+                label="Highest day"
+                value={
+                  activity.maxSteps == null ? null : grouped(activity.maxSteps)
+                }
+              />
+              <Metric
+                label="Avg vs baseline"
+                value={signed(activity.avgStepsVsBaseline, 0)}
+                unit="steps"
+              />
+              <Metric
+                label="Baseline hit"
+                value={rounded(activity.baselineHitPct, 0)}
+                unit="%"
+              />
+              <Metric
+                label="Step baseline"
+                value={grouped(activity.stepBaseline)}
+              />
             </StatsSection>
 
             <StatsSection

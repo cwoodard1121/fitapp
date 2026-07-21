@@ -12,6 +12,7 @@ import type {
   BodyMetric,
   ExerciseSlot,
   NutritionLog,
+  RecoveryMetric,
   Session,
   SetEntry,
   SetLog,
@@ -49,6 +50,18 @@ export interface NutritionBlockStats {
   longestLoggingStreak: number
 }
 
+export interface ActivityBlockStats {
+  stepBaseline: number
+  daysLogged: number
+  coveragePct: number | null
+  avgSteps: number | null
+  totalSteps: number
+  minSteps: number | null
+  maxSteps: number | null
+  avgStepsVsBaseline: number | null
+  baselineHitPct: number | null
+}
+
 export interface BodyBlockStats {
   checkIns: number
   weightCheckIns: number
@@ -73,6 +86,7 @@ export interface BlockStats {
   observedWeeks: number
   dataDays: number
   training: TrainingBlockStats
+  activity: ActivityBlockStats
   nutrition: NutritionBlockStats
   body: BodyBlockStats
 }
@@ -84,6 +98,8 @@ export interface ComputeBlockStatsInput {
   setLogs: SetLog[]
   setEntries: SetEntry[]
   slots: ExerciseSlot[]
+  recoveryMetrics: RecoveryMetric[]
+  stepBaseline: number
   nutritionLogs: NutritionLog[]
   bodyMetrics: BodyMetric[]
 }
@@ -203,6 +219,8 @@ export function computeBlockStats(input: ComputeBlockStatsInput): BlockStats {
     setLogs,
     setEntries,
     slots,
+    recoveryMetrics,
+    stepBaseline,
     nutritionLogs,
     bodyMetrics,
   } = input
@@ -315,6 +333,17 @@ export function computeBlockStats(input: ComputeBlockStatsInput): BlockStats {
       ? proteinValues.filter((protein) => protein >= block.protein_target!).length
       : 0
 
+  const scopedRecovery = recoveryMetrics
+    .filter(
+      (metric): metric is RecoveryMetric & { steps: number } =>
+        metric.steps != null &&
+        metric.metric_date !== today &&
+        inWindow(metric.metric_date, window),
+    )
+    .sort((a, b) => a.metric_date.localeCompare(b.metric_date))
+  const stepValues = scopedRecovery.map((metric) => metric.steps)
+  const avgSteps = average(stepValues)
+
   const scopedBody = bodyMetrics
     .filter((metric) => inWindow(metric.measured_on, window))
     .sort((a, b) => a.measured_on.localeCompare(b.measured_on))
@@ -344,6 +373,7 @@ export function computeBlockStats(input: ComputeBlockStatsInput): BlockStats {
 
   const dataDates = new Set<string>(trainingDates)
   for (const log of scopedNutrition) dataDates.add(log.logged_on)
+  for (const metric of scopedRecovery) dataDates.add(metric.metric_date)
   for (const metric of scopedBody) dataDates.add(metric.measured_on)
 
   return {
@@ -367,6 +397,20 @@ export function computeBlockStats(input: ComputeBlockStatsInput): BlockStats {
       totalVolume,
       avgVolumePerSession: ratio(totalVolume, scopedSessions.length),
       avgRir: ratio(rirTotal, rirCount),
+    },
+    activity: {
+      stepBaseline,
+      daysLogged: scopedRecovery.length,
+      coveragePct: percentage(scopedRecovery.length, window.days),
+      avgSteps,
+      totalSteps: stepValues.reduce((sum, steps) => sum + steps, 0),
+      minSteps: stepValues.length > 0 ? Math.min(...stepValues) : null,
+      maxSteps: stepValues.length > 0 ? Math.max(...stepValues) : null,
+      avgStepsVsBaseline: avgSteps == null ? null : avgSteps - stepBaseline,
+      baselineHitPct: percentage(
+        stepValues.filter((steps) => steps >= stepBaseline).length,
+        stepValues.length,
+      ),
     },
     nutrition: {
       daysLogged: scopedNutrition.length,

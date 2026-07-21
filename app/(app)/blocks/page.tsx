@@ -3,11 +3,13 @@ import { format } from "date-fns"
 import { createClient } from "@/lib/supabase/server"
 import { requireUserId, getProfile, getActiveProgram } from "@/lib/data"
 import { computeBlockStats } from "@/lib/blocks/stats"
+import { DEFAULT_STEP_BASELINE } from "@/lib/nutrition/deficit"
 import type {
   Block,
   BodyMetric,
   ExerciseSlot,
   NutritionLog,
+  RecoveryMetric,
   Session,
   SetEntry,
   SetLog,
@@ -55,6 +57,7 @@ export default async function BlocksPage() {
     setLogs,
     setEntries,
     slots,
+    recoveryMetrics,
     nutritionLogs,
     bodyMetrics,
   ] = await Promise.all([
@@ -105,6 +108,15 @@ export default async function BlocksPage() {
         .order("id")
         .range(from, to),
     ),
+    fetchAll<RecoveryMetric>((from, to) =>
+      supabase
+        .from("recovery_metrics")
+        .select("*")
+        .eq("user_id", userId)
+        .order("metric_date")
+        .order("id")
+        .range(from, to),
+    ),
     fetchAll<NutritionLog>((from, to) =>
       supabase
         .from("nutrition_logs")
@@ -136,6 +148,9 @@ export default async function BlocksPage() {
         setLogs,
         setEntries,
         slots,
+        recoveryMetrics,
+        stepBaseline:
+          profile?.maintenance_step_baseline ?? DEFAULT_STEP_BASELINE,
         nutritionLogs,
         bodyMetrics,
       }),

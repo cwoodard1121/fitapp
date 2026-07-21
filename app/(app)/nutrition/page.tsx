@@ -7,7 +7,6 @@ import { computeCalibration, type Calibration } from '@/lib/nutrition/calibratio
 import {
   DEFAULT_STEP_BASELINE,
   TRACKING_START,
-  fractionOfDayElapsed,
 } from '@/lib/nutrition/deficit'
 
 import { NutritionClient } from '@/components/nutrition/nutrition-client'
@@ -29,9 +28,7 @@ export default async function NutritionPage() {
   const stepBaseline = profile?.maintenance_step_baseline ?? DEFAULT_STEP_BASELINE
   const minCalories = profile ? profile.nutrition_min_calories : 1200
 
-  const now = new Date()
-  const today = format(now, 'yyyy-MM-dd')
-  const initialDayProgress = fractionOfDayElapsed(now)
+  const today = format(new Date(), 'yyyy-MM-dd')
 
   // Active diet block (kind=diet, is_active) supplies the targets we measure
   // today's intake against. There should be at most one.
@@ -128,7 +125,6 @@ export default async function NutritionPage() {
         stepBaseline={stepBaseline}
         minCalories={minCalories}
         calibration={calibration}
-        initialDayProgress={initialDayProgress}
       />
     </div>
   )
