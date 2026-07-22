@@ -6,15 +6,11 @@
  * (data layer) and the client (UI explanations) and be unit-tested in isolation.
  *
  * Two layers:
- *  1. The faithful spreadsheet port — derived flags, growth score, recovery
- *     gate, volume signal, and the first-match-wins decision ladder. Pinned by
- *     the §10 acceptance tests; do not drift from these.
- *  2. A "smart" autoregulation layer on top, tuned for a returning/detrained
- *     lifter (see the SMART AUTOREGULATION LAYER block): faster ramp when
- *     readiness is clearly green, a doubled load step when the bar is far too
- *     light, an "Add 2 reps" jump, and a stimulus rule — a low pump earns a set
- *     even when load/rep progression is blocked. These only change behaviour
- *     outside the pinned cases, so the acceptance tests stay green.
+ *  1. Derived readiness flags, a configurable growth score, hard safety gates,
+ *     and a first-match-wins decision ladder.
+ *  2. A progression layer tuned for a returning/detrained lifter: objective
+ *     performance can drive progress without requiring perfect RIR, easy work
+ *     can move faster, and under-stimulated work can earn another set.
  */
 
 /* ------------------------------------------------------------------ */
@@ -39,8 +35,8 @@ export type Decision =
   | null
 
 /**
- * Readiness-score weights. Defaults reproduce the spreadsheet exactly; the
- * Settings screen can tune them. Pass via EngineContext.weights to override.
+ * Readiness-score weights. The Settings screen can tune them. Pass via
+ * EngineContext.weights to override.
  */
 export interface ReadinessWeights {
   recoveryGood: number
@@ -66,8 +62,10 @@ export const DEFAULT_WEIGHTS: ReadinessWeights = {
   enjoyment: 1,
   sorenessBand: 1,
   sorenessHighNoRecovery: -2,
-  rirTooEasy: 1,
-  rirLow: -1,
+  // RIR is context, not the primary progression signal. Ordinary variance
+  // nudges the score; near-failure work is handled by a safety check below.
+  rirTooEasy: 0.5,
+  rirLow: -0.5,
 }
 
 export interface SlotConfig {
@@ -273,14 +271,12 @@ export function evaluateSlot(
         ? 'Green'
         : 'Yellow'
 
-  /* === SMART AUTOREGULATION LAYER ===================================
-   * Tuned for a returning / detrained lifter: bank easy progress fast,
-   * and treat a low pump as an under-stimulus signal that earns volume
-   * even when load/rep progression is blocked. The §10 acceptance cases
-   * are unaffected — they all sit on-target (RIR == target, high pump),
-   * outside these smart thresholds. */
+  /* === PROGRESSION LAYER ============================================
+   * Bank clear progress without demanding a perfect RIR match. A slightly
+   * low RIR only affects the score; very-low RIR (near failure relative to
+   * the target) blocks an increase by itself. */
   const SET_CAP = 5 // willing to ramp hypertrophy work up to 5 work sets
-  const PROGRESS_SCORE = 4 // was 5: a clean green session shouldn't stall
+  const PROGRESS_SCORE = 2.5
 
   // Clearly more in the tank than the +2 "too easy" -> the load is too light.
   const veryeasy = actualRir != null && actualRir >= targetRir + 3
@@ -295,11 +291,17 @@ export function evaluateSlot(
   // recovery -> any non-red gate) so a low pump still earns a set on a
   // merely-okay day. Heavy compounds (Load +5) are excluded — pump isn't their
   // signal and extra sets there just pile on fatigue.
+  const progressionSignal = score >= PROGRESS_SCORE || (perfup && score > 0)
+  const readyToProgress =
+    gate !== 'Red' && perfok && !verylowrir && progressionSignal
+
   const addSet =
     canVolume &&
     gate !== 'Red' &&
     perfok &&
-    badpump &&
+    !verylowrir &&
+    ((badpump && w.pumpBad > 0) ||
+      (progressBias === 'Set optional' && readyToProgress)) &&
     (actualSets == null || actualSets < SET_CAP)
 
   const noData =
@@ -339,15 +341,17 @@ export function evaluateSlot(
       : "Readiness is red — hold or reduce, don't add stress."
   } else if (addSet) {
     decision = 'Add 1 set'
-    reason = 'Low pump with recovery to spare — under-stimulated, so add a set (volume, not load).'
-  } else if (perfok && goodrecovery && !lowrir && (score >= PROGRESS_SCORE || tooeasy)) {
+    reason = badpump
+      ? 'Push volume next session: the work looked under-stimulating, so add one set.'
+      : 'Strong session — push volume with one more set next time.'
+  } else if (readyToProgress) {
     if (isBodyweight) {
       // Bodyweight: reps then sets only — never an automatic load bump.
       if (bestReps != null && bestReps + 1 > maxRep) {
         if (actualSets == null || actualSets < SET_CAP) {
           decision = 'Add 1 set'
           reason =
-            'Topped the rep range on a bodyweight move — add a set for volume (or strap on some weight yourself).'
+            'Push harder next session: add a set after topping the bodyweight rep range.'
         } else {
           decision = 'Maintain'
           reason =
@@ -355,47 +359,45 @@ export function evaluateSlot(
         }
       } else if (veryeasy && bestReps != null && bestReps + 2 <= maxRep) {
         decision = 'Add 2 reps'
-        reason = 'Lots left in the tank — chase two reps this time, not one.'
+        reason = 'Push harder next session: chase two more reps instead of one.'
       } else {
         decision = 'Add 1 rep'
-        reason = 'Strong bodyweight set inside the range — add a rep.'
+        reason = 'Performance supports more work — push for one more rep next session.'
       }
     } else if (progressBias === 'Load +5') {
       decision = 'Add 5 lb'
       bigJump = veryeasy
       reason = veryeasy
-        ? 'Way more in the tank — jump the load up harder this time.'
-        : 'Strong session, recovery green — add load.'
+        ? 'Push harder next session: take the larger load jump shown.'
+        : 'Performance supports more work — add load next session.'
     } else if (progressBias === 'Reps first') {
       if (bestReps != null && bestReps + 1 > maxRep) {
         decision = 'Add 5 lb'
         bigJump = veryeasy
         reason = veryeasy
-          ? 'Topped the rep range with plenty left — bump the load up a chunk.'
-          : 'Hit the top of the rep range — convert the progress to load.'
+          ? 'Push harder next session: take the larger load jump after topping the rep range.'
+          : 'You topped the rep range — push the load up next session.'
       } else if (veryeasy && bestReps != null && bestReps + 2 <= maxRep) {
         decision = 'Add 2 reps'
-        reason = 'Lots left in the tank — chase two reps this time, not one.'
+        reason = 'Push harder next session: chase two more reps instead of one.'
       } else {
         decision = 'Add 1 rep'
-        reason = 'Strong session inside the range — add a rep.'
+        reason = 'Performance supports more work — push for one more rep next session.'
       }
     } else if (progressBias === 'Set optional') {
       decision = 'Add 1 set'
-      reason = 'Strong session — add a set to drive more volume.'
+      reason = 'Strong session — push volume with one more set next time.'
     } else {
       decision = 'Maintain'
       reason = 'On track — repeat and beat it next time.'
     }
-  } else if (tooeasy && perfok && !highsore && progressBias === 'Load +5' && !isBodyweight) {
-    decision = 'Add 5 lb'
-    bigJump = veryeasy
-    reason = veryeasy ? 'Too light — jump the load up harder.' : 'That was too light — add load.'
   } else {
     decision = 'Maintain'
-    reason = lowrir
-      ? 'That was a grind — repeat it and clean up the reps before adding.'
-      : 'Hold steady — repeat and progress next time.'
+    reason = verylowrir
+      ? 'That reached near-failure effort — repeat the target before adding more.'
+      : perfdown
+        ? 'Performance dipped — repeat the target and rebuild momentum.'
+        : 'No clear progression signal yet — repeat the target and beat it next time.'
   }
 
   /* --- Step sizes: double the load step on a clearly-too-light session --- */
@@ -459,6 +461,8 @@ export function evaluateSlot(
     perfdown,
     perfup,
     perfok,
+    progressionSignal,
+    readyToProgress,
     addSet,
     bigJump,
     isBodyweight,

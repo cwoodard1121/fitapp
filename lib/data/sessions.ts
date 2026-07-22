@@ -251,7 +251,13 @@ export async function buildTodayView(
     const log = logs[slot.id] ?? null
     const entries = entriesBySlot[slot.id] ?? []
     const priorLog = priorLogs.get(exerciseNameKey(slot.exercise_name))
-    const prev = derivePrevTargets(config, priorLog, priorLog?.week ?? week - 1, deloadWeek)
+    const prev = derivePrevTargets(
+      config,
+      priorLog,
+      priorLog?.week ?? week - 1,
+      deloadWeek,
+      weights,
+    )
     // A second occurrence during Week 1 should use the first occurrence's
     // calibrated result instead of resetting to the seed/base targets.
     const targetWeek = week === 1 && priorLog ? 2 : week

@@ -123,13 +123,20 @@ export default async function ProgressPage() {
     let prevLog: SetLog | null = null
 
     for (const log of groupLogs) {
-      const prev = derivePrevTargets(config, prevLog, log.week - 1, deloadWeek)
+      const prev = derivePrevTargets(
+        config,
+        prevLog,
+        log.week - 1,
+        deloadWeek,
+        profile?.readiness_weights,
+      )
       const result = evaluateSlot(setLogInputFromRow(log), config, {
         week: log.week,
         deloadWeek,
         prevNextLoad: prev.prevNextLoad,
         prevNextSets: prev.prevNextSets,
         prevNextReps: prev.prevNextReps,
+        weights: profile?.readiness_weights ?? undefined,
       })
       points.push({
         date: log.created_at,

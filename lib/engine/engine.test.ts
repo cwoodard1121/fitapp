@@ -71,7 +71,7 @@ function strongLog(overrides: Partial<SetLogInput> = {}): SetLogInput {
 }
 
 /* ------------------------------------------------------------------ */
-/* T1..T10 — these pin the spreadsheet port.                           */
+/* T1..T10 — core decision contract.                                   */
 /* ------------------------------------------------------------------ */
 
 describe('evaluateSlot — pinned decision cases (T1..T10)', () => {
@@ -221,8 +221,8 @@ describe('evaluateSlot — recovery gate', () => {
 })
 
 describe('evaluateSlot — growth score', () => {
-  it('sums the components on a known positive input to 8', () => {
-    // +2 recovery, +1 perf up, +2 good pump, +1 enjoyment, +1 mild soreness, +1 too easy
+  it('sums the components on a known positive input to 7.5', () => {
+    // +2 recovery, +1 perf up, +2 good pump, +1 enjoyment, +1 mild soreness, +0.5 too easy
     const l = log({
       recovery: 8, // +2
       performance: 'Up', // +1
@@ -234,11 +234,11 @@ describe('evaluateSlot — growth score', () => {
       bestReps: 5,
       actualSets: 2,
     })
-    expect(evaluateSlot(l, slot(), ctx()).score).toBe(8)
+    expect(evaluateSlot(l, slot(), ctx()).score).toBe(7.5)
   })
 
-  it('sums the components on a known negative input to -7', () => {
-    // -3 recovery, -2 perf down, +1 bad pump, 0 enjoyment, -2 high sore (not recovered), -1 low rir
+  it('sums the components on a known negative input to -6.5', () => {
+    // -3 recovery, -2 perf down, +1 bad pump, 0 enjoyment, -2 high sore (not recovered), -0.5 low rir
     const l = log({
       recovery: 3, // -3
       performance: 'Down', // -2
@@ -250,7 +250,7 @@ describe('evaluateSlot — growth score', () => {
       bestReps: 5,
       actualSets: 2,
     })
-    expect(evaluateSlot(l, slot(), ctx()).score).toBe(-7)
+    expect(evaluateSlot(l, slot(), ctx()).score).toBe(-6.5)
   })
 })
 
@@ -512,12 +512,12 @@ describe('smart layer — incoming soreness and DOMS', () => {
 })
 
 describe('smart layer — configurable readiness weights', () => {
-  it('defaults reproduce the spreadsheet score exactly', () => {
+  it('omitting weights matches the exported defaults', () => {
     const l = log({ recovery: 8, performance: 'Up', pump: 8, enjoyment: 8, soreness: 5, actualRir: 6, actualLoad: 100, bestReps: 5, actualSets: 2 })
     const base = evaluateSlot(l, slot(), ctx()).score
     const withDefaults = evaluateSlot(l, slot(), ctx({ weights: DEFAULT_WEIGHTS })).score
     expect(withDefaults).toBe(base)
-    expect(withDefaults).toBe(8)
+    expect(withDefaults).toBe(7.5)
   })
 
   it('respects a tuned weight (e.g. recovery matters more)', () => {
@@ -525,6 +525,87 @@ describe('smart layer — configurable readiness weights', () => {
     const tuned = { ...DEFAULT_WEIGHTS, recoveryGood: 5 }
     expect(evaluateSlot(l, slot(), ctx({ weights: tuned })).score).toBe(5)
     expect(evaluateSlot(l, slot(), ctx()).score).toBe(2)
+  })
+})
+
+describe('progression balance — performance leads and RIR stays secondary', () => {
+  it('progresses after better performance without requiring green recovery', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 80,
+        bestReps: 10,
+        actualSets: 2,
+        actualRir: 3,
+        performance: 'Up',
+      }),
+      slot(),
+      ctx(),
+    )
+
+    expect(res.gate).toBe('Yellow')
+    expect(res.flags.readyToProgress).toBe(true)
+    expect(res.decision).toBe('Add 1 rep')
+    expect(res.reason).toMatch(/push|more work/i)
+  })
+
+  it('does not let a slightly low RIR veto strong recovery and performance', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 80,
+        bestReps: 10,
+        actualSets: 2,
+        actualRir: 2,
+        recovery: 8,
+        performance: 'Up',
+      }),
+      slot({ targetRir: 3 }),
+      ctx(),
+    )
+
+    expect(res.flags.lowrir).toBe(true)
+    expect(res.flags.verylowrir).toBe(false)
+    expect(res.score).toBe(2.5)
+    expect(res.decision).toBe('Add 1 rep')
+  })
+
+  it('still holds after a genuinely near-failure effort', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 80,
+        bestReps: 10,
+        actualSets: 2,
+        actualRir: 0,
+        recovery: 8,
+        performance: 'Up',
+        pump: 8,
+      }),
+      slot({ targetRir: 3 }),
+      ctx(),
+    )
+
+    expect(res.flags.verylowrir).toBe(true)
+    expect(res.flags.readyToProgress).toBe(false)
+    expect(res.decision).toBe('Maintain')
+  })
+
+  it('adds a set for Set optional when the configured score supports progression', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 40,
+        bestReps: 12,
+        actualSets: 2,
+        actualRir: 3,
+        pump: 8,
+        enjoyment: 8,
+        performance: 'Same',
+      }),
+      slot({ progressBias: 'Set optional' }),
+      ctx(),
+    )
+
+    expect(res.score).toBe(3)
+    expect(res.decision).toBe('Add 1 set')
+    expect(res.nextSets).toBe(3)
   })
 })
 

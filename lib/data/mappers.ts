@@ -2,6 +2,7 @@ import type { ExerciseSlot, SetLog } from '@/lib/types'
 import type {
   EngineContext,
   EngineResult,
+  ReadinessWeights,
   SetLogInput,
   SlotConfig,
 } from '@/lib/engine/engine'
@@ -116,11 +117,16 @@ export function derivePrevTargets(
   prevLog: SetLog | null | undefined,
   prevWeek: number,
   deloadWeek: number,
+  weights?: ReadinessWeights | null,
 ): PrevTargets {
   if (!prevLog) {
     return { prevNextLoad: null, prevNextSets: null, prevNextReps: null }
   }
-  const ctx: EngineContext = { week: prevWeek, deloadWeek }
+  const ctx: EngineContext = {
+    week: prevWeek,
+    deloadWeek,
+    weights: weights ?? undefined,
+  }
   const res: EngineResult = evaluateSlot(setLogInputFromRow(prevLog), config, ctx)
   return {
     prevNextLoad: res.nextLoad,

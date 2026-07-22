@@ -15,7 +15,7 @@ import type {
   NutritionLog,
   SetLog,
 } from '@/lib/types'
-import { getActiveProgram, getProgramFull, requireUserId } from '@/lib/data'
+import { getActiveProgram, getProfile, getProgramFull, requireUserId } from '@/lib/data'
 import { createClient } from '@/lib/supabase/server'
 
 import { computeAnalytics } from './compute'
@@ -42,7 +42,7 @@ export async function gatherAnalytics(): Promise<TrainingAnalytics> {
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
 
-  const program = await getActiveProgram()
+  const [program, profile] = await Promise.all([getActiveProgram(), getProfile()])
   let slots: ExerciseSlot[] = []
   if (program) {
     const full = await getProgramFull(program.id)
@@ -93,5 +93,6 @@ export async function gatherAnalytics(): Promise<TrainingAnalytics> {
     bodyMetrics,
     nutrition,
     dietBlock,
+    readinessWeights: profile?.readiness_weights,
   })
 }

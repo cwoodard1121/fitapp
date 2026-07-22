@@ -18,7 +18,7 @@ import type {
   SetLog,
 } from '@/lib/types'
 import { exerciseNameKey } from '@/lib/exercises/identity'
-import type { Decision } from '@/lib/engine/engine'
+import type { Decision, ReadinessWeights } from '@/lib/engine/engine'
 import { evaluateSlot, detectStall } from '@/lib/engine/engine'
 import {
   slotConfigFromRow,
@@ -160,6 +160,7 @@ function buildLiftSeries(
   slots: ExerciseSlot[],
   logs: SetLog[],
   deloadWeek: number,
+  weights?: ReadinessWeights | null,
 ): Map<string, LiftSeries> {
   const slotById = new Map<string, ExerciseSlot>(slots.map((s) => [s.id, s]))
   const groups = new Map<string, { name: string; slot: ExerciseSlot; logs: SetLog[] }>()
@@ -183,13 +184,20 @@ function buildLiftSeries(
     const points: LiftSeriesPoint[] = []
     let prevLog: SetLog | null = null
     for (const log of groupLogs) {
-      const prev = derivePrevTargets(config, prevLog, log.week - 1, deloadWeek)
+      const prev = derivePrevTargets(
+        config,
+        prevLog,
+        log.week - 1,
+        deloadWeek,
+        weights,
+      )
       const result = evaluateSlot(setLogInputFromRow(log), config, {
         week: log.week,
         deloadWeek,
         prevNextLoad: prev.prevNextLoad,
         prevNextSets: prev.prevNextSets,
         prevNextReps: prev.prevNextReps,
+        weights: weights ?? undefined,
       })
       points.push({
         date: log.created_at,
@@ -735,6 +743,7 @@ export interface AnalyticsInput {
   bodyMetrics: BodyMetric[]
   nutrition: NutritionLog[]
   dietBlock: Block | null
+  readinessWeights?: ReadinessWeights | null
 }
 
 /**
@@ -743,11 +752,21 @@ export interface AnalyticsInput {
  * there is no data, so it is useful even in Week 1 with thin history.
  */
 export function computeAnalytics(input: AnalyticsInput): TrainingAnalytics {
-  const { now, program, slots, logs, goals, bodyMetrics, nutrition, dietBlock } = input
+  const {
+    now,
+    program,
+    slots,
+    logs,
+    goals,
+    bodyMetrics,
+    nutrition,
+    dietBlock,
+    readinessWeights,
+  } = input
   const deloadWeek = program?.deload_week ?? 0
   const interpretedBodyMetrics = interpretBodyMetrics(bodyMetrics)
 
-  const series = buildLiftSeries(slots, logs, deloadWeek)
+  const series = buildLiftSeries(slots, logs, deloadWeek, readinessWeights)
   const lifts = [...series.values()]
     .map(toLiftAnalytic)
     .sort((a, b) => b.sessions - a.sessions || a.exercise.localeCompare(b.exercise))

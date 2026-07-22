@@ -98,7 +98,8 @@ export function ReadinessWeightsForm({
           {isCustom ? <Badge variant="outline">Custom</Badge> : null}
         </div>
         <CardDescription>
-          These weight the growth score that drives every set&apos;s call.
+          These tune the score behind progression. Severe recovery and soreness
+          still act as fixed safety stops.
         </CardDescription>
       </CardHeader>
 

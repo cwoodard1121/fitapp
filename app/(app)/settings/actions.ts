@@ -102,6 +102,10 @@ export async function updateReadinessWeights(
     if (error) return { ok: false, error: error.message }
 
     revalidatePath('/settings')
+    revalidatePath('/today')
+    revalidatePath('/progress')
+    revalidatePath('/overview')
+    revalidatePath('/history')
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not save weights.' }
@@ -122,6 +126,10 @@ export async function resetReadinessWeights(): Promise<ActionResult> {
     if (error) return { ok: false, error: error.message }
 
     revalidatePath('/settings')
+    revalidatePath('/today')
+    revalidatePath('/progress')
+    revalidatePath('/overview')
+    revalidatePath('/history')
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not reset weights.' }
