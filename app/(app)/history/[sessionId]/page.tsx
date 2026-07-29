@@ -12,7 +12,13 @@ import {
   buildTodayView,
 } from "@/lib/data"
 import { epley1RM } from "@/lib/engine/engine"
-import type { Program, ProgramDay, Session, SetLog } from "@/lib/types"
+import type {
+  ExerciseSlot,
+  Program,
+  ProgramDay,
+  Session,
+  SetLog,
+} from "@/lib/types"
 import { Stat } from "@/components/ui/stat"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -56,7 +62,7 @@ export default async function SessionDetailPage({
   const profile = await getProfile()
   const unit = profile?.unit ?? "lb"
 
-  const [{ data: programRow }, { data: dayRow }, slots, logs] =
+  const [{ data: programRow }, { data: dayRow }, daySlots, logs] =
     await Promise.all([
       supabase
         .from("programs")
@@ -73,6 +79,30 @@ export default async function SessionDetailPage({
       getSlotsForDay(session.day_id),
       getSetLogsForSession(session.id),
     ])
+
+  // A program reset can re-home a completed session while intentionally
+  // leaving unmatched lift logs on their historical slots. Include those rows
+  // in session detail so no completed exercise disappears from History.
+  const daySlotIds = new Set(daySlots.map((slot) => slot.id))
+  const historicalSlotIds = [
+    ...new Set(
+      Object.values(logs)
+        .map((log) => log.slot_id)
+        .filter((slotId) => !daySlotIds.has(slotId)),
+    ),
+  ]
+  let historicalSlots: ExerciseSlot[] = []
+  if (historicalSlotIds.length > 0) {
+    const { data, error } = await supabase
+      .from("exercise_slots")
+      .select("*")
+      .eq("user_id", userId)
+      .in("id", historicalSlotIds)
+      .order("order_index", { ascending: true })
+    if (error) throw error
+    historicalSlots = (data ?? []) as ExerciseSlot[]
+  }
+  const slots = [...daySlots, ...historicalSlots]
 
   const program = programRow as Program | null
   const day = dayRow as ProgramDay | null

@@ -143,6 +143,7 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
 
   const performedSets = rows.filter((r) => num(r.reps) != null).length
   const hasData = performedSets > 0
+  const toFailure = slot.is_bodyweight && slot.target_rir === 0
   const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) =>
     e.currentTarget.select()
 
@@ -200,8 +201,17 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
           <Stat size="sm" label="Load" value={targets.load} unit={unit} />
         )}
         <Stat size="sm" label="Sets" value={targets.sets} />
-        <Stat size="sm" label="Reps" value={targets.reps} placeholder="—" />
-        <Stat size="sm" label="RIR" value={targets.rir} />
+        <Stat
+          size="sm"
+          label="Reps"
+          value={toFailure ? 'F' : targets.reps}
+          placeholder="—"
+        />
+        <Stat
+          size="sm"
+          label="RIR"
+          value={toFailure ? 'failure' : targets.rir}
+        />
       </div>
       <Separator />
 

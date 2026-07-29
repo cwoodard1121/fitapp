@@ -1,5 +1,6 @@
 import type { ExerciseSlot, SetLog } from '@/lib/types'
 import type {
+  Decision,
   EngineContext,
   EngineResult,
   ReadinessWeights,
@@ -105,6 +106,7 @@ export interface PrevTargets {
   prevNextLoad: number | null
   prevNextSets: number | null
   prevNextReps: number | null
+  decision: Decision
 }
 
 /**
@@ -118,19 +120,28 @@ export function derivePrevTargets(
   prevWeek: number,
   deloadWeek: number,
   weights?: ReadinessWeights | null,
+  nextDaySoreness?: number | null,
 ): PrevTargets {
   if (!prevLog) {
-    return { prevNextLoad: null, prevNextSets: null, prevNextReps: null }
+    return {
+      prevNextLoad: null,
+      prevNextSets: null,
+      prevNextReps: null,
+      decision: null,
+    }
   }
   const ctx: EngineContext = {
     week: prevWeek,
     deloadWeek,
     weights: weights ?? undefined,
   }
-  const res: EngineResult = evaluateSlot(setLogInputFromRow(prevLog), config, ctx)
+  const input = setLogInputFromRow(prevLog)
+  input.nextDaySoreness = nextDaySoreness ?? null
+  const res: EngineResult = evaluateSlot(input, config, ctx)
   return {
     prevNextLoad: res.nextLoad,
     prevNextSets: res.nextSets,
     prevNextReps: res.nextReps,
+    decision: res.decision,
   }
 }

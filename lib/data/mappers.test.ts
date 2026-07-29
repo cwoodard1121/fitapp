@@ -36,14 +36,38 @@ const priorLog: SetLog = {
 }
 
 describe('derivePrevTargets', () => {
-  it('uses custom readiness weights for the actual carried-forward target', () => {
+  it('carries objective progression forward with default or custom score weights', () => {
     const defaults = derivePrevTargets(slot, priorLog, 2, 5, DEFAULT_WEIGHTS)
     const tuned = derivePrevTargets(slot, priorLog, 2, 5, {
       ...DEFAULT_WEIGHTS,
       recoveryGood: 5,
     })
 
-    expect(defaults.prevNextReps).toBe(10)
+    expect(defaults.prevNextReps).toBe(11)
     expect(tuned.prevNextReps).toBe(11)
+  })
+
+  it('feeds persisted next-day soreness into the strict set decision', () => {
+    const lowPumpLog = { ...priorLog, pump: 4 }
+    const lowSoreness = derivePrevTargets(
+      slot,
+      lowPumpLog,
+      2,
+      5,
+      DEFAULT_WEIGHTS,
+      1,
+    )
+    const confirmedStimulus = derivePrevTargets(
+      slot,
+      lowPumpLog,
+      2,
+      5,
+      DEFAULT_WEIGHTS,
+      4,
+    )
+
+    expect(lowSoreness.prevNextSets).toBe(3)
+    expect(confirmedStimulus.prevNextSets).toBe(2)
+    expect(confirmedStimulus.prevNextReps).toBe(11)
   })
 })

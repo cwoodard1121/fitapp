@@ -55,8 +55,8 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const reply = await getCoachReply(messages)
-    return Response.json({ reply })
+    const result = await getCoachReply(messages)
+    return Response.json(result)
   } catch (e) {
     console.error('coach reply failed', e)
     const msg = e instanceof Error ? e.message : ''

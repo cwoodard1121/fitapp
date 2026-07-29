@@ -85,6 +85,8 @@ export interface Program {
   is_active: boolean;
   /** Per-program mesocycle anchor; the active program's date drives "current week". */
   start_date: string | null;
+  /** Retired templates stay attached to historical sessions but leave active UI. */
+  archived_at: string | null;
   created_at: string;
 }
 
@@ -162,6 +164,19 @@ export interface SetEntry {
   reps: number | null;
   rir: number | null;
   created_at: string;
+}
+
+/** muscle_soreness_checkins — next-day feedback per trained muscle area. */
+export interface MuscleSorenessCheckin {
+  id: string;
+  user_id: string;
+  session_id: string;
+  muscle_area: string;
+  /** 0 = not sore, 10 = extremely sore. */
+  soreness: number;
+  checked_on: string;
+  created_at: string;
+  updated_at: string;
 }
 
 /** body_metrics — unique (user_id, measured_on) */

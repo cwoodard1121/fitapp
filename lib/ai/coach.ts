@@ -18,12 +18,22 @@
 import type { Profile } from '@/lib/types'
 import { gatherAnalytics } from '@/lib/analytics'
 import type { TrainingAnalytics } from '@/lib/analytics/types'
-import { getProfile } from '@/lib/data'
+import { getActiveProgram, getProfile, getProgramFull } from '@/lib/data'
+import {
+  COACH_PROGRAM_TOOLS,
+  executeCoachProgramTool,
+} from '@/lib/ai/program-tools'
+import { EXERCISE_CATALOG } from '@/lib/exercises/catalog'
 
 /** One chat turn. Roles mirror the OpenAI message roles we forward. */
 export interface CoachMessage {
   role: 'user' | 'assistant'
   content: string
+}
+
+export interface CoachReply {
+  reply: string
+  actions: string[]
 }
 
 /* ------------------------------------------------------------------ */
@@ -65,13 +75,36 @@ function serializeAnalytics(analytics: TrainingAnalytics): string {
  * brand-new chat is always seeded with current numbers.
  */
 export async function buildCoachSystemPrompt(): Promise<string> {
-  const [analytics, profile] = await Promise.all([
+  const [analytics, profile, activeProgram] = await Promise.all([
     gatherAnalytics(),
     getProfile().catch(() => null as Profile | null),
+    getActiveProgram().catch(() => null),
   ])
+  const fullProgram = activeProgram
+    ? await getProgramFull(activeProgram.id).catch(() => null)
+    : null
 
   const unit = profile?.unit ?? 'lb'
   const name = profile?.display_name?.trim() || 'the athlete'
+  const program = fullProgram
+    ? {
+        name: fullProgram.program.name,
+        days: fullProgram.days.map((day) => ({
+          dayNumber: day.day_number,
+          label: day.label,
+          exercises: fullProgram.slots
+            .filter((slot) => slot.day_id === day.id)
+            .sort((a, b) => a.order_index - b.order_index)
+            .map((slot) => ({
+              name: slot.exercise_name,
+              sets: slot.base_sets,
+              reps: [slot.rep_low, slot.rep_high],
+              targetRir: slot.target_rir,
+            })),
+        })),
+      }
+    : null
+  const exerciseLibrary = EXERCISE_CATALOG.map((exercise) => exercise.name)
 
   return `You are "Coach", the in-app strength & physique coach inside ${name}'s training app (simplegym). You're chatting with the athlete. Below are their REAL, current numbers — computed by the app, not by you.
 
@@ -82,10 +115,18 @@ Style — talk like a sharp coach in a chat, not a data export:
 - Use the athlete's unit (${unit}) and round numbers. Write naturally ("bench is up about 12 lb over 6 weeks"), never code-style field names (no camelCase/snake_case).
 - Pull only the figures relevant to the question — don't dump every stat. It's fine to ask a clarifying question.
 
-Scope you can speak to from the data: per-lift e1RM trends/rates and stalls, the autoregulation engine's recent decisions, weekly volume by muscle, goal pacing/projected ETAs, bodyweight & body-fat trajectory, nutrition adherence vs targets, and mesocycle position — plus general strength/hypertrophy/recovery coaching. You can't log workouts or change app data from chat; for that, point them to the relevant screen (Today, Body, Nutrition, Goals, Settings).
+Scope you can speak to from the data: per-lift e1RM trends/rates and stalls, the autoregulation engine's recent decisions, weekly volume by muscle, goal pacing/projected ETAs, bodyweight & body-fat trajectory, nutrition adherence vs targets, and mesocycle position — plus general strength/hypertrophy/recovery coaching.
+
+You can also edit the ACTIVE TRAINING PROGRAM with the supplied tools. Use them only when the athlete clearly asks to change the program. You may replace an exercise, change its sets/rep range/target RIR, add an exercise from the library, or remove an exercise. Never claim a change happened unless its tool returned ok=true. If the request is ambiguous about the day or exercise, ask one short clarifying question instead of guessing. Program tools preserve completed workout history; they change future prescriptions only. You still cannot log workouts or edit nutrition, body, goals, or completed sessions from chat — point the athlete to the relevant screen for those.
 
 ATHLETE ANALYTICS (JSON, the source of truth — interpret, don't recompute):
-${serializeAnalytics(analytics)}`
+${serializeAnalytics(analytics)}
+
+ACTIVE TRAINING PROGRAM (JSON; null means none is active):
+${JSON.stringify(program)}
+
+EXERCISE LIBRARY (exact names accepted by program tools):
+${JSON.stringify(exerciseLibrary)}`
 }
 
 /* ------------------------------------------------------------------ */
@@ -104,10 +145,20 @@ const REASONING_EFFORT = 'medium'
  * the reasoning eats the budget and the reply comes back empty.
  */
 const MAX_OUTPUT_TOKENS = 4000
+const MAX_PROGRAM_TOOL_CALLS = 5
+
+interface OpenAIOutputItem {
+  type?: string
+  name?: string
+  arguments?: string
+  call_id?: string
+  content?: Array<{ type?: string; text?: string }>
+  [key: string]: unknown
+}
 
 interface OpenAIResponse {
   output_text?: string
-  output?: Array<{ content?: Array<{ type?: string; text?: string }> }>
+  output?: OpenAIOutputItem[]
   status?: string
   incomplete_details?: { reason?: string }
 }
@@ -128,12 +179,59 @@ function extractText(data: OpenAIResponse): string {
   return parts.join('')
 }
 
+async function requestCoachResponse(input: unknown[], options: {
+  apiKey: string
+  baseUrl: string
+  model: string
+}): Promise<OpenAIResponse> {
+  const res = await fetch(`${options.baseUrl}/responses`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${options.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: options.model,
+      input,
+      tools: COACH_PROGRAM_TOOLS,
+      tool_choice: 'auto',
+      parallel_tool_calls: false,
+      reasoning: { effort: REASONING_EFFORT },
+      max_output_tokens: MAX_OUTPUT_TOKENS,
+    }),
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(
+      `OpenAI request failed (${res.status}): ${body.slice(0, 300)}`,
+    )
+  }
+  return (await res.json()) as OpenAIResponse
+}
+
+function savedActionsFallback(actions: string[]): CoachReply {
+  const summary =
+    actions.length === 1
+      ? actions[0]
+      : `Saved ${actions.length} program changes:\n${actions
+          .map((action) => `- ${action}`)
+          .join('\n')}`
+  return {
+    reply: `${summary}\n\nThose edits are saved. I couldn't finish the extra coach explanation, but your program is up to date.`,
+    actions,
+  }
+}
+
 /**
- * Ask the coach for a reply to the given conversation and return its text.
- * Throws on missing key / non-200 / empty output so the route can map it to a
- * clean HTTP error.
+ * Ask the coach for a reply. When the model requests a safe program edit, run
+ * it server-side, feed the result back with the matching call ID, then let the
+ * model explain the outcome. Throws on missing key / non-200 / empty output so
+ * the route can map it to a clean HTTP error.
  */
-export async function getCoachReply(messages: CoachMessage[]): Promise<string> {
+export async function getCoachReply(
+  messages: CoachMessage[],
+): Promise<CoachReply> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set')
 
@@ -143,37 +241,78 @@ export async function getCoachReply(messages: CoachMessage[]): Promise<string> {
 
   const system = await buildCoachSystemPrompt()
   const turns = messages.slice(-MAX_TURNS)
+  const input: unknown[] = [{ role: 'system', content: system }, ...turns]
+  const actions: string[] = []
 
-  const res = await fetch(`${baseUrl}/responses`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      input: [{ role: 'system', content: system }, ...turns],
-      reasoning: { effort: REASONING_EFFORT },
-      max_output_tokens: MAX_OUTPUT_TOKENS,
-    }),
-  })
+  // One requested edit per response keeps mutations ordered and auditable.
+  // The final request is reserved for confirmation, so no mutation can happen
+  // without a subsequent chance to explain it.
+  for (let round = 0; round <= MAX_PROGRAM_TOOL_CALLS; round += 1) {
+    let data: OpenAIResponse
+    try {
+      data = await requestCoachResponse(input, { apiKey, baseUrl, model })
+    } catch (error) {
+      if (actions.length > 0) return savedActionsFallback(actions)
+      throw error
+    }
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`OpenAI request failed (${res.status}): ${body.slice(0, 300)}`)
-  }
+    const functionCalls = (data.output ?? []).filter(
+      (item) => item.type === 'function_call',
+    )
+    if (functionCalls.length > 0) {
+      if (functionCalls.length !== 1) {
+        if (actions.length > 0) return savedActionsFallback(actions)
+        throw new Error('OpenAI requested multiple program edits in one step.')
+      }
+      if (round === MAX_PROGRAM_TOOL_CALLS) {
+        if (actions.length > 0) return savedActionsFallback(actions)
+        throw new Error(
+          'The coach requested too many program edits at once. Please split the request into smaller changes.',
+        )
+      }
+      input.push(...(data.output ?? []))
+      for (const call of functionCalls) {
+        if (
+          typeof call.name !== 'string' ||
+          typeof call.arguments !== 'string' ||
+          typeof call.call_id !== 'string'
+        ) {
+          if (actions.length > 0) return savedActionsFallback(actions)
+          throw new Error('OpenAI returned an incomplete program tool call.')
+        }
+        const result = await executeCoachProgramTool(
+          call.name,
+          call.arguments,
+        )
+        if (result.ok) actions.push(result.message)
+        input.push({
+          type: 'function_call_output',
+          call_id: call.call_id,
+          output: JSON.stringify(result),
+        })
+      }
+      continue
+    }
 
-  const data = (await res.json()) as OpenAIResponse
-  const text = extractText(data).trim()
-  if (!text) {
+    const text = extractText(data).trim()
+    if (text) return { reply: text, actions }
+
     // No visible text — for a reasoning model this usually means reasoning ate
     // the whole max_output_tokens budget (status 'incomplete').
     const reason = data.incomplete_details?.reason
-    throw new Error(
+    const emptyOutputError = new Error(
       `OpenAI returned no text (status: ${data.status ?? 'unknown'}${
         reason ? `, reason: ${reason}` : ''
       }). Likely the reasoning used the whole token budget — raise max_output_tokens.`,
     )
+    if (actions.length > 0) return savedActionsFallback(actions)
+    throw emptyOutputError
   }
-  return text
+
+  return actions.length > 0
+    ? savedActionsFallback(actions)
+    : {
+        reply: 'I could not complete that program edit. Please split it into a smaller change.',
+        actions: [],
+      }
 }

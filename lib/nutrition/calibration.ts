@@ -24,11 +24,11 @@ import {
 
 export const CALIBRATION_SETTLE_DAYS = 6
 export const CALIBRATION_ESTIMATE_DAYS = 7
-export const CALIBRATION_MAX_DAYS = 14
+export const CALIBRATION_RELIABLE_DAYS = 14
 export const CALIBRATION_ESTIMATE_WEIGH_INS = 5
 export const CALIBRATION_ESTIMATE_WEIGHT_SPAN_DAYS = 6
-export const CALIBRATION_LOCK_WEIGH_INS = 10
-export const CALIBRATION_LOCK_WEIGHT_SPAN_DAYS = 13
+export const CALIBRATION_RELIABLE_WEIGH_INS = 10
+export const CALIBRATION_RELIABLE_WEIGHT_SPAN_DAYS = 13
 
 export interface CalibrationInput {
   /** body_metrics ascending by measured_on. */
@@ -48,7 +48,7 @@ export interface CalibrationInput {
 }
 
 export interface CalibrationChecklistItem {
-  key: 'water' | 'tracking' | 'scale' | 'lock'
+  key: 'water' | 'tracking' | 'scale' | 'reliable'
   label: string
   complete: boolean
   detail: string
@@ -124,6 +124,10 @@ function roundTo25(value: number) {
   return Math.round(value / 25) * 25
 }
 
+function roundWholeCalories(value: number | null): number | null {
+  return value == null ? null : Math.max(0, Math.round(value))
+}
+
 function calendarDates(start: Date, end: Date): string[] {
   const days = Math.max(0, differenceInCalendarDays(end, start) + 1)
   return Array.from({ length: days }, (_, index) => dateKey(addDays(start, index)))
@@ -155,30 +159,50 @@ export function computeCalibration(input: CalibrationInput): Calibration {
   const availableDays = waterComplete
     ? differenceInCalendarDays(completedEnd, settledStart) + 1
     : 0
-  const analysisDays = Math.max(
-    0,
-    Math.min(CALIBRATION_MAX_DAYS, availableDays),
-  )
+  // Every later completed block day remains in the model. Fourteen days is a
+  // reliability milestone, not a cap on how long the estimate can improve.
+  const analysisDays = Math.max(0, availableDays)
   const analysisEnd = analysisDays > 0 ? completedEnd : null
-  const analysisStart =
-    analysisEnd != null ? addDays(analysisEnd, -(analysisDays - 1)) : null
+  const analysisStart = analysisEnd != null ? settledStart : null
   const dates =
     analysisStart && analysisEnd ? calendarDates(analysisStart, analysisEnd) : []
 
   const logsByDate = new Map(logs.map((log) => [log.logged_on, log]))
   const calories = dates.flatMap((date) => {
     const value = logsByDate.get(date)?.calories
-    return value == null ? [] : [Number(value)]
+    const numeric = Number(value)
+    return value == null || !Number.isFinite(numeric) || numeric < 0 ? [] : [numeric]
   })
   const steps = dates.flatMap((date) => {
     const value = stepsByDate[date]
-    return value == null ? [] : [Number(value)]
+    const numeric = Number(value)
+    return value == null || !Number.isFinite(numeric) || numeric < 0 ? [] : [numeric]
+  })
+  const completeTrackingDates = dates.filter((date) => {
+    const rawCalories = logsByDate.get(date)?.calories
+    const rawSteps = stepsByDate[date]
+    const caloriesValue = Number(rawCalories)
+    const stepsValue = Number(rawSteps)
+    return (
+      rawCalories != null &&
+      rawSteps != null &&
+      Number.isFinite(caloriesValue) &&
+      caloriesValue >= 0 &&
+      Number.isFinite(stepsValue) &&
+      stepsValue >= 0
+    )
   })
 
   const weightPoints: WeightPoint[] = analysisStart && analysisEnd
     ? bodyEntries
         .filter((entry) => {
-          if (entry.bodyweight == null || entry.bodyweight <= 0) return false
+          if (
+            entry.bodyweight == null ||
+            !Number.isFinite(Number(entry.bodyweight)) ||
+            entry.bodyweight <= 0
+          ) {
+            return false
+          }
           const measured = parseISO(entry.measured_on)
           return measured >= analysisStart && measured <= analysisEnd
         })
@@ -190,6 +214,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
           weight: Number(entry.bodyweight),
           date: entry.measured_on,
         }))
+        .sort((a, b) => a.date.localeCompare(b.date))
     : []
   const bodySpanDays =
     weightPoints.length >= 2
@@ -202,19 +227,15 @@ export function computeCalibration(input: CalibrationInput): Calibration {
   const actualWeeklyLoss = scaleSlope == null ? null : -scaleSlope * 7
 
   const trackingComplete =
-    analysisDays >= CALIBRATION_ESTIMATE_DAYS &&
-    calories.length === analysisDays &&
-    steps.length === analysisDays
+    completeTrackingDates.length >= CALIBRATION_ESTIMATE_DAYS
   const scaleEstimateComplete =
     weightPoints.length >= CALIBRATION_ESTIMATE_WEIGH_INS &&
     bodySpanDays >= CALIBRATION_ESTIMATE_WEIGHT_SPAN_DAYS &&
     scaleSlope != null
-  const lockComplete =
-    analysisDays >= CALIBRATION_MAX_DAYS &&
-    calories.length === CALIBRATION_MAX_DAYS &&
-    steps.length === CALIBRATION_MAX_DAYS &&
-    weightPoints.length >= CALIBRATION_LOCK_WEIGH_INS &&
-    bodySpanDays >= CALIBRATION_LOCK_WEIGHT_SPAN_DAYS &&
+  const reliabilityComplete =
+    completeTrackingDates.length >= CALIBRATION_RELIABLE_DAYS &&
+    weightPoints.length >= CALIBRATION_RELIABLE_WEIGH_INS &&
+    bodySpanDays >= CALIBRATION_RELIABLE_WEIGHT_SPAN_DAYS &&
     scaleSlope != null
   const canEstimate = waterComplete && trackingComplete && scaleEstimateComplete
 
@@ -233,8 +254,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
       complete: trackingComplete,
       detail: `${Math.min(
         CALIBRATION_ESTIMATE_DAYS,
-        calories.length,
-        steps.length,
+        completeTrackingDates.length,
       )}/${CALIBRATION_ESTIMATE_DAYS} complete calorie + step days`,
     },
     {
@@ -250,24 +270,26 @@ export function computeCalibration(input: CalibrationInput): Calibration {
       )}/${CALIBRATION_ESTIMATE_WEIGHT_SPAN_DAYS} days`,
     },
     {
-      key: 'lock',
-      label: 'Estimate locked',
-      complete: lockComplete,
-      detail: `${Math.min(
-        calories.length,
-        steps.length,
-      )}/${CALIBRATION_MAX_DAYS} complete days · ${weightPoints.length}/${CALIBRATION_LOCK_WEIGH_INS} weigh-ins · ${bodySpanDays}/${CALIBRATION_LOCK_WEIGHT_SPAN_DAYS} days`,
+      key: 'reliable',
+      label: reliabilityComplete ? 'Reliable and updating' : 'Reliable baseline',
+      complete: reliabilityComplete,
+      detail: reliabilityComplete
+        ? `${completeTrackingDates.length} complete days · ${weightPoints.length} weigh-ins · ${bodySpanDays}-day span`
+        : `${Math.min(
+            completeTrackingDates.length,
+            CALIBRATION_RELIABLE_DAYS,
+          )}/${CALIBRATION_RELIABLE_DAYS} complete days · ${weightPoints.length}/${CALIBRATION_RELIABLE_WEIGH_INS} weigh-ins · ${bodySpanDays}/${CALIBRATION_RELIABLE_WEIGHT_SPAN_DAYS} days`,
     },
   ]
-  const ready = canEstimate && lockComplete
+  const ready = canEstimate && reliabilityComplete
 
   let estimatedMaintenance: number | null = null
-  const avgCalories: number | null = mean(calories)
+  const avgCalories = roundWholeCalories(mean(calories))
   const avgSteps: number | null = mean(steps)
   if (canEstimate && actualWeeklyLoss != null) {
     const kg = weightKg > 0 ? weightKg : DEFAULT_WEIGHT_KG
     const tissueKcalPerDay = (actualWeeklyLoss * kcalPerUnit(unit)) / 7
-    const baselineEstimates = dates.map((date) => {
+    const baselineEstimates = completeTrackingDates.map((date) => {
       const intake = Number(logsByDate.get(date)!.calories)
       const stepDelta =
         (stepsByDate[date] - stepBaseline) *

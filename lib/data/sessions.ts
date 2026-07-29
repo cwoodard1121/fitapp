@@ -12,9 +12,14 @@ import {
   targetLoad,
   targetSets,
 } from '@/lib/engine/engine'
+import { chooseVolumeIncreaseWinners } from '@/lib/engine/volume-arbitration'
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId } from '@/lib/data/auth'
 import { exerciseNameKey } from '@/lib/exercises/identity'
+import {
+  getSorenessBySessionAndMuscle,
+  sorenessLookupKey,
+} from '@/lib/data/soreness'
 import {
   derivePrevTargets,
   setLogInputFromRow,
@@ -158,12 +163,18 @@ export async function getSetEntriesForSession(
  * session. Slot ids are deliberately ignored: the same named exercise shares
  * history across days, programs, and casing differences.
  */
+interface PriorExerciseLog {
+  log: SetLog
+  muscleArea: string | null
+  nextDaySoreness: number | null
+}
+
 async function getPriorLogsByExercise(
   session: Session,
   slots: ExerciseSlot[],
   currentLogs: Record<string, SetLog>,
-): Promise<Map<string, SetLog>> {
-  const result = new Map<string, SetLog>()
+): Promise<Map<string, PriorExerciseLog>> {
+  const result = new Map<string, PriorExerciseLog>()
   if (slots.length === 0) return result
 
   const supabase = await createClient()
@@ -171,16 +182,27 @@ async function getPriorLogsByExercise(
   const wanted = new Set(slots.map((slot) => exerciseNameKey(slot.exercise_name)))
   const { data: namedSlots, error: slotError } = await supabase
     .from('exercise_slots')
-    .select('id, exercise_name')
+    .select('id, exercise_name, muscle_area')
     .eq('user_id', userId)
   if (slotError) throw slotError
 
-  const nameBySlotId = new Map<string, string>()
-  for (const row of (namedSlots ?? []) as Pick<ExerciseSlot, 'id' | 'exercise_name'>[]) {
+  const metaBySlotId = new Map<
+    string,
+    { exerciseKey: string; muscleArea: string | null }
+  >()
+  for (const row of (namedSlots ?? []) as Pick<
+    ExerciseSlot,
+    'id' | 'exercise_name' | 'muscle_area'
+  >[]) {
     const key = exerciseNameKey(row.exercise_name)
-    if (wanted.has(key)) nameBySlotId.set(row.id, key)
+    if (wanted.has(key)) {
+      metaBySlotId.set(row.id, {
+        exerciseKey: key,
+        muscleArea: row.muscle_area,
+      })
+    }
   }
-  const matchingSlotIds = [...nameBySlotId.keys()]
+  const matchingSlotIds = [...metaBySlotId.keys()]
   if (matchingSlotIds.length === 0) return result
 
   const currentLogTimes = Object.values(currentLogs)
@@ -203,15 +225,19 @@ async function getPriorLogsByExercise(
   )
   if (completedSessionIds.length === 0) return result
 
-  const { data: priorRows, error: logError } = await supabase
-    .from('set_logs')
-    .select('*')
-    .eq('user_id', userId)
-    .in('slot_id', matchingSlotIds)
-    .in('session_id', completedSessionIds)
-    .lt('created_at', cutoff)
-    .order('created_at', { ascending: false })
-    .limit(1000)
+  const [priorLogResult, sorenessBySessionMuscle] = await Promise.all([
+    supabase
+      .from('set_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .in('slot_id', matchingSlotIds)
+      .in('session_id', completedSessionIds)
+      .lt('created_at', cutoff)
+      .order('created_at', { ascending: false })
+      .limit(1000),
+    getSorenessBySessionAndMuscle(supabase, userId, completedSessionIds),
+  ])
+  const { data: priorRows, error: logError } = priorLogResult
   if (logError) throw logError
 
   for (const log of (priorRows ?? []) as SetLog[]) {
@@ -224,8 +250,18 @@ async function getPriorLogsByExercise(
     ) {
       continue
     }
-    const key = nameBySlotId.get(log.slot_id)
-    if (key && !result.has(key)) result.set(key, log)
+    const meta = metaBySlotId.get(log.slot_id)
+    if (meta && !result.has(meta.exerciseKey)) {
+      result.set(meta.exerciseKey, {
+        log,
+        muscleArea: meta.muscleArea,
+        nextDaySoreness: meta.muscleArea
+          ? (sorenessBySessionMuscle.get(
+              sorenessLookupKey(log.session_id, meta.muscleArea),
+            ) ?? null)
+          : null,
+      })
+    }
   }
 
   return result
@@ -246,20 +282,61 @@ export async function buildTodayView(
   const priorLogs = await getPriorLogsByExercise(session, slots, logs)
   const entriesBySlot = await getSetEntriesForSession(session.id)
 
-  return slots.map((slot) => {
+  const prepared = slots.map((slot) => {
     const config = slotConfigFromRow(slot)
     const log = logs[slot.id] ?? null
     const entries = entriesBySlot[slot.id] ?? []
-    const priorLog = priorLogs.get(exerciseNameKey(slot.exercise_name))
+    const prior = priorLogs.get(exerciseNameKey(slot.exercise_name))
+    const priorLog = prior?.log
     const prev = derivePrevTargets(
       config,
       priorLog,
       priorLog?.week ?? week - 1,
       deloadWeek,
       weights,
+      prior?.nextDaySoreness,
     )
+    return { slot, config, log, entries, prior, priorLog, prev }
+  })
+
+  // One muscle-level soreness report may support at most one added set from
+  // that exposure. If several exercises qualify, the exercise with the lowest
+  // pump wins (program order breaks ties); the others take normal rep/load
+  // progression. This keeps volume additions genuinely sparse.
+  const volumeWinnerIndexes = chooseVolumeIncreaseWinners(
+    prepared.map((item) =>
+      item.prev.decision === 'Add 1 set' &&
+      item.prior?.muscleArea
+        ? {
+            exposureKey: sorenessLookupKey(
+              item.prior.log.session_id,
+              item.prior.muscleArea,
+            ),
+            pump: item.prior.log.pump,
+          }
+        : null,
+    ),
+  )
+
+  return prepared.map((item, index) => {
+    const { slot, config, log, entries, prior, priorLog } = item
+    let prev = item.prev
+    if (
+      prev.decision === 'Add 1 set' &&
+      prior?.muscleArea &&
+      !volumeWinnerIndexes.has(index)
+    ) {
+      prev = derivePrevTargets(
+        config,
+        prior.log,
+        prior.log.week,
+        deloadWeek,
+        weights,
+        null,
+      )
+    }
     // A second occurrence during Week 1 should use the first occurrence's
-    // calibrated result instead of resetting to the seed/base targets.
+    // progressed targets instead of resetting to the seed/base targets.
     const targetWeek = week === 1 && priorLog ? 2 : week
 
     const baseTargets: SlotTargets = {

@@ -67,8 +67,8 @@ export function MaintenanceCheck({
         </CardTitle>
         <CardDescription>
           Infers maintenance at exactly {c.stepBaseline.toLocaleString()} steps/day.
-          An early estimate appears after 7 complete post-settling days and locks
-          by day 14.
+          An early estimate appears after 7 complete post-settling days, becomes
+          reliable after 14, and keeps updating through the block.
         </CardDescription>
       </CardHeader>
 
@@ -117,7 +117,12 @@ export function MaintenanceCheck({
                 tone="signal"
               />
               <RateStat value={c.actualWeeklyLoss} unit={unit} />
-              <Stat label="Avg intake" value={c.avgCalories} unit="kcal" />
+              <Stat
+                label="Avg intake"
+                value={c.avgCalories}
+                unit="kcal"
+                precision={0}
+              />
               <Stat label="Avg steps" value={c.avgSteps} precision={0} />
             </div>
 
@@ -130,8 +135,8 @@ export function MaintenanceCheck({
                 <span>
                   <strong>Early estimate only.</strong> It is based on{' '}
                   {c.analysisDays} post-settling days and {c.bodyReadings} weigh-ins.
-                  Water noise can still move it; wait for the 14-day lock before
-                  changing maintenance.
+                  Water noise can still move it; wait for the reliable baseline
+                  before changing maintenance.
                 </span>
               </p>
             ) : c.suggestion ? (
@@ -181,7 +186,9 @@ export function MaintenanceCheck({
             <p className="text-xs leading-snug text-muted">
               The calculation adds observed tissue loss to intake, then removes
               calories attributable to steps above the baseline (or adds them back
-              below it). The saved step baseline stays unchanged.
+              below it). Every complete block day refines the estimate, and the
+              scale slope downweights brief water spikes. The saved step baseline
+              stays unchanged.
             </p>
           </>
         ) : null}

@@ -46,8 +46,6 @@ export interface ReadinessWeights {
   pumpGood: number
   pumpBad: number
   enjoyment: number
-  sorenessBand: number
-  sorenessHighNoRecovery: number
   rirTooEasy: number
   rirLow: number
 }
@@ -60,8 +58,6 @@ export const DEFAULT_WEIGHTS: ReadinessWeights = {
   pumpGood: 2,
   pumpBad: 1,
   enjoyment: 1,
-  sorenessBand: 1,
-  sorenessHighNoRecovery: -2,
   // RIR is context, not the primary progression signal. Ordinary variance
   // nudges the score; near-failure work is handled by a safety check below.
   rirTooEasy: 0.5,
@@ -95,6 +91,16 @@ export interface SetLogInput {
   pump: number | null
   enjoyment: number | null
   soreness: number | null
+  /**
+   * Soreness reported the day after this exercise trained its muscle, on the
+   * same 0-10 scale as soreness. Optional so existing logs remain valid until
+   * day-after feedback is persisted and mapped.
+   *
+   * This is a weak stimulus check, not a growth score: low next-day soreness
+   * can help justify one extra set only when the rest of the session agrees.
+   * High values remain useful as a recovery safety signal.
+   */
+  nextDaySoreness?: number | null
   recovery: number | null
   performance: Performance | null
 }
@@ -210,6 +216,7 @@ export function evaluateSlot(
     pump,
     enjoyment,
     soreness,
+    nextDaySoreness,
     recovery,
     performance,
   } = log
@@ -231,14 +238,21 @@ export function evaluateSlot(
 
   /* --- Derived boolean flags --- */
   const lowrir = actualRir != null && actualRir < targetRir - 0.5
-  const verylowrir = actualRir != null && actualRir < targetRir - 2
+  const verylowrir =
+    actualRir != null && targetRir >= 2 && actualRir <= targetRir - 2
   const tooeasy = actualRir != null && actualRir > targetRir + 2
   const badpump = pump != null && pump <= 5
   const goodpump = pump != null && pump >= 7
   const lowsore = soreness != null && soreness <= 2
   const productivesore = soreness != null && soreness >= 3 && soreness <= 6
-  const highsore = soreness != null && soreness >= 8
-  const severesore = soreness != null && soreness >= 10
+  const nextdaysoreknown = nextDaySoreness != null
+  const nextdaylowsore = nextDaySoreness != null && nextDaySoreness <= 2
+  const nextdayproductivesore =
+    nextDaySoreness != null && nextDaySoreness >= 3 && nextDaySoreness <= 7
+  const nextdayhighsore = nextDaySoreness != null && nextDaySoreness >= 8
+  const nextdayseveresore = nextDaySoreness != null && nextDaySoreness >= 10
+  const highsore = (soreness != null && soreness >= 8) || nextdayhighsore
+  const severesore = (soreness != null && soreness >= 10) || nextdayseveresore
   const goodrecovery = recovery != null && recovery >= 7
   const badrecovery = recovery != null && recovery <= 4
   const perfdown = performance === 'Down'
@@ -252,11 +266,8 @@ export function evaluateSlot(
     (perfup ? w.perfUp : perfdown ? w.perfDown : 0) +
     (goodpump ? w.pumpGood : badpump ? w.pumpBad : 0) +
     (enjoyment != null && enjoyment >= 7 ? w.enjoyment : 0) +
-    (productivesore
-      ? w.sorenessBand
-      : highsore && !goodrecovery
-        ? w.sorenessHighNoRecovery
-        : 0) +
+    // Soreness is intentionally excluded from the growth score. It can support
+    // a stimulus/recovery decision below, but it is not evidence of growth.
     (tooeasy ? w.rirTooEasy : lowrir ? w.rirLow : 0)
 
   /* --- Recovery gate --- */
@@ -272,37 +283,53 @@ export function evaluateSlot(
         : 'Yellow'
 
   /* === PROGRESSION LAYER ============================================
-   * Bank clear progress without demanding a perfect RIR match. A slightly
-   * low RIR only affects the score; very-low RIR (near failure relative to
-   * the target) blocks an increase by itself. */
-  const SET_CAP = 5 // willing to ramp hypertrophy work up to 5 work sets
-  const PROGRESS_SCORE = 2.5
+   * A completed, in-range session progresses by default. Subjective feedback
+   * can stop progression when it identifies real regression/recovery trouble,
+   * but a merely neutral score no longer forces repeated cautious holds.
+   *
+   * Set additions have a much higher bar. A slot may earn at most one set
+   * above its configured baseline, and only with an explicit day-after signal
+   * that agrees with low pump plus solid objective work and appropriate effort.
+   */
+  const SET_CAP = Math.min(5, baseSets + 1)
 
   // Clearly more in the tank than the +2 "too easy" -> the load is too light.
   const veryeasy = actualRir != null && actualRir >= targetRir + 3
-  // Volume is for hypertrophy work, not heavy compounds (Load +5). Bodyweight
-  // movements always allow volume — sets are how they progress once reps cap.
+  // Volume is for hypertrophy work, not load-first compounds. Bodyweight
+  // movements can earn volume, but only through the strict evidence rule.
   const canVolume = progressBias !== 'Load +5' || isBodyweight
 
-  // Stimulus-driven volume signal: a low pump means the
-  // muscle was under-stimulated, so it earns a SET — and this is checked
-  // BEFORE load/rep progression, so "can't add load/reps cleanly but pump is
-  // low -> add a set" falls out naturally. Relaxed from the original (good
-  // recovery -> any non-red gate) so a low pump still earns a set on a
-  // merely-okay day. Heavy compounds (Load +5) are excluded — pump isn't their
-  // signal and extra sets there just pile on fatigue.
-  const progressionSignal = score >= PROGRESS_SCORE || (perfup && score > 0)
+  // Objective completion is the default progression signal. The score remains
+  // useful context, but neutral subjective feedback no longer stalls a clean
+  // in-range workout.
+  // Extra sets are an optional stimulus experiment, not a new mandatory
+  // baseline. Comparing against configured sets keeps re-evaluation stable
+  // when old logs are recomputed without their previous display targets.
+  const prescribedSets = baseSets
+  const completedWork =
+    bestReps != null &&
+    actualSets != null &&
+    (isBodyweight || actualLoad != null)
+  const enoughReps = bestReps != null && bestReps >= repLow
+  const enoughSets =
+    actualSets != null && actualSets >= Math.max(1, prescribedSets)
+  const progressionSignal = completedWork && enoughReps && enoughSets
   const readyToProgress =
     gate !== 'Red' && perfok && !verylowrir && progressionSignal
 
+  const establishedLoad =
+    isBodyweight || (actualLoad != null && actualLoad > 0)
+  const appropriateSetIntensity =
+    actualRir != null && actualRir <= targetRir + 1 && !verylowrir
   const addSet =
     canVolume &&
-    gate !== 'Red' &&
-    perfok &&
-    !verylowrir &&
-    ((badpump && w.pumpBad > 0) ||
-      (progressBias === 'Set optional' && readyToProgress)) &&
-    (actualSets == null || actualSets < SET_CAP)
+    readyToProgress &&
+    badpump &&
+    nextdaylowsore &&
+    establishedLoad &&
+    appropriateSetIntensity &&
+    actualSets != null &&
+    actualSets < SET_CAP
 
   const noData =
     actualLoad == null && bestReps == null && actualSets == null && actualRir == null
@@ -329,11 +356,6 @@ export function evaluateSlot(
       week === 1
         ? 'Severe soreness may be novel DOMS in Week 1, but 10/10 is too high to progress through.'
         : 'Severe soreness says the previous muscle dose was not recovered — reduce today.'
-  } else if (week === 1) {
-    decision = 'Calibrate (set baseline)'
-    reason = highsore
-      ? 'Week 1 DOMS is common. Hold the dose steady, log honest performance, and do not add work yet.'
-      : 'Week 1 — log honest numbers to set your baseline; no push yet.'
   } else if (gate === 'Red') {
     decision = 'Hold/reduce'
     reason = badrecovery
@@ -341,22 +363,16 @@ export function evaluateSlot(
       : "Readiness is red — hold or reduce, don't add stress."
   } else if (addSet) {
     decision = 'Add 1 set'
-    reason = badpump
-      ? 'Push volume next session: the work looked under-stimulating, so add one set.'
-      : 'Strong session — push volume with one more set next time.'
+    reason =
+      'Load, reps, and effort were solid, but pump and next-day soreness were low - add one set.'
   } else if (readyToProgress) {
     if (isBodyweight) {
-      // Bodyweight: reps then sets only — never an automatic load bump.
+      // Bodyweight progresses through reps. Sets only increase through the
+      // strict stimulus rule above; added load remains the user's choice.
       if (bestReps != null && bestReps + 1 > maxRep) {
-        if (actualSets == null || actualSets < SET_CAP) {
-          decision = 'Add 1 set'
-          reason =
-            'Push harder next session: add a set after topping the bodyweight rep range.'
-        } else {
-          decision = 'Maintain'
-          reason =
-            'Maxed reps and sets at bodyweight — hold here, or add your own load to keep progressing.'
-        }
+        decision = 'Maintain'
+        reason =
+          'Rep range topped at bodyweight - hold here or add your own load; sets increase only when stimulus feedback supports it.'
       } else if (veryeasy && bestReps != null && bestReps + 2 <= maxRep) {
         decision = 'Add 2 reps'
         reason = 'Push harder next session: chase two more reps instead of one.'
@@ -370,7 +386,10 @@ export function evaluateSlot(
       reason = veryeasy
         ? 'Push harder next session: take the larger load jump shown.'
         : 'Performance supports more work — add load next session.'
-    } else if (progressBias === 'Reps first') {
+    } else {
+      // Both Reps first and Set optional use double progression. Set optional
+      // permits the evidence-based set branch above; it does not make volume
+      // the default progression on every successful workout.
       if (bestReps != null && bestReps + 1 > maxRep) {
         decision = 'Add 5 lb'
         bigJump = veryeasy
@@ -384,12 +403,6 @@ export function evaluateSlot(
         decision = 'Add 1 rep'
         reason = 'Performance supports more work — push for one more rep next session.'
       }
-    } else if (progressBias === 'Set optional') {
-      decision = 'Add 1 set'
-      reason = 'Strong session — push volume with one more set next time.'
-    } else {
-      decision = 'Maintain'
-      reason = 'On track — repeat and beat it next time.'
     }
   } else {
     decision = 'Maintain'
@@ -397,7 +410,13 @@ export function evaluateSlot(
       ? 'That reached near-failure effort — repeat the target before adding more.'
       : perfdown
         ? 'Performance dipped — repeat the target and rebuild momentum.'
-        : 'No clear progression signal yet — repeat the target and beat it next time.'
+        : !completedWork
+          ? 'Complete the logged load, reps, and sets before increasing the target.'
+          : !enoughReps
+            ? 'Reps were below the range - keep the load and build into the range first.'
+            : !enoughSets
+              ? 'Complete the prescribed sets before increasing the target.'
+              : 'Repeat the target and beat it next time.'
   }
 
   /* --- Step sizes: double the load step on a clearly-too-light session --- */
@@ -421,17 +440,23 @@ export function evaluateSlot(
 
   const nextSets =
     decision === 'Add 1 set'
-      ? (actualSets ?? baseSets) + 1
+      ? baseSets + 1
       : decision === 'Hold/reduce'
-        ? Math.max(1, (actualSets ?? baseSets) - 1)
-        : actualSets
+        ? Math.max(1, Math.min(baseSets, (actualSets ?? baseSets) - 1))
+        : decision == null
+          ? actualSets
+          : baseSets
 
+  const repsInsideConfiguredRange =
+    bestReps == null ? null : Math.min(repHigh, Math.max(repLow, bestReps))
   const nextReps =
-    decision === 'Add 2 reps'
-      ? (bestReps ?? repLow) + 2
-      : decision === 'Add 1 rep'
-        ? (bestReps ?? repLow) + 1
-        : bestReps
+    decision === 'Add 5 lb'
+      ? repLow
+      : decision === 'Add 2 reps'
+        ? (bestReps ?? repLow) + 2
+        : decision === 'Add 1 rep'
+          ? (bestReps ?? repLow) + 1
+          : repsInsideConfiguredRange
 
   /* --- Derived metrics --- */
   const e1rm =
@@ -454,6 +479,11 @@ export function evaluateSlot(
     goodpump,
     lowsore,
     productivesore,
+    nextdaysoreknown,
+    nextdaylowsore,
+    nextdayproductivesore,
+    nextdayhighsore,
+    nextdayseveresore,
     highsore,
     severesore,
     goodrecovery,
@@ -461,6 +491,11 @@ export function evaluateSlot(
     perfdown,
     perfup,
     perfok,
+    completedWork,
+    enoughReps,
+    enoughSets,
+    establishedLoad,
+    appropriateSetIntensity,
     progressionSignal,
     readyToProgress,
     addSet,

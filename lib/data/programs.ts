@@ -15,6 +15,7 @@ export async function getActiveProgram(): Promise<Program | null> {
     .select('*')
     .eq('user_id', userId)
     .eq('is_active', true)
+    .is('archived_at', null)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
@@ -33,6 +34,7 @@ export async function getPrograms(): Promise<Program[]> {
     .from('programs')
     .select('*')
     .eq('user_id', userId)
+    .is('archived_at', null)
     .order('is_active', { ascending: false })
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -96,6 +98,7 @@ export async function setActiveProgram(programId: string): Promise<void> {
     .select('id')
     .eq('id', programId)
     .eq('user_id', userId)
+    .is('archived_at', null)
     .maybeSingle()
   if (oErr) throw oErr
   if (!owned) throw new Error('Program not found.')
@@ -123,6 +126,7 @@ export async function deleteProgram(
     .select('id, is_active')
     .eq('id', programId)
     .eq('user_id', userId)
+    .is('archived_at', null)
     .maybeSingle()
   if (tErr) throw tErr
   if (!target) throw new Error('Program not found.')
@@ -142,6 +146,7 @@ export async function deleteProgram(
     .from('programs')
     .select('id')
     .eq('user_id', userId)
+    .is('archived_at', null)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()

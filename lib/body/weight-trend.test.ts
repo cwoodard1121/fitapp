@@ -144,6 +144,41 @@ describe('buildWeightTrend', () => {
       sampleCount: 3,
     })
   })
+
+  it('keeps an acute water spike visible without letting it move the trend', () => {
+    const points = buildWeightTrend(
+      Array.from({ length: 14 }, (_, index) =>
+        reading(
+          `2026-03-${String(index + 1).padStart(2, '0')}`,
+          index === 13 ? 205 : 200,
+        ),
+      ),
+    )
+
+    expect(points.at(-1)).toMatchObject({
+      weight: 205,
+      average: 200,
+      sampleCount: 7,
+    })
+  })
+
+  it('contains a short multi-day water spike instead of treating it as tissue gain', () => {
+    const points = buildWeightTrend(
+      Array.from({ length: 14 }, (_, index) =>
+        reading(
+          `2026-03-${String(index + 1).padStart(2, '0')}`,
+          index === 12 ? 204 : index === 13 ? 203 : 200,
+        ),
+      ),
+    )
+
+    expect(points.at(-2)?.weight).toBe(204)
+    expect(points.at(-1)).toMatchObject({
+      weight: 203,
+      average: 200.1,
+      sampleCount: 7,
+    })
+  })
 })
 
 describe('summarizeWeightTrend', () => {

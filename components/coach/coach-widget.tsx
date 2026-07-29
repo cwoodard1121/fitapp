@@ -1,7 +1,9 @@
 'use client'
 
 import * as React from 'react'
+import { useRouter } from 'next/navigation'
 import { Sparkles, X, Send, Plus, Square } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui'
@@ -17,7 +19,7 @@ const SUGGESTIONS = [
   'How is my training trending?',
   'What should I focus on this week?',
   'Am I on track for my goals?',
-  'Is any lift stalling?',
+  'Swap an exercise in my program',
 ]
 
 /**
@@ -31,6 +33,7 @@ const SUGGESTIONS = [
  * route enforces the same gate defensively.
  */
 export function CoachWidget() {
+  const router = useRouter()
   const [open, setOpen] = React.useState(false)
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
   const [input, setInput] = React.useState('')
@@ -95,7 +98,7 @@ export function CoachWidget() {
         })
 
         const data = (await res.json().catch(() => null)) as
-          | { reply?: string; error?: string }
+          | { reply?: string; actions?: string[]; error?: string }
           | null
         if (!res.ok) {
           throw new Error(data?.error || `Request failed (${res.status}).`)
@@ -103,6 +106,14 @@ export function CoachWidget() {
 
         const reply = typeof data?.reply === 'string' ? data.reply.trim() : ''
         if (!reply) throw new Error('The coach came back empty — try again.')
+        if (data?.actions?.length) {
+          toast.success(
+            data.actions.length === 1
+              ? 'Program updated.'
+              : `${data.actions.length} program changes saved.`,
+          )
+          router.refresh()
+        }
 
         setMessages((prev) => {
           const copy = prev.slice()
@@ -139,7 +150,7 @@ export function CoachWidget() {
         abortRef.current = null
       }
     },
-    [messages, streaming],
+    [messages, router, streaming],
   )
 
   function stop() {
@@ -203,7 +214,9 @@ export function CoachWidget() {
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 text-signal" aria-hidden />
               <span className="text-sm font-semibold">Coach</span>
-              <span className="text-[11px] text-muted">grounded in your stats</span>
+              <span className="text-[11px] text-muted">
+                stats + program edits
+              </span>
             </div>
             <div className="flex items-center gap-1">
               <Button
@@ -332,7 +345,8 @@ function EmptyState({
         <Sparkles className="mx-auto size-7 text-signal" aria-hidden />
         <p className="text-sm font-medium text-foreground">Ask your coach</p>
         <p className="text-xs text-muted">
-          I already know your lifts, goals, body trend, and nutrition. Ask me anything.
+          I know your lifts, goals, body trend, nutrition, and active program. I
+          can also swap, add, remove, or edit exercises.
         </p>
       </div>
       <div className="grid gap-2">

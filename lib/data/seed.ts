@@ -24,6 +24,7 @@ export async function seedDefaultProgram(): Promise<Program> {
     .from('programs')
     .select('*')
     .eq('user_id', userId)
+    .is('archived_at', null)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()

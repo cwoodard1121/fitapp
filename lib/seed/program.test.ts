@@ -1,47 +1,87 @@
 import { describe, expect, it } from 'vitest'
 
+import { EXERCISE_CATALOG } from '@/lib/exercises/catalog'
+import { exerciseNameKey } from '@/lib/exercises/identity'
 import { DEFAULT_PROGRAM } from './program'
 
 describe('DEFAULT_PROGRAM', () => {
-  it('matches the shortened four-day routine', () => {
-    const [day1, day2, day3, day4] = DEFAULT_PROGRAM.days
+  it('matches the canonical five-day routine', () => {
+    expect(DEFAULT_PROGRAM.name).toBe('Five-Day Progression')
+    expect(DEFAULT_PROGRAM.days).toHaveLength(5)
 
-    expect(day1.slots.map((slot) => [slot.exerciseName, slot.baseSets])).toEqual([
-      ['Touch-and-go bench', 2],
-      ['DB incline bench', 2],
-      ['Pull-up', 2],
-      ['DB lateral raise', 3],
-      ['Cable crunch', 3],
+    expect(programShape()).toEqual([
+      [
+        ['Barbell Bench Press', 2, 5, 10],
+        ['Incline Dumbbell Bench Press', 2, 6, 12],
+        ['Pull-Up', 2, 5, 20],
+        ['Barbell Row', 2, 6, 10],
+        ['Dumbbell Lateral Raise', 2, 8, 15],
+        ['Dumbbell Wrist Curl', 3, 10, 20],
+      ],
+      [
+        ['EZ-Bar Curl', 4, 6, 12],
+        ['Triceps Pushdown', 3, 6, 10],
+        ['Cable Reverse Curl', 3, 8, 15],
+        ['Cable Crunch', 2, 8, 15],
+      ],
+      [
+        ['Pull-Up', 2, 5, 20],
+        ['Barbell Row', 2, 6, 10],
+        ['Incline Dumbbell Bench Press', 2, 6, 12],
+        ['Cable Lateral Raise', 2, 8, 15],
+      ],
+      [
+        ['Barbell Squat', 3, 6, 12],
+        ['Deadlift', 2, 5, 8],
+        ['Incline Dumbbell Curl', 3, 10, 15],
+        ['Skull Crusher', 2, 10, 15],
+      ],
+      [
+        ['Cable Lateral Raise', 3, 10, 15],
+        ['Seated Dumbbell Lateral Raise', 2, 6, 12],
+        ['Pull-Up', 2, 5, 20],
+        ['Dumbbell Wrist Curl', 3, 10, 15],
+      ],
     ])
+  })
 
-    expect(day2.slots.map((slot) => slot.exerciseName)).toEqual([
-      'Cable lateral raise',
-      'Seated lateral raise',
-      'Barbell curl',
-      'Incline curl',
-      'Pushdown',
-      'Overhead cable triceps extension',
-      'Reverse curl',
-    ])
+  it('marks every pull-up prescription as two bodyweight sets to failure', () => {
+    const pullUps = DEFAULT_PROGRAM.days.flatMap((day) =>
+      day.slots.filter((slot) => slot.exerciseName === 'Pull-Up'),
+    )
 
-    expect(day3.label).toBe('Day 3 Chest / Back / Legs')
-    expect(day3.slots.map((slot) => slot.exerciseName)).toEqual([
-      'Pull-up or pulldown',
-      'Row',
-      'DB incline bench',
-      'Squat',
-      'Deadlift',
-      'Cable crunch',
-    ])
+    expect(pullUps).toHaveLength(3)
+    for (const pullUp of pullUps) {
+      expect(pullUp).toMatchObject({
+        baseSets: 2,
+        targetRir: 0,
+        isBodyweight: true,
+        seedLoad: null,
+      })
+    }
+  })
 
-    expect(day3.slots.find((slot) => slot.exerciseName === 'Cable crunch')?.baseSets).toBe(3)
+  it('keeps every programmed movement in the exercise library', () => {
+    const catalogKeys = new Set(
+      EXERCISE_CATALOG.map((exercise) => exerciseNameKey(exercise.name)),
+    )
+    const programmedKeys = new Set(
+      DEFAULT_PROGRAM.days.flatMap((day) =>
+        day.slots.map((slot) => exerciseNameKey(slot.exerciseName)),
+      ),
+    )
 
-    expect(day4.slots.find((slot) => slot.exerciseName === 'Rear-delt fly')?.baseSets).toBe(2)
-    expect(day4.slots.some((slot) => slot.exerciseName === 'Close-grip bench or dip')).toBe(false)
-    expect(day4.slots.find((slot) => slot.exerciseName === 'Skullcrusher')).toMatchObject({
-      baseSets: 2,
-      repLow: 8,
-      repHigh: 12,
-    })
+    expect([...programmedKeys].filter((key) => !catalogKeys.has(key))).toEqual([])
   })
 })
+
+function programShape(): [string, number, number, number][][] {
+  return DEFAULT_PROGRAM.days.map((day) =>
+    day.slots.map((slot) => [
+      slot.exerciseName,
+      slot.baseSets,
+      slot.repLow,
+      slot.repHigh,
+    ]),
+  )
+}

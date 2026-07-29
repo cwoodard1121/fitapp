@@ -42,6 +42,7 @@ export function SlotRow({
     slot.rep_low === slot.rep_high
       ? `${slot.rep_low}`
       : `${slot.rep_low}–${slot.rep_high}`
+  const toFailure = slot.is_bodyweight && slot.target_rir === 0
 
   return (
     <li className="flex items-stretch">
@@ -81,8 +82,16 @@ export function SlotRow({
             {slot.exercise_name}
           </span>
           <span className="mt-0.5 block truncate font-mono text-xs tabular-nums text-muted">
-            {reps} reps · {biasTag(slot.progress_bias)} · {slot.base_sets}×
-            {' · '}RIR {slot.target_rir}
+            {toFailure ? (
+              <>
+                {slot.base_sets}×F · BW
+              </>
+            ) : (
+              <>
+                {reps} reps · {biasTag(slot.progress_bias)} · {slot.base_sets}×
+                {' · '}RIR {slot.target_rir}
+              </>
+            )}
             {slot.seed_load != null ? ` · ${slot.seed_load}${unit}` : ''}
           </span>
         </span>

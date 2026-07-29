@@ -15,7 +15,7 @@ export interface WeightTrendPoint {
   date: string
   /** The scale reading for this day, or null when no weigh-in was logged. */
   weight: number | null
-  /** Trailing calendar-day average ending on this date. */
+  /** Trailing water-resistant estimate ending on this date. */
   average: number | null
   /** Number of logged days represented by the average. */
   sampleCount: number
@@ -55,6 +55,81 @@ const round = (value: number, precision: number) => {
   return Math.round((value + Number.EPSILON) * scale) / scale
 }
 
+function mean(values: number[]): number | null {
+  if (values.length === 0) return null
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2
+}
+
+function dailyMean(readings: DailyReading[]): number | null {
+  return mean(readings.map((reading) => reading.value))
+}
+
+/**
+ * Keep the normal rolling-mean behaviour for sparse windows, then use a
+ * robust fitted line plus Huber weights once there are enough readings to
+ * identify an outlier. A legitimate rise or fall stays part of the mean because
+ * points are weighted by their residual from the fitted line, not merely their
+ * distance from the middle weight. Raw readings are never changed; only an
+ * acute water spike's influence on the trend is reduced.
+ */
+function waterResistantMean(readings: DailyReading[]): number | null {
+  if (readings.length < 5) return dailyMean(readings)
+
+  const firstDay = parseISO(readings[0].date)
+  const dayOffsets = readings.map((reading) =>
+    differenceInCalendarDays(parseISO(reading.date), firstDay),
+  )
+  const slopes: number[] = []
+  for (let i = 0; i < readings.length; i++) {
+    for (let j = i + 1; j < readings.length; j++) {
+      const span = dayOffsets[j] - dayOffsets[i]
+      if (span > 0) {
+        slopes.push((readings[j].value - readings[i].value) / span)
+      }
+    }
+  }
+  const slope = median(slopes) ?? 0
+  const intercept = median(
+    readings.map((reading, index) => reading.value - slope * dayOffsets[index]),
+  )
+  if (intercept == null) return null
+  const residuals = readings.map(
+    (reading, index) => reading.value - (intercept + slope * dayOffsets[index]),
+  )
+  const absoluteResiduals = residuals.map(Math.abs)
+  const medianAbsoluteDeviation = median(absoluteResiduals) ?? 0
+  const values = readings.map((reading) => reading.value)
+  const center = median(values)
+  if (center == null) return null
+
+  const robustScale = Math.max(
+    medianAbsoluteDeviation * 1.4826,
+    Math.abs(center) * 0.001,
+  )
+  const cutoff = robustScale * 1.5
+
+  let weightedSum = 0
+  let weightSum = 0
+  for (let index = 0; index < readings.length; index++) {
+    const value = readings[index].value
+    const residual = absoluteResiduals[index]
+    const weight = residual <= cutoff ? 1 : cutoff / residual
+    weightedSum += value * weight
+    weightSum += weight
+  }
+
+  return weightSum > 0 ? weightedSum / weightSum : center
+}
+
 /**
  * Build a trailing calendar-day series.
  *
@@ -69,6 +144,7 @@ function buildRollingTrend(
   windowDays: TrendWindowDays,
   throughDate?: string,
   requireFullWindow = true,
+  windowAverage: (readings: DailyReading[]) => number | null = dailyMean,
 ): { date: string; value: number | null; average: number | null; sampleCount: number }[] {
   const valuesByDate = new Map<string, number[]>()
 
@@ -118,14 +194,12 @@ function buildRollingTrend(
 
   let windowStartIndex = 0
   let windowEndIndex = 0
-  let windowSum = 0
 
   for (let day = firstDay; day <= lastDay; day = addDays(day, 1)) {
     const date = format(day, 'yyyy-MM-dd')
     const windowStart = format(addDays(day, -(windowDays - 1)), 'yyyy-MM-dd')
 
     while (windowEndIndex < readings.length && readings[windowEndIndex].date <= date) {
-      windowSum += readings[windowEndIndex].value
       windowEndIndex += 1
     }
 
@@ -133,21 +207,21 @@ function buildRollingTrend(
       windowStartIndex < windowEndIndex &&
       readings[windowStartIndex].date < windowStart
     ) {
-      windowSum -= readings[windowStartIndex].value
       windowStartIndex += 1
     }
 
     const sampleCount = windowEndIndex - windowStartIndex
     const hasFullCalendarWindow =
       differenceInCalendarDays(day, firstDay) >= windowDays - 1
+    const average =
+      (!requireFullWindow || hasFullCalendarWindow) && sampleCount > 0
+        ? windowAverage(readings.slice(windowStartIndex, windowEndIndex))
+        : null
 
     points.push({
       date,
       value: readingByDate.get(date) ?? null,
-      average:
-        (!requireFullWindow || hasFullCalendarWindow) && sampleCount > 0
-          ? round(windowSum / sampleCount, 1)
-          : null,
+      average: average == null ? null : round(average, 1),
       sampleCount,
     })
   }
@@ -163,6 +237,9 @@ export function buildWeightTrend(
     entries.map((entry) => ({ measured_on: entry.measured_on, value: entry.bodyweight })),
     (value) => value > 0,
     windowDays,
+    undefined,
+    true,
+    waterResistantMean,
   ).map((point) => ({
     date: point.date,
     weight: point.value,

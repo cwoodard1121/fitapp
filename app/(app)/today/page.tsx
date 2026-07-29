@@ -14,6 +14,7 @@ import {
   mesocycleNumber,
   requireUserId,
 } from '@/lib/data'
+import { getPendingSorenessCheckin } from '@/lib/data/soreness'
 import type {
   BodyMetric,
   RecoveryMetric,
@@ -39,6 +40,7 @@ import { SlotRow } from '@/components/today/slot-row'
 import { SessionBar } from '@/components/today/session-bar'
 import { EmptyState } from '@/components/today/empty-state'
 import { WeeklyNavyPrompt } from '@/components/today/weekly-navy-prompt'
+import { NextDaySorenessCard } from '@/components/today/next-day-soreness-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,9 +51,10 @@ export default async function TodayPage({
 }) {
   const { day: dayParam } = await searchParams
 
-  const [profile, programs] = await Promise.all([
+  const [profile, programs, pendingSoreness] = await Promise.all([
     getProfile(),
     getPrograms(),
+    getPendingSorenessCheckin(),
   ])
   const program = programs.find((p) => p.is_active) ?? null
 
@@ -75,6 +78,12 @@ export default async function TodayPage({
     return (
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <Header unit={unit} />
+        {pendingSoreness ? (
+          <NextDaySorenessCard
+            key={pendingSoreness.sessionId}
+            checkin={pendingSoreness}
+          />
+        ) : null}
         {weeklyNavyDue ? (
           <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
         ) : null}
@@ -88,6 +97,12 @@ export default async function TodayPage({
     return (
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <Header unit={unit} />
+        {pendingSoreness ? (
+          <NextDaySorenessCard
+            key={pendingSoreness.sessionId}
+            checkin={pendingSoreness}
+          />
+        ) : null}
         {weeklyNavyDue ? (
           <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
         ) : null}
@@ -224,6 +239,13 @@ export default async function TodayPage({
           {isDeload ? <Badge variant="warning">Deload</Badge> : null}
         </div>
       </Header>
+
+      {pendingSoreness ? (
+        <NextDaySorenessCard
+          key={pendingSoreness.sessionId}
+          checkin={pendingSoreness}
+        />
+      ) : null}
 
       {weeklyNavyDue ? (
         <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />

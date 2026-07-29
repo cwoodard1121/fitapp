@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { BodyMetric, NutritionLog } from '@/lib/types'
 import {
   CALIBRATION_ESTIMATE_DAYS,
-  CALIBRATION_MAX_DAYS,
+  CALIBRATION_RELIABLE_DAYS,
   computeCalibration,
 } from './calibration'
 import { KCAL_PER_STEP } from './deficit'
@@ -51,7 +51,7 @@ function nutritionLog(date: string, calories: number): NutritionLog {
 }
 
 function trackedInput({
-  days = CALIBRATION_MAX_DAYS,
+  days = CALIBRATION_RELIABLE_DAYS,
   maintenance = 2500,
   weightOutlier = false,
 }: {
@@ -126,7 +126,7 @@ describe('maintenance calibration', () => {
     expect(result.suggestion).toBeNull()
   })
 
-  it('locks the estimate at fourteen complete post-settling days', () => {
+  it('marks the estimate reliable at fourteen complete post-settling days', () => {
     const { input, trueMaintenance } = trackedInput()
     const result = computeCalibration(input)
 
@@ -161,6 +161,15 @@ describe('maintenance calibration', () => {
     expect(result.estimatedMaintenance).toBe(2600)
   })
 
+  it('reports average intake as a whole calorie without changing the estimate math', () => {
+    const { input } = trackedInput({ days: CALIBRATION_ESTIMATE_DAYS })
+    const result = computeCalibration(input)
+
+    expect(result.avgCalories).toBe(2089)
+    expect(Number.isInteger(result.avgCalories)).toBe(true)
+    expect(result.estimatedMaintenance).toBe(2600)
+  })
+
   it('uses a robust scale slope that resists one water-weight spike', () => {
     const { input } = trackedInput({ weightOutlier: true })
     const result = computeCalibration(input)
@@ -170,18 +179,47 @@ describe('maintenance calibration', () => {
     expect(result.estimatedMaintenance).toBe(2600)
   })
 
-  it('uses no more than the latest fourteen post-settling days', () => {
-    const { input } = trackedInput({ days: 20 })
+  it('resists several acute water spikes late in a longer block', () => {
+    const { input } = trackedInput({ days: 28 })
+    for (const index of [24, 25, 26]) {
+      input.bodyEntries[index].bodyweight =
+        (input.bodyEntries[index].bodyweight ?? 0) + 5
+    }
+
     const result = computeCalibration(input)
 
     expect(result.status).toBe('ready')
-    expect(result.analysisDays).toBe(14)
-    expect(result.analysisStart).toBe('2026-06-13')
-    expect(result.analysisEnd).toBe('2026-06-26')
+    expect(result.actualWeeklyLoss).toBeCloseTo(1, 6)
     expect(result.estimatedMaintenance).toBe(2600)
   })
 
-  it('can establish maintenance once the estimate is locked', () => {
+  it('keeps every post-settling day in the estimate after day fourteen', () => {
+    const { input } = trackedInput({ days: 20 })
+    for (const log of input.logs.slice(14)) {
+      log.calories = (log.calories ?? 0) + 150
+    }
+    const result = computeCalibration(input)
+
+    expect(result.status).toBe('ready')
+    expect(result.analysisDays).toBe(20)
+    expect(result.analysisStart).toBe('2026-06-07')
+    expect(result.analysisEnd).toBe('2026-06-26')
+    expect(result.estimatedMaintenance).toBe(2650)
+  })
+
+  it('keeps updating after a missed tracking day instead of resetting calibration', () => {
+    const { input } = trackedInput({ days: 20 })
+    delete input.stepsByDate[Object.keys(input.stepsByDate)[10]]
+
+    const result = computeCalibration(input)
+
+    expect(result.status).toBe('ready')
+    expect(result.analysisDays).toBe(20)
+    expect(result.stepsLogged).toBe(19)
+    expect(result.estimatedMaintenance).toBe(2600)
+  })
+
+  it('can establish maintenance once the estimate is reliable', () => {
     const { input } = trackedInput({ maintenance: null })
     const result = computeCalibration(input)
 

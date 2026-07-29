@@ -218,7 +218,7 @@ function TrendSummaryCard({
               A full trend needs {averageWindowDays} days.
             </p>
             <p className="mt-1 text-xs leading-relaxed text-muted">
-              Keep logging weigh-ins. The average appears after the first complete{' '}
+              Keep logging weigh-ins. The trend appears after the first complete{' '}
               {averageWindowDays}-calendar-day window.
             </p>
           </div>
@@ -231,7 +231,7 @@ function TrendSummaryCard({
                   <span className="ml-1.5 text-base font-normal text-muted">{unit}</span>
                 </p>
                 <p className="mt-1 text-xs text-muted">
-                  Current {averageWindowDays}-day average
+                  Current {averageWindowDays}-day water-adjusted trend
                 </p>
               </div>
               {summary.startAverage != null && summary.change != null ? (
@@ -376,12 +376,12 @@ export function TrendChart({
             <div className="space-y-1">
               <CardTitle>Weight over time</CardTitle>
               <CardDescription>
-                Calendar-day rolling averages for weight and interpreted body fat.
+                Water-resistant weight trend and calendar-day interpreted body fat.
               </CardDescription>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted">Average window</span>
+                <span className="text-xs text-muted">Trend window</span>
                 <Tabs
                   value={String(averageWindowDays)}
                   onValueChange={(value) =>
@@ -390,7 +390,7 @@ export function TrendChart({
                 >
                   <TabsList
                     className="h-9"
-                    aria-label="Weight and body fat rolling average window"
+                    aria-label="Weight and body fat trend window"
                   >
                     <TabsTrigger value="7" className="px-2.5 py-1 text-xs">
                       7d
@@ -462,7 +462,7 @@ export function TrendChart({
                 className="inline-block h-0 w-4 border-t-[3px]"
                 style={{ borderColor: COLORS.signal }}
               />
-              {averageWindowDays}-day average
+              {averageWindowDays}-day weight trend
             </span>
             <span className="flex items-center gap-1.5">
               <span
@@ -475,7 +475,7 @@ export function TrendChart({
 
           <div
             className="h-60 w-full"
-            aria-label={`Bodyweight and ${averageWindowDays}-day average trend chart`}
+            aria-label={`Bodyweight and ${averageWindowDays}-day water-adjusted trend chart`}
           >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
@@ -497,7 +497,7 @@ export function TrendChart({
                 />
                 <Line
                   type="monotone"
-                  name={`${averageWindowDays}-day average`}
+                  name={`${averageWindowDays}-day weight trend`}
                   dataKey="weightAverage"
                   stroke={COLORS.signal}
                   strokeWidth={2.75}
