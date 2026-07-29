@@ -366,31 +366,90 @@ const updateSlotSchema = z
 
 export async function updateSlot(
   input: z.input<typeof updateSlotSchema>,
-): Promise<ActionResult> {
+): Promise<ActionResult<ExerciseSlot>> {
   try {
     const v = updateSlotSchema.parse(input)
     const { supabase, userId } = await ctx()
-    const { error } = await supabase
+    const { data: current, error: currentError } = await supabase
       .from('exercise_slots')
-      .update({
-        slot_code: v.slotCode,
-        order_index: v.orderIndex,
-        exercise_name: v.exerciseName,
-        muscle_area: v.muscleArea ?? null,
-        progress_bias: v.progressBias,
-        rep_low: v.repLow,
-        rep_high: v.repHigh,
-        target_rir: v.targetRir,
-        base_sets: v.baseSets,
-        load_increment: v.loadIncrement,
-        seed_load: v.seedLoad,
-        is_bodyweight: v.isBodyweight,
-      })
+      .select('*')
       .eq('id', v.slotId)
       .eq('user_id', userId)
-    if (error) throw error
+      .gte('order_index', 0)
+      .single()
+    if (currentError) throw currentError
+
+    const prescriptionChanged =
+      current.exercise_name !== v.exerciseName ||
+      current.muscle_area !== (v.muscleArea ?? null) ||
+      current.progress_bias !== v.progressBias ||
+      current.rep_low !== v.repLow ||
+      current.rep_high !== v.repHigh ||
+      current.target_rir !== v.targetRir ||
+      current.base_sets !== v.baseSets ||
+      current.load_increment !== v.loadIncrement ||
+      current.seed_load !== v.seedLoad ||
+      current.is_bodyweight !== v.isBodyweight
+
+    let resultingSlotId = v.slotId
+    if (prescriptionChanged) {
+      // Retire + replace atomically so old set_logs keep the exercise identity
+      // and prescription they were actually performed against.
+      const { data: replacementId, error: replacementError } =
+        await supabase.rpc('replace_active_program_slot', {
+          p_slot_id: v.slotId,
+          p_exercise_name: v.exerciseName,
+          p_muscle_area: v.muscleArea ?? null,
+          p_progress_bias: v.progressBias,
+          p_rep_low: v.repLow,
+          p_rep_high: v.repHigh,
+          p_target_rir: v.targetRir,
+          p_base_sets: v.baseSets,
+          p_load_increment: v.loadIncrement,
+          p_seed_load: v.seedLoad,
+          p_is_bodyweight: v.isBodyweight,
+        })
+      if (replacementError) throw replacementError
+      if (typeof replacementId !== 'string') {
+        throw new Error('The replacement exercise could not be created.')
+      }
+      resultingSlotId = replacementId
+
+      const { error: displayError } = await supabase
+        .from('exercise_slots')
+        .update({
+          slot_code: v.slotCode,
+          order_index: v.orderIndex,
+        })
+        .eq('id', replacementId)
+        .eq('user_id', userId)
+      if (displayError) throw displayError
+    } else {
+      // Slot code and display order do not change exercise history semantics.
+      const { error } = await supabase
+        .from('exercise_slots')
+        .update({
+          slot_code: v.slotCode,
+          order_index: v.orderIndex,
+        })
+        .eq('id', v.slotId)
+        .eq('user_id', userId)
+      if (error) throw error
+    }
+
+    // A prescription edit creates a new history-safe UUID. Return the
+    // canonical row so the client immediately targets that live replacement
+    // for any follow-up save, remove, or reorder.
+    const { data: resultingSlot, error: resultingSlotError } = await supabase
+      .from('exercise_slots')
+      .select('*')
+      .eq('id', resultingSlotId)
+      .eq('user_id', userId)
+      .single()
+    if (resultingSlotError) throw resultingSlotError
+
     revalidatePath(ROUTE)
-    return { ok: true, data: null }
+    return { ok: true, data: resultingSlot as ExerciseSlot }
   } catch (e) {
     return fail(e)
   }
@@ -404,9 +463,20 @@ export async function removeSlot(
   try {
     const { slotId } = removeSlotSchema.parse(input)
     const { supabase, userId } = await ctx()
+    const { data: slot, error: findError } = await supabase
+      .from('exercise_slots')
+      .select('order_index')
+      .eq('id', slotId)
+      .eq('user_id', userId)
+      .gte('order_index', 0)
+      .single()
+    if (findError) throw findError
+
+    // Retire instead of deleting: set_logs and set_entries retain their source
+    // exercise row for history, analytics, and future carry-forward accuracy.
     const { error } = await supabase
       .from('exercise_slots')
-      .delete()
+      .update({ order_index: -1000000 - Math.abs(slot.order_index) })
       .eq('id', slotId)
       .eq('user_id', userId)
     if (error) throw error

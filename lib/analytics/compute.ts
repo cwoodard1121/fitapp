@@ -23,9 +23,14 @@ import { evaluateSlot, detectStall } from '@/lib/engine/engine'
 import {
   slotConfigFromRow,
   setLogInputFromRow,
-  derivePrevTargets,
 } from '@/lib/data/mappers'
 import { weekForDate } from '@/lib/data/week'
+import {
+  canCarryProgression,
+  hasExerciseHistorySignal,
+  trainingLogTimestamp,
+  trainingWeekKey,
+} from '@/lib/data/training-history'
 import {
   blockFloorWeeklyRate,
   normalizedBodyweight,
@@ -142,6 +147,11 @@ interface LiftSeriesPoint {
   reps: number | null
   decision: Decision
   decisionLabel: string
+  pain: number | null
+  pump: number | null
+  recovery: number | null
+  performance: string | null
+  nextDaySoreness: number | null
 }
 
 interface LiftSeries {
@@ -163,8 +173,16 @@ function buildLiftSeries(
   weights?: ReadinessWeights | null,
 ): Map<string, LiftSeries> {
   const slotById = new Map<string, ExerciseSlot>(slots.map((s) => [s.id, s]))
-  const groups = new Map<string, { name: string; slot: ExerciseSlot; logs: SetLog[] }>()
+  const groups = new Map<
+    string,
+    {
+      name: string
+      slot: ExerciseSlot
+      logs: { log: SetLog; slot: ExerciseSlot }[]
+    }
+  >()
   for (const log of logs) {
+    if (!hasExerciseHistorySignal(log)) continue
     const slot = slotById.get(log.slot_id)
     if (!slot) continue
     const key = exerciseNameKey(slot.exercise_name)
@@ -172,43 +190,49 @@ function buildLiftSeries(
     if (g) {
       g.name = slot.exercise_name
       g.slot = slot
-      g.logs.push(log)
+      g.logs.push({ log, slot })
     } else {
-      groups.set(key, { name: slot.exercise_name, slot, logs: [log] })
+      groups.set(key, {
+        name: slot.exercise_name,
+        slot,
+        logs: [{ log, slot }],
+      })
     }
   }
 
   const series = new Map<string, LiftSeries>()
   for (const [key, { name, slot, logs: groupLogs }] of groups) {
-    const config = slotConfigFromRow(slot)
     const points: LiftSeriesPoint[] = []
-    let prevLog: SetLog | null = null
-    for (const log of groupLogs) {
-      const prev = derivePrevTargets(
-        config,
-        prevLog,
-        log.week - 1,
-        deloadWeek,
-        weights,
-      )
+    let previousResult: ReturnType<typeof evaluateSlot> | null = null
+    for (const { log, slot: historicalSlot } of groupLogs) {
+      const config = slotConfigFromRow(historicalSlot)
       const result = evaluateSlot(setLogInputFromRow(log), config, {
         week: log.week,
         deloadWeek,
-        prevNextLoad: prev.prevNextLoad,
-        prevNextSets: prev.prevNextSets,
-        prevNextReps: prev.prevNextReps,
+        prevNextLoad: previousResult?.nextLoad,
+        prevNextSets: previousResult?.nextSets,
+        prevNextReps: previousResult?.nextReps,
+        prescribedLoad: log.target_load,
+        prescribedSets: log.target_sets,
+        prescribedReps: log.target_reps,
+        prescribedRir: log.target_rir,
         weights: weights ?? undefined,
       })
       points.push({
-        date: log.created_at,
+        date: trainingLogTimestamp(log),
         week: log.week,
         e1rm: result.e1rm,
         load: log.actual_load,
         reps: log.best_reps,
         decision: result.decision,
         decisionLabel: result.decisionLabel,
+        pain: log.pain,
+        pump: log.pump,
+        recovery: log.recovery,
+        performance: log.performance,
+        nextDaySoreness: log.next_day_soreness ?? null,
       })
-      prevLog = log
+      if (canCarryProgression(log)) previousResult = result
     }
     series.set(key, {
       name,
@@ -257,6 +281,21 @@ function toLiftAnalytic(s: LiftSeries): LiftAnalytic {
     [...points].reverse().find((p) => p.reps != null)?.reps ?? null
   const last = points[points.length - 1]
   const lastDecision = last ? last.decisionLabel || null : null
+  const latestPain =
+    [...points].reverse().find((point) => point.pain != null)?.pain ?? null
+  const latestPump =
+    [...points].reverse().find((point) => point.pump != null)?.pump ?? null
+  const latestRecovery =
+    [...points].reverse().find((point) => point.recovery != null)?.recovery ??
+    null
+  const latestPerformance =
+    [...points]
+      .reverse()
+      .find((point) => point.performance != null)?.performance ?? null
+  const latestNextDaySoreness =
+    [...points]
+      .reverse()
+      .find((point) => point.nextDaySoreness != null)?.nextDaySoreness ?? null
 
   // Trend: prefer the e1RM series; for bodyweight lifts (load 0 -> e1RM null)
   // fall back to a reps trend. 'new' when there is too little to say.
@@ -296,6 +335,11 @@ function toLiftAnalytic(s: LiftSeries): LiftAnalytic {
     latestReps,
     trend,
     lastDecision,
+    latestPain,
+    latestPump,
+    latestRecovery,
+    latestPerformance,
+    latestNextDaySoreness,
     stalled,
   }
 }
@@ -429,24 +473,25 @@ function bodyRate(
 }
 
 /**
- * Per-week total tonnage points (time-anchored to each week's latest session)
- * for volume-goal pacing. Lets a volume goal show a real weekly slope instead of
- * falling through to a misleading status.
+ * Per-training-week total tonnage points, keyed by the complete program /
+ * schedule / mesocycle / week identity and time-anchored to that week's latest
+ * performed session. Repeated week numbers therefore remain separate points.
  */
 function weeklyTonnagePoints(logs: SetLog[]): { t: number; v: number }[] {
-  const byWeek = new Map<number, { v: number; t: number }>()
+  const byWeek = new Map<string, { v: number; t: number }>()
   for (const log of logs) {
     if (log.actual_load == null || log.best_reps == null || log.actual_sets == null) continue
     const tonnage = log.actual_load * log.best_reps * log.actual_sets
     if (tonnage <= 0) continue
-    const t = ms(log.created_at)
+    const t = ms(trainingLogTimestamp(log))
     if (Number.isNaN(t)) continue
-    const cur = byWeek.get(log.week)
+    const weekKey = trainingWeekKey(log)
+    const cur = byWeek.get(weekKey)
     if (cur) {
       cur.v += tonnage
       if (t > cur.t) cur.t = t
     } else {
-      byWeek.set(log.week, { v: tonnage, t })
+      byWeek.set(weekKey, { v: tonnage, t })
     }
   }
   return [...byWeek.values()].sort((a, b) => a.t - b.t).map((p) => ({ t: p.t, v: p.v }))
@@ -608,24 +653,30 @@ function computeBody(bodyMetrics: BodyMetric[], dietBlock: Block | null): BodyAn
 }
 
 /**
- * Weekly sets + tonnage per muscle area from the MOST RECENT logged week. Pins
- * to the latest log's week number and a ~10-day window off the latest session
- * so a same-numbered week from a prior mesocycle can't bleed in.
+ * Weekly sets + tonnage per muscle area from the most recently performed
+ * training week. The complete training-week identity keeps repeated week
+ * numbers from different schedules or mesocycles from being merged.
  */
 function computeVolume(slots: ExerciseSlot[], logs: SetLog[]): MuscleVolumeAnalytic[] {
-  if (logs.length === 0) return []
+  // Readiness and feedback can fan out placeholder rows before any sets are
+  // performed. Those rows must not make a newer, otherwise empty week current.
+  const workLogs = logs.filter((log) => (log.actual_sets ?? 0) > 0)
+  if (workLogs.length === 0) return []
   const slotById = new Map<string, ExerciseSlot>(slots.map((s) => [s.id, s]))
 
-  let latest = logs[0]
-  for (const l of logs) if (ms(l.created_at) > ms(latest.created_at)) latest = l
-  const targetWeek = latest.week
-  const latestMs = ms(latest.created_at)
-  const windowMs = 10 * MS_DAY
+  let latest = workLogs[0]
+  for (const log of workLogs) {
+    const logTime = ms(trainingLogTimestamp(log))
+    const latestTime = ms(trainingLogTimestamp(latest))
+    if (!Number.isNaN(logTime) && (Number.isNaN(latestTime) || logTime > latestTime)) {
+      latest = log
+    }
+  }
+  const targetWeekKey = trainingWeekKey(latest)
 
   const byMuscle = new Map<string, { sets: number; tonnage: number }>()
-  for (const log of logs) {
-    if (log.week !== targetWeek) continue
-    if (latestMs - ms(log.created_at) > windowMs) continue
+  for (const log of workLogs) {
+    if (trainingWeekKey(log) !== targetWeekKey) continue
     const slot = slotById.get(log.slot_id)
     if (!slot) continue
     const area = slot.muscle_area ?? 'Other'
@@ -711,13 +762,13 @@ function computeMeso(program: Program | null, now: Date): MesoAnalytic {
   }
 }
 
-/** Last-7-day tonnage across all logs — the live "current" for volume goals. */
+/** Last-7-day tonnage by workout time — the live "current" for volume goals. */
 function recentTonnage(logs: SetLog[], now: Date): number | null {
   const since = now.getTime() - 7 * MS_DAY
   let sum = 0
   let any = false
   for (const log of logs) {
-    if (ms(log.created_at) < since) continue
+    if (ms(trainingLogTimestamp(log)) < since) continue
     if (log.actual_load == null || log.best_reps == null || log.actual_sets == null) {
       continue
     }
@@ -736,7 +787,7 @@ export interface AnalyticsInput {
   now: Date
   program: Program | null
   slots: ExerciseSlot[]
-  /** All set_logs, oldest -> newest (week asc, created_at asc). */
+  /** All set_logs, oldest -> newest by workout/session time. */
   logs: SetLog[]
   goals: Goal[]
   /** body_metrics oldest -> newest. */

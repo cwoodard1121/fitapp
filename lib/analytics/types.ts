@@ -30,6 +30,12 @@ export interface LiftAnalytic {
   trend: 'up' | 'flat' | 'down' | 'new'
   /** The most recent next-session decision produced for this lift. */
   lastDecision: string | null
+  /** Latest explicit feedback so the AI can reason from the real signals. */
+  latestPain: number | null
+  latestPump: number | null
+  latestRecovery: number | null
+  latestPerformance: string | null
+  latestNextDaySoreness: number | null
   stalled: boolean
 }
 

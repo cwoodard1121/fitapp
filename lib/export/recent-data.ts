@@ -1,4 +1,4 @@
-import type { Unit } from "@/lib/types"
+import type { RirOverride, Unit } from "@/lib/types"
 
 export interface RecentExportSet {
   load: number | null
@@ -19,9 +19,13 @@ export interface RecentExportExercise {
   feel: {
     pump: number | null
     enjoyment: number | null
+    pain: number | null
+    nextDaySoreness: number | null
+    /** Legacy same-day soreness retained for older workout records. */
     soreness: number | null
     recovery: number | null
   }
+  hitRirOverride: RirOverride | null
   performance: string | null
   notes: string | null
 }
@@ -124,11 +128,16 @@ function exerciseToken(exercise: RecentExportExercise): string {
   const feel = [
     exercise.feel.pump,
     exercise.feel.enjoyment,
+    exercise.feel.pain,
+    exercise.feel.nextDaySoreness,
     exercise.feel.soreness,
     exercise.feel.recovery,
   ]
   if (feel.some((value) => value != null)) {
     extras.push(`feel=${feel.map((value) => (value == null ? "-" : number(value))).join("/")}`)
+  }
+  if (exercise.hitRirOverride) {
+    extras.push(`hitRIR=${exercise.hitRirOverride}`)
   }
   if (exercise.performance) extras.push(`perf=${cleanText(exercise.performance).toLowerCase()}`)
   if (exercise.notes?.trim()) extras.push(`note=${compactNote(exercise.notes)}`)
@@ -189,7 +198,7 @@ function workoutsToken(day: RecentExportDay): string | null {
 export function formatRecentDataExport(data: RecentExportData): string {
   const header =
     `SimpleGym 14d ${data.startDate}..${data.endDate} | BW/load=${data.unit} | ` +
-    "sets=loadxreps@RIR | feel=pump/enjoyment/soreness/recovery(1-10)"
+    "sets=loadxreps@RIR | hitRIR=Y/N/Skip | feel=pump/enjoyment/pain/next-day-soreness/legacy-soreness/recovery(0-10)"
   const lines = data.days.map((day) => {
     const tokens = [bodyToken(day), nutritionToken(day), recoveryToken(day), workoutsToken(day)].filter(
       (value): value is string => value != null,

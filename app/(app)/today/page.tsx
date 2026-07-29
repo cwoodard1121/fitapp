@@ -17,6 +17,7 @@ import {
 import { getPendingSorenessCheckin } from '@/lib/data/soreness'
 import type {
   BodyMetric,
+  ExerciseSlot,
   RecoveryMetric,
   Session,
   SessionStatus,
@@ -29,6 +30,10 @@ import { getRecoveryRange } from '@/lib/wearables/store'
 import { computeRecoveryScore, suggestedReadiness, type RecoveryScore } from '@/lib/recovery/score'
 import type { LiftAdvice } from '@/lib/types'
 import { exerciseNameKey } from '@/lib/exercises/identity'
+import {
+  hasExerciseHistorySignal,
+  mergeSessionExerciseSlots,
+} from '@/lib/data/training-history'
 import { Badge } from '@/components/ui/badge'
 import { RecoveryStrip } from '@/components/today/recovery-strip'
 import { AnalysisFocus } from '@/components/analysis/analysis-focus'
@@ -119,7 +124,12 @@ export default async function TodayPage({
 
   // Sessions for the whole week so the day selector can show progress and we
   // can default to the next unlogged day.
-  const weekSessions = await ensureWeekSessions(program.id, week)
+  const weekSessions = await ensureWeekSessions(
+    program.id,
+    week,
+    meso,
+    program.schedule_version,
+  )
   const sessionByDay = new Map<string, Session>(
     weekSessions.map((s) => [s.day_id, s]),
   )
@@ -138,13 +148,52 @@ export default async function TodayPage({
 
   const session =
     sessionByDay.get(selectedDay.id) ??
-    (await getSessionForDay(program.id, selectedDay.id, week))
+    (await getSessionForDay(
+      program.id,
+      selectedDay.id,
+      week,
+      meso,
+      program.schedule_version,
+    ))
 
-  const daySlots = full.slots
+  let daySlots = full.slots
     .filter((s) => s.day_id === selectedDay.id)
     .sort((a, b) => a.order_index - b.order_index)
 
   const logs = await getSetLogsForSession(session.id)
+  // If the program is edited after this workout has started, keep any logged
+  // retired exercise in this session and hide its same-code replacement until
+  // the next exposure. Program edits therefore cannot make entered work vanish
+  // or turn the session into a blank replacement row.
+  const activeSlotIds = new Set(daySlots.map((slot) => slot.id))
+  const historicalSlotIds = [
+    ...new Set(
+      Object.values(logs)
+        .filter(hasExerciseHistorySignal)
+        .map((log) => log.slot_id)
+        .filter((slotId) => !activeSlotIds.has(slotId)),
+    ),
+  ]
+  if (historicalSlotIds.length > 0) {
+    const { data: historicalRows, error: historicalError } = await supabase
+      .from('exercise_slots')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('day_id', selectedDay.id)
+      .in('id', historicalSlotIds)
+    if (historicalError) throw historicalError
+
+    daySlots = mergeSessionExerciseSlots(
+      daySlots,
+      (historicalRows ?? []) as ExerciseSlot[],
+      new Set(
+        Object.values(logs)
+          .filter(hasExerciseHistorySignal)
+          .map((log) => log.slot_id),
+      ),
+    )
+  }
+
   const slotViews = await buildTodayView(
     session,
     daySlots,
@@ -153,7 +202,6 @@ export default async function TodayPage({
     profile?.readiness_weights ?? undefined,
   )
 
-  const allSlotIds = daySlots.map((s) => s.id)
   // Session-level systemic recovery is fanned across slots — read it from any.
   const sessionRecovery =
     slotViews.find((v) => v.log?.recovery != null)?.log?.recovery ?? null
@@ -276,9 +324,9 @@ export default async function TodayPage({
       {daySlots.length > 0 ? (
         <div className="mt-4">
           <SessionReadiness
+            key={session.id}
             sessionId={session.id}
             week={week}
-            allSlotIds={allSlotIds}
             recovery={sessionRecovery}
             suggested={
               recoveryScore && recoveryScore.status === 'ok'
@@ -305,13 +353,12 @@ export default async function TodayPage({
       ) : (
         <ol className="mt-4 space-y-3">
           {slotViews.map((view) => (
-            <li key={view.slot.id}>
+            <li key={`${session.id}:${view.slot.id}`}>
               <SlotRow
                 view={view}
                 sessionId={session.id}
                 week={week}
                 unit={unit}
-                allSlotIds={allSlotIds}
               />
             </li>
           ))}

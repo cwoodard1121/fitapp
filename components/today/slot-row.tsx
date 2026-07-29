@@ -13,13 +13,16 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { saveSetEntries } from '@/app/(app)/today/actions'
 import { ReadinessSheet } from '@/components/today/readiness-sheet'
+import {
+  enqueueTrainingSave,
+  registerTrainingSaveRetry,
+} from '@/lib/client/training-save-queue'
 
 interface SlotRowProps {
   view: SlotView
   sessionId: string
   week: number
   unit: Unit
-  allSlotIds: string[]
 }
 
 interface Row {
@@ -80,19 +83,77 @@ function realSnapshot(rows: Row[]): string {
   )
 }
 
+/** Full editable draft, including target-prefilled rows with no reps yet. */
+function draftSnapshot(rows: Row[]): string {
+  return JSON.stringify(rows)
+}
+
 const GATE_BADGE: Record<string, 'success' | 'warning' | 'danger'> = {
   Green: 'success',
   Yellow: 'warning',
   Red: 'danger',
 }
 
-export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProps) {
+let nextSaveMountId = 0
+
+export function SlotRow({ view, sessionId, week, unit }: SlotRowProps) {
   const { slot, log, targets, result } = view
 
   const [rows, setRows] = React.useState<Row[]>(() => initialRows(view))
   const [pending, startTransition] = React.useTransition()
+  const saveInstanceId = React.useRef<string | null>(null)
+  if (saveInstanceId.current == null) {
+    nextSaveMountId += 1
+    saveInstanceId.current = `mount-${nextSaveMountId}`
+  }
   const [savedFlash, setSavedFlash] = React.useState(false)
+  const mounted = React.useRef(true)
+  const rowsRef = React.useRef(rows)
   const lastSaved = React.useRef(realSnapshot(initialRows(view)))
+  const lastQueued = React.useRef(lastSaved.current)
+  const lastHydratedDraft = React.useRef(
+    draftSnapshot(initialRows(view)),
+  )
+  // A mount id keeps an unmounted dirty retry distinct if this slot is replaced
+  // or revisited before its failed request settles.
+  const logicalSaveKey = `${sessionId}:${slot.id}`
+  const saveKey = `${logicalSaveKey}:${saveInstanceId.current}`
+  const targetKey = [
+    targets.load,
+    targets.sets,
+    targets.reps,
+    targets.rir,
+  ].join(':')
+  const hydratedTargetKey = React.useRef(targetKey)
+
+  React.useEffect(() => {
+    rowsRef.current = rows
+  }, [rows])
+  React.useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+  React.useEffect(() => {
+    if (hydratedTargetKey.current === targetKey) return
+    hydratedTargetKey.current = targetKey
+
+    // Next-day feedback can change an untouched prescription during
+    // router.refresh(). Refresh only pristine prefills; never overwrite a
+    // draft the athlete has started entering.
+    if (
+      draftSnapshot(rowsRef.current) !== lastHydratedDraft.current
+    ) {
+      return
+    }
+    const nextRows = initialRows(view)
+    rowsRef.current = nextRows
+    lastHydratedDraft.current = draftSnapshot(nextRows)
+    lastSaved.current = realSnapshot(nextRows)
+    lastQueued.current = lastSaved.current
+    setRows(nextRows)
+  }, [targetKey, view])
 
   const setField = (i: number, field: keyof Row, value: string) => {
     setRows((prev) => {
@@ -117,25 +178,84 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
     commitRows(next) // persist the removal right away (explicit next list)
   }
 
-  function commitRows(rowsToSave: Row[]) {
-    const snap = realSnapshot(rowsToSave)
-    if (snap === lastSaved.current) return
+  const queueRows = React.useCallback(
+    (rowsToSave: Row[], force = false): Promise<boolean> => {
+      const snap = realSnapshot(rowsToSave)
+      if (!force && snap === lastQueued.current) return Promise.resolve(true)
 
-    const payload = rowsToSave.map((r) => ({
-      load: num(r.load),
-      reps: num(r.reps),
-      rir: num(r.rir),
-    }))
+      const payload = rowsToSave.map((r) => ({
+        load: num(r.load),
+        reps: num(r.reps),
+        rir: num(r.rir),
+      }))
+      lastQueued.current = snap
 
-    startTransition(async () => {
-      const res = await saveSetEntries({ sessionId, slotId: slot.id, week, entries: payload })
-      if (res.ok) {
-        lastSaved.current = snap
-        setSavedFlash(true)
-        window.setTimeout(() => setSavedFlash(false), 1400)
-      } else {
-        toast.error(res.error)
+      const save = async (): Promise<boolean> => {
+        try {
+          const res = await saveSetEntries({
+            sessionId,
+            slotId: slot.id,
+            week,
+            entries: payload,
+            targetLoad: targets.load,
+            targetSets: targets.sets,
+            targetReps: targets.reps,
+            targetRir: targets.rir,
+          })
+          if (res.ok) {
+            lastSaved.current = snap
+            lastHydratedDraft.current = draftSnapshot(rowsToSave)
+            if (mounted.current) {
+              setSavedFlash(true)
+              window.setTimeout(() => {
+                if (mounted.current) setSavedFlash(false)
+              }, 1400)
+            }
+            return true
+          } else {
+            if (lastQueued.current === snap) {
+              lastQueued.current = lastSaved.current
+            }
+            if (mounted.current) toast.error(res.error)
+            return false
+          }
+        } catch {
+          if (lastQueued.current === snap) {
+            lastQueued.current = lastSaved.current
+          }
+          if (mounted.current) {
+            toast.error('Could not save this set. Please try again.')
+          }
+          return false
+        }
       }
+
+      return enqueueTrainingSave(saveKey, logicalSaveKey, save)
+    },
+    [
+      saveKey,
+      logicalSaveKey,
+      sessionId,
+      slot.id,
+      targets.load,
+      targets.reps,
+      targets.rir,
+      targets.sets,
+      week,
+    ],
+  )
+
+  React.useEffect(
+    () =>
+      registerTrainingSaveRetry(saveKey, logicalSaveKey, () =>
+        queueRows(rowsRef.current, true),
+      ),
+    [logicalSaveKey, queueRows, saveKey],
+  )
+
+  function commitRows(rowsToSave: Row[]) {
+    startTransition(async () => {
+      await queueRows(rowsToSave)
     })
   }
 
@@ -180,8 +300,8 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
           week={week}
           exerciseName={slot.exercise_name}
           slotCode={slot.slot_code}
-          allSlotIds={allSlotIds}
           log={log}
+          targets={targets}
         />
       </div>
 
@@ -338,8 +458,8 @@ export function SlotRow({ view, sessionId, week, unit, allSlotIds }: SlotRowProp
               ) : null}
             </div>
             <p className="text-[11px] text-muted">
-              Your logged sets, RIR, pump, soreness, and performance affect the
-              next completed session—not today&apos;s target.
+              Your logged sets, RIR, pump, pain, performance, and next-day
+              soreness affect the next completed session—not today&apos;s target.
             </p>
           </div>
         ) : (

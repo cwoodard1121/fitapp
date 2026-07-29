@@ -18,13 +18,15 @@ export interface CatalogExercise {
   repLow: number
   repHigh: number
   loadIncrement: number
+  /** Only selected accessory movements may earn a sparse automatic set bump. */
+  allowSetProgression?: boolean
 }
 
 export const EXERCISE_CATALOG: CatalogExercise[] = [
   /* ----- Chest ----- */
   { name: 'Barbell Bench Press', muscleArea: 'Chest', isBodyweight: false, progressBias: 'Reps first', repLow: 5, repHigh: 10, loadIncrement: 5 },
   { name: 'Incline barbell press', muscleArea: 'Upper chest', isBodyweight: false, progressBias: 'Load +5', repLow: 5, repHigh: 8, loadIncrement: 5 },
-  { name: 'Incline Dumbbell Bench Press', muscleArea: 'Upper chest', isBodyweight: false, progressBias: 'Reps first', repLow: 6, repHigh: 12, loadIncrement: 5 },
+  { name: 'Incline Dumbbell Bench Press', muscleArea: 'Upper chest', isBodyweight: false, progressBias: 'Reps first', repLow: 6, repHigh: 12, loadIncrement: 5, allowSetProgression: true },
   { name: 'Flat DB press', muscleArea: 'Chest', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 15, loadIncrement: 5 },
   { name: 'Machine chest press', muscleArea: 'Chest', isBodyweight: false, progressBias: 'Reps first', repLow: 10, repHigh: 15, loadIncrement: 5 },
   { name: 'Cable fly', muscleArea: 'Chest', isBodyweight: false, progressBias: 'Reps first', repLow: 12, repHigh: 20, loadIncrement: 2.5 },
@@ -47,24 +49,24 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
   /* ----- Shoulders ----- */
   { name: 'Overhead press', muscleArea: 'Shoulders', isBodyweight: false, progressBias: 'Load +5', repLow: 5, repHigh: 8, loadIncrement: 5 },
   { name: 'Seated DB shoulder press', muscleArea: 'Shoulders', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 12, loadIncrement: 5 },
-  { name: 'Dumbbell Lateral Raise', muscleArea: 'Side delts', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 15, loadIncrement: 2.5 },
-  { name: 'Cable Lateral Raise', muscleArea: 'Side delts', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 15, loadIncrement: 2.5 },
-  { name: 'Seated Dumbbell Lateral Raise', muscleArea: 'Side delts', isBodyweight: false, progressBias: 'Reps first', repLow: 6, repHigh: 12, loadIncrement: 2.5 },
+  { name: 'Dumbbell Lateral Raise', muscleArea: 'Side delts', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 15, loadIncrement: 2.5, allowSetProgression: true },
+  { name: 'Cable Lateral Raise', muscleArea: 'Side delts', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 15, loadIncrement: 2.5, allowSetProgression: true },
+  { name: 'Seated Dumbbell Lateral Raise', muscleArea: 'Side delts', isBodyweight: false, progressBias: 'Reps first', repLow: 6, repHigh: 12, loadIncrement: 2.5, allowSetProgression: true },
   { name: 'Face pull', muscleArea: 'Rear delts', isBodyweight: false, progressBias: 'Reps first', repLow: 12, repHigh: 20, loadIncrement: 2.5 },
   { name: 'Reverse pec deck', muscleArea: 'Rear delts', isBodyweight: false, progressBias: 'Reps first', repLow: 12, repHigh: 20, loadIncrement: 5 },
 
   /* ----- Biceps ----- */
-  { name: 'EZ-Bar Curl', muscleArea: 'Biceps', isBodyweight: false, progressBias: 'Reps first', repLow: 6, repHigh: 12, loadIncrement: 2.5 },
+  { name: 'EZ-Bar Curl', muscleArea: 'Biceps', isBodyweight: false, progressBias: 'Reps first', repLow: 6, repHigh: 12, loadIncrement: 2.5, allowSetProgression: true },
   { name: 'Barbell curl', muscleArea: 'Biceps', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 12, loadIncrement: 2.5 },
-  { name: 'Incline Dumbbell Curl', muscleArea: 'Biceps', isBodyweight: false, progressBias: 'Reps first', repLow: 10, repHigh: 15, loadIncrement: 2.5 },
+  { name: 'Incline Dumbbell Curl', muscleArea: 'Biceps', isBodyweight: false, progressBias: 'Reps first', repLow: 10, repHigh: 15, loadIncrement: 2.5, allowSetProgression: true },
   { name: 'Hammer curl', muscleArea: 'Biceps/forearms', isBodyweight: false, progressBias: 'Reps first', repLow: 10, repHigh: 15, loadIncrement: 2.5 },
   { name: 'Cable curl', muscleArea: 'Biceps', isBodyweight: false, progressBias: 'Reps first', repLow: 10, repHigh: 15, loadIncrement: 2.5 },
   { name: 'Preacher curl', muscleArea: 'Biceps', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 12, loadIncrement: 2.5 },
 
   /* ----- Triceps ----- */
-  { name: 'Triceps Pushdown', muscleArea: 'Triceps', isBodyweight: false, progressBias: 'Reps first', repLow: 6, repHigh: 10, loadIncrement: 2.5 },
+  { name: 'Triceps Pushdown', muscleArea: 'Triceps', isBodyweight: false, progressBias: 'Reps first', repLow: 6, repHigh: 10, loadIncrement: 2.5, allowSetProgression: true },
   { name: 'Overhead triceps extension', muscleArea: 'Triceps', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 15, loadIncrement: 2.5 },
-  { name: 'Skull Crusher', muscleArea: 'Triceps', isBodyweight: false, progressBias: 'Reps first', repLow: 10, repHigh: 15, loadIncrement: 2.5 },
+  { name: 'Skull Crusher', muscleArea: 'Triceps', isBodyweight: false, progressBias: 'Reps first', repLow: 10, repHigh: 15, loadIncrement: 2.5, allowSetProgression: true },
   { name: 'Close-grip bench press', muscleArea: 'Triceps', isBodyweight: false, progressBias: 'Load +5', repLow: 5, repHigh: 8, loadIncrement: 5 },
   { name: 'Triceps kickback', muscleArea: 'Triceps', isBodyweight: false, progressBias: 'Reps first', repLow: 12, repHigh: 20, loadIncrement: 2.5 },
 
@@ -94,13 +96,13 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
   { name: 'Leg press calf raise', muscleArea: 'Calves', isBodyweight: false, progressBias: 'Reps first', repLow: 10, repHigh: 20, loadIncrement: 10 },
 
   /* ----- Forearms ----- */
-  { name: 'Dumbbell Wrist Curl', muscleArea: 'Forearms', isBodyweight: false, progressBias: 'Reps first', repLow: 10, repHigh: 20, loadIncrement: 2.5 },
+  { name: 'Dumbbell Wrist Curl', muscleArea: 'Forearms', isBodyweight: false, progressBias: 'Reps first', repLow: 10, repHigh: 20, loadIncrement: 2.5, allowSetProgression: true },
   { name: 'Reverse wrist curl', muscleArea: 'Forearms', isBodyweight: false, progressBias: 'Reps first', repLow: 15, repHigh: 25, loadIncrement: 2.5 },
-  { name: 'Cable Reverse Curl', muscleArea: 'Biceps / forearms', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 15, loadIncrement: 2.5 },
+  { name: 'Cable Reverse Curl', muscleArea: 'Biceps / forearms', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 15, loadIncrement: 2.5, allowSetProgression: true },
 
   /* ----- Abs ----- */
   { name: 'Hanging leg raise', muscleArea: 'Abs', isBodyweight: true, progressBias: 'Reps first', repLow: 10, repHigh: 20, loadIncrement: 5 },
-  { name: 'Cable Crunch', muscleArea: 'Abs', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 15, loadIncrement: 5 },
+  { name: 'Cable Crunch', muscleArea: 'Abs', isBodyweight: false, progressBias: 'Reps first', repLow: 8, repHigh: 15, loadIncrement: 5, allowSetProgression: true },
   { name: 'Plank', muscleArea: 'Abs', isBodyweight: true, progressBias: 'Reps first', repLow: 10, repHigh: 20, loadIncrement: 5 },
   { name: 'Ab wheel rollout', muscleArea: 'Abs', isBodyweight: true, progressBias: 'Reps first', repLow: 8, repHigh: 15, loadIncrement: 5 },
 ]

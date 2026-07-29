@@ -53,8 +53,13 @@ export default async function MesocyclePage() {
 
   const full = await getProgramFull(program.id)
   const days: ProgramDay[] = full?.days ?? []
+  const lengthWeeks = Math.max(1, program.length_weeks)
+  // Each program owns its mesocycle anchor; a null start_date means Week 1.
+  const startDate = program.start_date
+  const currentWeek = weekForDate(startDate, lengthWeeks)
+  const mesoNumber = mesocycleNumber(startDate, lengthWeeks)
 
-  // Group sessions by week -> day_id -> status (one query for the program).
+  // Group only this immutable schedule version + mesocycle by week and day.
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
   const { data: sessionRows } = await supabase
@@ -62,6 +67,8 @@ export default async function MesocyclePage() {
     .select('week, day_id, status')
     .eq('program_id', program.id)
     .eq('user_id', userId)
+    .eq('schedule_version', program.schedule_version)
+    .eq('mesocycle', mesoNumber)
 
   const byWeek = new Map<number, Map<string, SessionStatus>>()
   for (const s of (sessionRows as Pick<Session, 'week' | 'day_id' | 'status'>[]) ?? []) {
@@ -72,12 +79,6 @@ export default async function MesocyclePage() {
     }
     dayMap.set(s.day_id, s.status)
   }
-
-  const lengthWeeks = Math.max(1, program.length_weeks)
-  // Each program owns its mesocycle anchor; a null start_date means Week 1.
-  const startDate = program.start_date
-  const currentWeek = weekForDate(startDate, lengthWeeks)
-  const mesoNumber = mesocycleNumber(startDate, lengthWeeks)
 
   const weeks: WeekRow[] = Array.from({ length: lengthWeeks }, (_, i) => {
     const week = i + 1

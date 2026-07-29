@@ -1,21 +1,35 @@
 import type { Metadata } from "next"
 import type { ReactNode } from "react"
 
-import type { Block, BodyMetric, ExerciseSlot, Goal, SetLog, Unit } from "@/lib/types"
+import type {
+  Block,
+  BodyMetric,
+  ExerciseSlot,
+  Goal,
+  Session,
+  SetLog,
+  Unit,
+} from "@/lib/types"
 import {
   getActiveProgram,
   getProfile,
-  getProgramFull,
   requireUserId,
   slotConfigFromRow,
   setLogInputFromRow,
-  derivePrevTargets,
 } from "@/lib/data"
 import { evaluateSlot, detectStall } from "@/lib/engine/engine"
 import { createClient } from "@/lib/supabase/server"
 import { getAnalysisAccess } from "@/lib/ai/allowlist"
 import { getLatestAnalysis } from "@/lib/ai/analysis"
 import { gatherAnalytics } from "@/lib/analytics"
+import { attachNextDaySorenessToLogs } from "@/lib/data/soreness"
+import {
+  attachSessionContextToLogs,
+  canCarryProgression,
+  hasExerciseHistorySignal,
+  trainingLogTimestamp,
+  trainingWeekKey,
+} from "@/lib/data/training-history"
 import {
   estimateBodyFatFromLeanRetention,
   normalizedBodyweight,
@@ -56,22 +70,31 @@ export default async function ProgressPage() {
     )
   }
 
-  const full = await getProgramFull(program.id)
-  const slots = full?.slots ?? []
-  const slotById = new Map<string, ExerciseSlot>(slots.map((s) => [s.id, s]))
-
-  // All logged sets for the user, oldest -> newest. RLS scopes to the user;
-  // we also pin user_id explicitly.
+  // All exercise identities and session-timed logs, including retired slots
+  // and archived programs, keep grandfathered progress available to charts/AI.
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
-  const { data: logRows, error } = await supabase
-    .from("set_logs")
-    .select("*")
-    .eq("user_id", userId)
-    .order("week", { ascending: true })
-    .order("created_at", { ascending: true })
-  if (error) throw error
-  const logs = (logRows as SetLog[]) ?? []
+  const [slotResult, logResult, sessionResult] = await Promise.all([
+    supabase.from("exercise_slots").select("*").eq("user_id", userId),
+    supabase.from("set_logs").select("*").eq("user_id", userId),
+    supabase.from("sessions").select("*").eq("user_id", userId),
+  ])
+  if (slotResult.error) throw slotResult.error
+  if (logResult.error) throw logResult.error
+  if (sessionResult.error) throw sessionResult.error
+  const slots = (slotResult.data as ExerciseSlot[]) ?? []
+  const slotById = new Map<string, ExerciseSlot>(slots.map((s) => [s.id, s]))
+  const timedLogs = attachSessionContextToLogs(
+    (logResult.data as SetLog[]) ?? [],
+    (sessionResult.data as Session[]) ?? [],
+  )
+  const logs = await attachNextDaySorenessToLogs(
+    supabase,
+    userId,
+    timedLogs,
+    slots,
+  )
+  const exerciseLogs = logs.filter(hasExerciseHistorySignal)
 
   // Goals + body measurements feed the new progress sections. Both are
   // RLS-scoped; we also pin user_id explicitly.
@@ -101,8 +124,15 @@ export default async function ProgressPage() {
   const deloadWeek = program.deload_week
 
   /* --- Group logs by exercise_name and run the engine in sequence. --- */
-  const groups = new Map<string, { name: string; slot: ExerciseSlot; logs: SetLog[] }>()
-  for (const log of logs) {
+  const groups = new Map<
+    string,
+    {
+      name: string
+      slot: ExerciseSlot
+      logs: { log: SetLog; slot: ExerciseSlot }[]
+    }
+  >()
+  for (const log of exerciseLogs) {
     const slot = slotById.get(log.slot_id)
     if (!slot) continue
     const key = exerciseNameKey(slot.exercise_name)
@@ -110,36 +140,37 @@ export default async function ProgressPage() {
     if (g) {
       g.name = slot.exercise_name
       g.slot = slot
-      g.logs.push(log)
+      g.logs.push({ log, slot })
     } else {
-      groups.set(key, { name: slot.exercise_name, slot, logs: [log] })
+      groups.set(key, {
+        name: slot.exercise_name,
+        slot,
+        logs: [{ log, slot }],
+      })
     }
   }
 
   const exercises: ExerciseSeries[] = []
   for (const { name, slot, logs: groupLogs } of groups.values()) {
-    const config = slotConfigFromRow(slot)
     const points: ExercisePoint[] = []
-    let prevLog: SetLog | null = null
+    let previousResult: ReturnType<typeof evaluateSlot> | null = null
 
-    for (const log of groupLogs) {
-      const prev = derivePrevTargets(
-        config,
-        prevLog,
-        log.week - 1,
-        deloadWeek,
-        profile?.readiness_weights,
-      )
+    for (const { log, slot: historicalSlot } of groupLogs) {
+      const config = slotConfigFromRow(historicalSlot)
       const result = evaluateSlot(setLogInputFromRow(log), config, {
         week: log.week,
         deloadWeek,
-        prevNextLoad: prev.prevNextLoad,
-        prevNextSets: prev.prevNextSets,
-        prevNextReps: prev.prevNextReps,
+        prevNextLoad: previousResult?.nextLoad,
+        prevNextSets: previousResult?.nextSets,
+        prevNextReps: previousResult?.nextReps,
+        prescribedLoad: log.target_load,
+        prescribedSets: log.target_sets,
+        prescribedReps: log.target_reps,
+        prescribedRir: log.target_rir,
         weights: profile?.readiness_weights ?? undefined,
       })
       points.push({
-        date: log.created_at,
+        date: trainingLogTimestamp(log),
         week: log.week,
         e1rm: result.e1rm,
         load: log.actual_load,
@@ -149,7 +180,7 @@ export default async function ProgressPage() {
         decisionLabel: result.decisionLabel,
         reason: result.reason,
       })
-      prevLog = log
+      if (canCarryProgression(log)) previousResult = result
     }
 
     const e1rms = points
@@ -207,7 +238,7 @@ export default async function ProgressPage() {
     let sum = 0
     let any = false
     for (const log of logs) {
-      if (new Date(log.created_at).getTime() < since) continue
+      if (new Date(trainingLogTimestamp(log)).getTime() < since) continue
       if (log.actual_load == null || log.best_reps == null || log.actual_sets == null) {
         continue
       }
@@ -300,7 +331,10 @@ export default async function ProgressPage() {
   /* --- Tonnage per muscle area per week. --- */
   const OTHER = "Other"
   const muscleSet = new Set<string>()
-  const byWeek = new Map<number, Record<string, number>>()
+  const byWeek = new Map<
+    string,
+    { week: number; time: number; values: Record<string, number> }
+  >()
   for (const log of logs) {
     const slot = slotById.get(log.slot_id)
     if (!slot) continue
@@ -311,17 +345,24 @@ export default async function ProgressPage() {
     if (tonnage <= 0) continue
     const area = slot.muscle_area ?? OTHER
     muscleSet.add(area)
-    const row = byWeek.get(log.week) ?? {}
-    row[area] = (row[area] ?? 0) + tonnage
-    byWeek.set(log.week, row)
+    const key = trainingWeekKey(log)
+    const time = new Date(trainingLogTimestamp(log)).getTime()
+    const bucket = byWeek.get(key) ?? {
+      week: log.week,
+      time: Number.isNaN(time) ? 0 : time,
+      values: {},
+    }
+    bucket.values[area] = (bucket.values[area] ?? 0) + tonnage
+    if (!Number.isNaN(time) && time > bucket.time) bucket.time = time
+    byWeek.set(key, bucket)
   }
 
   const muscleAreas = [...muscleSet].sort()
-  const volume: VolumeWeekRow[] = [...byWeek.keys()]
-    .sort((a, b) => a - b)
-    .map((week) => {
-      const row: VolumeWeekRow = { week }
-      for (const area of muscleAreas) row[area] = byWeek.get(week)?.[area] ?? 0
+  const volume: VolumeWeekRow[] = [...byWeek.values()]
+    .sort((a, b) => a.time - b.time)
+    .map((bucket) => {
+      const row: VolumeWeekRow = { week: bucket.week }
+      for (const area of muscleAreas) row[area] = bucket.values[area] ?? 0
       return row
     })
 

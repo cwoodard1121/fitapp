@@ -8,6 +8,14 @@ import type {
   SlotConfig,
 } from '@/lib/engine/engine'
 import { evaluateSlot, epley1RM } from '@/lib/engine/engine'
+import { EXERCISE_CATALOG } from '@/lib/exercises/catalog'
+import { exerciseNameKey } from '@/lib/exercises/identity'
+
+const SET_PROGRESS_ELIGIBLE_EXERCISE_KEYS = new Set(
+  EXERCISE_CATALOG.filter((exercise) => exercise.allowSetProgression).map(
+    (exercise) => exerciseNameKey(exercise.name),
+  ),
+)
 
 export interface SetEntryValues {
   load: number | null
@@ -26,11 +34,13 @@ export interface SetAggregate {
  * Collapse a slot's individual sets into the aggregate the engine reads. The
  * "best set" is selected only by objective load × completed reps (highest Epley
  * e1RM, falling back to most reps). It drives the aggregate load/reps, while the
- * count of real sets drives volume. RIR is carried separately for progression
- * decisions and never changes e1RM.
+ * count of real sets drives volume. RIR is carried separately as the lowest
+ * estimate across performed sets, so one near-failure set cannot be hidden by
+ * the objectively strongest set. RIR never changes e1RM.
  */
 export function aggregateFromEntries(entries: SetEntryValues[]): SetAggregate {
-  const real = entries.filter((e) => e.load != null || e.reps != null)
+  // Load-only rows are target-prefilled UI rows, not performed sets.
+  const real = entries.filter((e) => e.reps != null)
   if (real.length === 0) {
     return { actual_load: null, best_reps: null, actual_sets: null, actual_rir: null }
   }
@@ -56,8 +66,7 @@ export function aggregateFromEntries(entries: SetEntryValues[]): SetAggregate {
   const rirs = real
     .map((e) => e.rir)
     .filter((r): r is number => r != null)
-  const actual_rir =
-    best.rir != null ? best.rir : rirs.length ? Math.min(...rirs) : null
+  const actual_rir = rirs.length ? Math.min(...rirs) : null
 
   return {
     actual_load: best.load,
@@ -80,6 +89,9 @@ export function slotConfigFromRow(row: ExerciseSlot): SlotConfig {
     loadIncrement: row.load_increment,
     seedLoad: row.seed_load,
     isBodyweight: row.is_bodyweight ?? false,
+    allowSetProgression: SET_PROGRESS_ELIGIBLE_EXERCISE_KEYS.has(
+      exerciseNameKey(row.exercise_name),
+    ),
   }
 }
 
@@ -97,6 +109,8 @@ export function setLogInputFromRow(row: SetLog | null | undefined): SetLogInput 
     pump: row?.pump ?? null,
     enjoyment: row?.enjoyment ?? null,
     soreness: row?.soreness ?? null,
+    nextDaySoreness: row?.next_day_soreness ?? null,
+    pain: row?.pain ?? null,
     recovery: row?.recovery ?? null,
     performance: row?.performance ?? null,
   }
@@ -121,6 +135,7 @@ export function derivePrevTargets(
   deloadWeek: number,
   weights?: ReadinessWeights | null,
   nextDaySoreness?: number | null,
+  carryIntoPrevious?: PrevTargets | null,
 ): PrevTargets {
   if (!prevLog) {
     return {
@@ -133,10 +148,18 @@ export function derivePrevTargets(
   const ctx: EngineContext = {
     week: prevWeek,
     deloadWeek,
+    prevNextLoad: carryIntoPrevious?.prevNextLoad,
+    prevNextSets: carryIntoPrevious?.prevNextSets,
+    prevNextReps: carryIntoPrevious?.prevNextReps,
+    prescribedLoad: prevLog.target_load,
+    prescribedSets: prevLog.target_sets,
+    prescribedReps: prevLog.target_reps,
+    prescribedRir: prevLog.target_rir,
     weights: weights ?? undefined,
   }
   const input = setLogInputFromRow(prevLog)
-  input.nextDaySoreness = nextDaySoreness ?? null
+  input.nextDaySoreness =
+    nextDaySoreness ?? input.nextDaySoreness ?? null
   const res: EngineResult = evaluateSlot(input, config, ctx)
   return {
     prevNextLoad: res.nextLoad,

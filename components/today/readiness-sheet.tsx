@@ -10,7 +10,12 @@ import {
   Loader2,
 } from 'lucide-react'
 
-import type { Performance, RirOverride, SetLog } from '@/lib/types'
+import type {
+  Performance,
+  RirOverride,
+  SetLog,
+  SlotTargets,
+} from '@/lib/types'
 import { cn } from '@/lib/utils'
 import {
   Sheet,
@@ -32,8 +37,8 @@ interface ReadinessSheetProps {
   week: number
   exerciseName: string
   slotCode: string
-  allSlotIds: string[]
   log: SetLog | null
+  targets: SlotTargets
 }
 
 const PERF_OPTIONS: { value: Performance; label: string; Icon: typeof ArrowUp }[] =
@@ -53,36 +58,69 @@ function RatingSlider({
   id,
   label,
   hint,
+  min = 1,
   value,
   onChange,
 }: {
   id: string
   label: string
   hint: string
-  value: number
-  onChange: (v: number) => void
+  min?: number
+  value: number | null
+  onChange: (v: number | null) => void
 }) {
+  const visualValue = value ?? Math.round((min + 10) / 2)
+
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
         <Label htmlFor={id} className="text-sm">
           {label}
         </Label>
-        <span className="font-mono text-base font-semibold tabular-nums text-signal">
-          {value}
-          <span className="ml-0.5 text-xs font-normal text-muted">/10</span>
-        </span>
+        {value == null ? (
+          <span className="text-xs font-medium text-muted">Not rated</span>
+        ) : (
+          <span className="font-mono text-base font-semibold tabular-nums text-signal">
+            {value}
+            <span className="ml-0.5 text-xs font-normal text-muted">/10</span>
+          </span>
+        )}
       </div>
-      <Slider
-        id={id}
-        min={1}
-        max={10}
-        step={1}
-        value={[value]}
-        onValueChange={(v) => onChange(v[0] ?? value)}
-        aria-label={label}
-      />
-      <p className="text-[11px] leading-tight text-muted">{hint}</p>
+      <div className="flex items-center gap-2">
+        <Slider
+          id={id}
+          min={min}
+          max={10}
+          step={1}
+          value={[visualValue]}
+          onPointerDown={() => {
+            if (value == null) onChange(visualValue)
+          }}
+          onValueChange={(next) => {
+            const rating = next[0]
+            if (rating != null) onChange(rating)
+          }}
+          aria-label={label}
+          aria-valuetext={
+            value == null ? 'Not rated; move slider to rate' : `${value} of 10`
+          }
+          className={cn('flex-1', value == null && 'opacity-50')}
+        />
+        {value != null ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onChange(null)}
+          >
+            Clear
+          </Button>
+        ) : null}
+      </div>
+      <p className="text-[11px] leading-tight text-muted">
+        {value == null ? 'Move the slider to rate. ' : null}
+        {hint}
+      </p>
     </div>
   )
 }
@@ -93,15 +131,17 @@ export function ReadinessSheet({
   week,
   exerciseName,
   slotCode,
-  allSlotIds,
   log,
+  targets,
 }: ReadinessSheetProps) {
   const [open, setOpen] = React.useState(false)
   const [pending, startTransition] = React.useTransition()
 
-  const [pump, setPump] = React.useState(log?.pump ?? 5)
-  const [soreness, setSoreness] = React.useState(log?.soreness ?? 1)
-  const [enjoyment, setEnjoyment] = React.useState(log?.enjoyment ?? 5)
+  const [pump, setPump] = React.useState<number | null>(log?.pump ?? null)
+  const [pain, setPain] = React.useState<number | null>(log?.pain ?? null)
+  const [enjoyment, setEnjoyment] = React.useState<number | null>(
+    log?.enjoyment ?? null,
+  )
   const [performance, setPerformance] = React.useState<Performance | null>(
     log?.performance ?? null,
   )
@@ -113,9 +153,10 @@ export function ReadinessSheet({
   const hasReadiness =
     log != null &&
     (log.pump != null ||
-      log.soreness != null ||
+      log.pain != null ||
       log.enjoyment != null ||
       log.performance != null ||
+      log.hit_rir_override != null ||
       log.notes != null)
 
   function onSave() {
@@ -125,11 +166,15 @@ export function ReadinessSheet({
         slotId,
         week,
         pump,
-        soreness,
+        pain,
         enjoyment,
         performance,
         hitRirOverride: rirOverride,
         notes: notes.trim() === '' ? null : notes.trim(),
+        targetLoad: targets.load,
+        targetSets: targets.sets,
+        targetReps: targets.reps,
+        targetRir: targets.rir,
       })
       if (res.ok) {
         toast.success('Feedback saved.')
@@ -173,13 +218,13 @@ export function ReadinessSheet({
             {exerciseName}
           </SheetTitle>
           <SheetDescription>
-            Add soreness, pump, performance, and enjoyment from this workout.
-            The engine uses them to set the next session.
+            Add pump, pain, performance, and enjoyment from this workout. The
+            engine uses explicit ratings to set the next session.
           </SheetDescription>
         </SheetHeader>
 
         <div className="mt-5 space-y-5">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             <RatingSlider
               id={`pump-${slotId}`}
               label="Pump"
@@ -188,11 +233,12 @@ export function ReadinessSheet({
               onChange={setPump}
             />
             <RatingSlider
-              id={`soreness-${slotId}`}
-              label="Soreness"
-              hint="How sore this muscle felt coming in. High soreness makes the next exposure more conservative."
-              value={soreness}
-              onChange={setSoreness}
+              id={`pain-${slotId}`}
+              label="Pain"
+              hint="0 = no pain. Stop the exercise for sharp or worsening pain, or pain that changes your movement."
+              min={0}
+              value={pain}
+              onChange={setPain}
             />
             <RatingSlider
               id={`enjoyment-${slotId}`}
@@ -285,7 +331,7 @@ export function ReadinessSheet({
                 Saving
               </>
             ) : (
-              'Save readiness'
+              'Save feedback'
             )}
           </Button>
         </div>

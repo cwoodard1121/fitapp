@@ -186,7 +186,15 @@ export function ProgramEditor({
         ),
       )
       const res = await updateSlot(edit)
-      if (!settle(res, 'Exercise saved.')) setSlots(prev)
+      if (settle(res, 'Exercise saved.')) {
+        // Prescription changes retire the old row and return a replacement
+        // UUID. Keep local state on that live row for subsequent actions.
+        setSlots((s) =>
+          s.map((slot) => (slot.id === edit.slotId ? res.data : slot)),
+        )
+      } else {
+        setSlots(prev)
+      }
       return res.ok
     },
     [slots, settle],

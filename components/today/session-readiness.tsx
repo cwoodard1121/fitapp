@@ -13,7 +13,6 @@ import { saveSessionReadiness } from '@/app/(app)/today/actions'
 interface SessionReadinessProps {
   sessionId: string
   week: number
-  allSlotIds: string[]
   /** Current session-level systemic recovery (fanned across the day's slots). */
   recovery: number | null
   /** Low-biased prefill from today's wearable recovery score; used only until rated. */
@@ -25,33 +24,48 @@ function Rating({
   label,
   hint,
   value,
+  suggested,
   onChange,
 }: {
   id: string
   label: string
   hint: string
-  value: number
+  value: number | null
+  suggested?: number | null
   onChange: (v: number) => void
 }) {
+  const visualValue = value ?? suggested ?? 7
+
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
         <Label htmlFor={id} className="text-sm">
           {label}
         </Label>
-        <span className="font-mono text-base font-semibold tabular-nums text-signal">
-          {value}
-          <span className="ml-0.5 text-xs font-normal text-muted">/10</span>
-        </span>
+        {value == null ? (
+          <span className="text-xs font-medium text-muted">Not rated</span>
+        ) : (
+          <span className="font-mono text-base font-semibold tabular-nums text-signal">
+            {value}
+            <span className="ml-0.5 text-xs font-normal text-muted">/10</span>
+          </span>
+        )}
       </div>
       <Slider
         id={id}
         min={1}
         max={10}
         step={1}
-        value={[value]}
-        onValueChange={(v) => onChange(v[0] ?? value)}
+        value={[visualValue]}
+        onPointerDown={() => {
+          if (value == null) onChange(visualValue)
+        }}
+        onValueChange={(v) => onChange(v[0] ?? visualValue)}
         aria-label={label}
+        aria-valuetext={
+          value == null ? 'Not rated; move slider to rate' : `${value} of 10`
+        }
+        className={value == null ? 'opacity-50' : undefined}
       />
       <p className="text-[11px] leading-tight text-muted">{hint}</p>
     </div>
@@ -61,23 +75,24 @@ function Rating({
 export function SessionReadiness({
   sessionId,
   week,
-  allSlotIds,
   recovery: initRecovery,
   suggested,
 }: SessionReadinessProps) {
   const rated = initRecovery != null
   const [expanded, setExpanded] = React.useState(!rated)
-  // Default to the wearable-suggested readiness (low-biased) when un-rated, else 7.
-  const [recovery, setRecovery] = React.useState(initRecovery ?? suggested ?? 7)
+  const [recovery, setRecovery] = React.useState<number | null>(initRecovery)
   const [pending, startTransition] = React.useTransition()
 
   function onSave() {
+    if (recovery == null) {
+      toast.error('Rate your readiness before saving.')
+      return
+    }
     startTransition(async () => {
       const res = await saveSessionReadiness({
         sessionId,
         week,
         recovery,
-        allSlotIds,
       })
       if (res.ok) {
         toast.success('Readiness saved.')
@@ -139,18 +154,34 @@ export function SessionReadiness({
           label="How ready do you feel?"
           hint="10 = fresh &amp; strong, ready to push · 1 = drained, weak, beat-up."
           value={recovery}
+          suggested={suggested}
           onChange={setRecovery}
         />
 
         {!rated && suggested != null ? (
-          <p className="flex items-start gap-1.5 text-[11px] leading-tight text-muted">
-            <BatteryCharging className="mt-px size-3.5 shrink-0 text-signal" aria-hidden />
-            Pre-filled to {suggested} from today&apos;s recovery score — nudge it if you feel
-            different.
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="flex items-start gap-1.5 text-[11px] leading-tight text-muted">
+              <BatteryCharging className="mt-px size-3.5 shrink-0 text-signal" aria-hidden />
+              Wearable suggestion: {suggested}/10. Confirm it or rate how you
+              actually feel.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setRecovery(suggested)}
+            >
+              Use {suggested}
+            </Button>
+          </div>
         ) : null}
 
-        <Button type="button" onClick={onSave} disabled={pending} className="w-full">
+        <Button
+          type="button"
+          onClick={onSave}
+          disabled={pending || recovery == null}
+          className="w-full"
+        >
           {pending ? (
             <>
               <Loader2 className="size-4 animate-spin" aria-hidden />

@@ -33,6 +33,8 @@ import {
 export async function ensureWeekSessions(
   programId: string,
   week: number,
+  mesocycle: number,
+  scheduleVersion: string,
 ): Promise<Session[]> {
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
@@ -50,6 +52,8 @@ export async function ensureWeekSessions(
     .select('*')
     .eq('program_id', programId)
     .eq('user_id', userId)
+    .eq('schedule_version', scheduleVersion)
+    .eq('mesocycle', mesocycle)
     .eq('week', week)
   if (eErr) throw eErr
   const existingSessions = (existing as Session[]) ?? []
@@ -61,19 +65,35 @@ export async function ensureWeekSessions(
       user_id: userId,
       program_id: programId,
       day_id: dayId,
+      schedule_version: scheduleVersion,
+      mesocycle,
       week,
       status: 'planned' as const,
     }))
 
   if (toInsert.length === 0) return existingSessions
 
-  const { data: inserted, error: iErr } = await supabase
+  const { error: iErr } = await supabase
     .from('sessions')
-    .insert(toInsert)
-    .select('*')
+    .upsert(toInsert, {
+      onConflict:
+        'user_id,program_id,schedule_version,mesocycle,week,day_id',
+      ignoreDuplicates: true,
+    })
   if (iErr) throw iErr
 
-  return [...existingSessions, ...((inserted as Session[]) ?? [])]
+  // Another request may have won the same insert. Re-read the unique identity
+  // so every caller receives the canonical session rows.
+  const { data: complete, error: completeError } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('program_id', programId)
+    .eq('user_id', userId)
+    .eq('schedule_version', scheduleVersion)
+    .eq('mesocycle', mesocycle)
+    .eq('week', week)
+  if (completeError) throw completeError
+  return (complete as Session[]) ?? []
 }
 
 /**
@@ -83,6 +103,8 @@ export async function getSessionForDay(
   programId: string,
   dayId: string,
   week: number,
+  mesocycle: number,
+  scheduleVersion: string,
 ): Promise<Session> {
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
@@ -92,25 +114,46 @@ export async function getSessionForDay(
     .select('*')
     .eq('program_id', programId)
     .eq('day_id', dayId)
+    .eq('schedule_version', scheduleVersion)
+    .eq('mesocycle', mesocycle)
     .eq('week', week)
     .eq('user_id', userId)
     .maybeSingle()
   if (eErr) throw eErr
   if (existing) return existing as Session
 
-  const { data: inserted, error: iErr } = await supabase
+  const { error: iErr } = await supabase
     .from('sessions')
-    .insert({
-      user_id: userId,
-      program_id: programId,
-      day_id: dayId,
-      week,
-      status: 'planned',
-    })
-    .select('*')
-    .single()
+    .upsert(
+      {
+        user_id: userId,
+        program_id: programId,
+        day_id: dayId,
+        schedule_version: scheduleVersion,
+        mesocycle,
+        week,
+        status: 'planned',
+      },
+      {
+        onConflict:
+          'user_id,program_id,schedule_version,mesocycle,week,day_id',
+        ignoreDuplicates: true,
+      },
+    )
   if (iErr) throw iErr
-  return inserted as Session
+
+  const { data: canonical, error: canonicalError } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('program_id', programId)
+    .eq('day_id', dayId)
+    .eq('schedule_version', scheduleVersion)
+    .eq('mesocycle', mesocycle)
+    .eq('week', week)
+    .eq('user_id', userId)
+    .single()
+  if (canonicalError) throw canonicalError
+  return canonical as Session
 }
 
 /**
@@ -163,16 +206,22 @@ export async function getSetEntriesForSession(
  * session. Slot ids are deliberately ignored: the same named exercise shares
  * history across days, programs, and casing differences.
  */
-interface PriorExerciseLog {
+interface HistoricalExerciseLog {
   log: SetLog
   muscleArea: string | null
   nextDaySoreness: number | null
+}
+
+interface PriorExerciseLog extends HistoricalExerciseLog {
+  /** Latest exposure outside deload, used to restore the full carry. */
+  preDeload: HistoricalExerciseLog | null
 }
 
 async function getPriorLogsByExercise(
   session: Session,
   slots: ExerciseSlot[],
   currentLogs: Record<string, SetLog>,
+  deloadWeek: number,
 ): Promise<Map<string, PriorExerciseLog>> {
   const result = new Map<string, PriorExerciseLog>()
   if (slots.length === 0) return result
@@ -208,10 +257,13 @@ async function getPriorLogsByExercise(
   const currentLogTimes = Object.values(currentLogs)
     .map((log) => log.created_at)
     .filter(Boolean)
-  const cutoff = currentLogTimes.sort()[0] ?? session.performed_at ?? new Date().toISOString()
+  const cutoff =
+    session.performed_at ??
+    currentLogTimes.sort()[0] ??
+    new Date().toISOString()
   const { data: completedSessions, error: sessionError } = await supabase
     .from('sessions')
-    .select('id')
+    .select('id, performed_at')
     .eq('user_id', userId)
     .eq('status', 'done')
     .neq('id', session.id)
@@ -221,9 +273,12 @@ async function getPriorLogsByExercise(
     .limit(500)
   if (sessionError) throw sessionError
   const completedSessionIds = (completedSessions ?? []).map(
-    (row: { id: string }) => row.id,
+    (row: { id: string; performed_at: string | null }) => row.id,
   )
   if (completedSessionIds.length === 0) return result
+  const completedSessionRank = new Map(
+    completedSessionIds.map((id, index) => [id, index]),
+  )
 
   const [priorLogResult, sorenessBySessionMuscle] = await Promise.all([
     supabase
@@ -232,35 +287,71 @@ async function getPriorLogsByExercise(
       .eq('user_id', userId)
       .in('slot_id', matchingSlotIds)
       .in('session_id', completedSessionIds)
-      .lt('created_at', cutoff)
-      .order('created_at', { ascending: false })
       .limit(1000),
     getSorenessBySessionAndMuscle(supabase, userId, completedSessionIds),
   ])
   const { data: priorRows, error: logError } = priorLogResult
   if (logError) throw logError
 
-  for (const log of (priorRows ?? []) as SetLog[]) {
-    // Readiness-only rows are not a completed exercise dose and cannot seed a target.
+  const rankedPriorRows = [...((priorRows ?? []) as SetLog[])].sort((a, b) => {
+    const sessionOrder =
+      (completedSessionRank.get(a.session_id) ?? Number.MAX_SAFE_INTEGER) -
+      (completedSessionRank.get(b.session_id) ?? Number.MAX_SAFE_INTEGER)
+    return sessionOrder || b.created_at.localeCompare(a.created_at)
+  })
+
+  for (const log of rankedPriorRows) {
+    const hasExerciseDose =
+      log.actual_load != null ||
+      log.best_reps != null ||
+      log.actual_sets != null ||
+      log.actual_rir != null
+    const hasExerciseSafetyFeedback =
+      log.pain != null || log.hit_rir_override === 'Skip'
+    // Systemic-readiness-only rows cannot replace real exercise history. A
+    // pain-only or explicitly skipped exposure can: its saved target snapshot
+    // tells the next session exactly what to hold or reduce from.
     if (
-      log.actual_load == null &&
-      log.best_reps == null &&
-      log.actual_sets == null &&
-      log.actual_rir == null
+      !hasExerciseDose &&
+      !hasExerciseSafetyFeedback
     ) {
       continue
     }
+    if (
+      !hasExerciseDose &&
+      hasExerciseSafetyFeedback &&
+      log.target_load == null &&
+      log.target_sets == null &&
+      log.target_reps == null
+    ) {
+      // Legacy feedback rows predate target snapshots and cannot safely seed a
+      // numeric prescription. Keep walking to the latest objective exposure.
+      continue
+    }
     const meta = metaBySlotId.get(log.slot_id)
-    if (meta && !result.has(meta.exerciseKey)) {
+    if (!meta) continue
+
+    const historical: HistoricalExerciseLog = {
+      log,
+      muscleArea: meta.muscleArea,
+      nextDaySoreness: meta.muscleArea
+        ? (sorenessBySessionMuscle.get(
+            sorenessLookupKey(log.session_id, meta.muscleArea),
+          ) ?? null)
+        : null,
+    }
+    const newest = result.get(meta.exerciseKey)
+    if (!newest) {
       result.set(meta.exerciseKey, {
-        log,
-        muscleArea: meta.muscleArea,
-        nextDaySoreness: meta.muscleArea
-          ? (sorenessBySessionMuscle.get(
-              sorenessLookupKey(log.session_id, meta.muscleArea),
-            ) ?? null)
-          : null,
+        ...historical,
+        preDeload: null,
       })
+    } else if (
+      newest.preDeload == null &&
+      log.week !== deloadWeek &&
+      newest.log.session_id !== log.session_id
+    ) {
+      newest.preDeload = historical
     }
   }
 
@@ -279,7 +370,12 @@ export async function buildTodayView(
   weights?: ReadinessWeights | null,
 ): Promise<SlotView[]> {
   const week = session.week
-  const priorLogs = await getPriorLogsByExercise(session, slots, logs)
+  const priorLogs = await getPriorLogsByExercise(
+    session,
+    slots,
+    logs,
+    deloadWeek,
+  )
   const entriesBySlot = await getSetEntriesForSession(session.id)
 
   const prepared = slots.map((slot) => {
@@ -288,6 +384,17 @@ export async function buildTodayView(
     const entries = entriesBySlot[slot.id] ?? []
     const prior = priorLogs.get(exerciseNameKey(slot.exercise_name))
     const priorLog = prior?.log
+    const carryIntoDeload =
+      priorLog?.week === deloadWeek && prior?.preDeload
+        ? derivePrevTargets(
+            config,
+            prior.preDeload.log,
+            prior.preDeload.log.week,
+            deloadWeek,
+            weights,
+            prior.preDeload.nextDaySoreness,
+          )
+        : null
     const prev = derivePrevTargets(
       config,
       priorLog,
@@ -295,24 +402,25 @@ export async function buildTodayView(
       deloadWeek,
       weights,
       prior?.nextDaySoreness,
+      carryIntoDeload,
     )
     return { slot, config, log, entries, prior, priorLog, prev }
   })
 
-  // One muscle-level soreness report may support at most one added set from
-  // that exposure. If several exercises qualify, the exercise with the lowest
-  // pump wins (program order breaks ties); the others take normal rep/load
-  // progression. This keeps volume additions genuinely sparse.
+  // The upcoming workout may add at most one set per muscle, even when its
+  // exercises inherited feedback from different historical sessions. Lowest
+  // prior pump wins (program order breaks ties); the others take normal
+  // rep/load progression. This keeps volume additions genuinely sparse.
   const volumeWinnerIndexes = chooseVolumeIncreaseWinners(
     prepared.map((item) =>
       item.prev.decision === 'Add 1 set' &&
-      item.prior?.muscleArea
+      item.slot.muscle_area
         ? {
-            exposureKey: sorenessLookupKey(
-              item.prior.log.session_id,
-              item.prior.muscleArea,
+            groupKey: sorenessLookupKey(
+              session.id,
+              item.slot.muscle_area,
             ),
-            pump: item.prior.log.pump,
+            pump: item.prior?.log.pump ?? null,
           }
         : null,
     ),
@@ -323,7 +431,8 @@ export async function buildTodayView(
     let prev = item.prev
     if (
       prev.decision === 'Add 1 set' &&
-      prior?.muscleArea &&
+      slot.muscle_area &&
+      prior &&
       !volumeWinnerIndexes.has(index)
     ) {
       prev = derivePrevTargets(
@@ -345,16 +454,30 @@ export async function buildTodayView(
       reps: targetWeek === 1 ? config.repLow : prev.prevNextReps ?? config.repLow,
       rir: config.targetRir,
     }
+    // Once any exercise-specific feedback or set data snapshots a target, keep
+    // showing and re-saving that exact prescription for the whole session.
+    // Later feedback, slot edits, or another occurrence must not rewrite the
+    // objective bar after the athlete has started against it.
+    const displayedTargets: SlotTargets = {
+      load: log?.target_load ?? baseTargets.load,
+      sets: log?.target_sets ?? baseTargets.sets,
+      reps: log?.target_reps ?? baseTargets.reps,
+      rir: log?.target_rir ?? baseTargets.rir,
+    }
     const ctx: EngineContext = {
       week,
       deloadWeek,
       prevNextLoad: prev.prevNextLoad,
       prevNextSets: prev.prevNextSets,
       prevNextReps: prev.prevNextReps,
+      prescribedLoad: displayedTargets.load,
+      prescribedSets: displayedTargets.sets,
+      prescribedReps: displayedTargets.reps,
+      prescribedRir: displayedTargets.rir,
       weights: weights ?? undefined,
     }
     const result = evaluateSlot(setLogInputFromRow(log), config, ctx)
 
-    return { slot, log, entries, targets: baseTargets, result }
+    return { slot, log, entries, targets: displayedTargets, result }
   })
 }

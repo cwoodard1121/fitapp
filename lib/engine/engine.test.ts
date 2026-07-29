@@ -25,6 +25,7 @@ function slot(overrides: Partial<SlotConfig> = {}): SlotConfig {
     baseSets: 2,
     loadIncrement: 5,
     seedLoad: 75,
+    allowSetProgression: true,
     isBodyweight: false,
     ...overrides,
   }
@@ -41,6 +42,7 @@ function log(overrides: Partial<SetLogInput> = {}): SetLogInput {
     enjoyment: null,
     soreness: null,
     nextDaySoreness: null,
+    pain: null,
     recovery: null,
     performance: null,
     ...overrides,
@@ -109,21 +111,21 @@ describe('evaluateSlot — pinned decision cases (T1..T10)', () => {
     expect(res.nextLoad).toBe(190)
   })
 
-  it('T4: bad recovery (gate red) -> Hold/reduce, nextLoad = load - incr, nextSets = sets - 1', () => {
+  it('T4: one bad-recovery signal still progresses completed target work', () => {
     const s = slot({ progressBias: 'Load +5', loadIncrement: 5, baseSets: 3 })
     const l = log({
       actualLoad: 100,
-      bestReps: 5,
+      bestReps: 8,
       actualSets: 3,
       actualRir: 3,
-      recovery: 3, // <= 4 -> badrecovery -> gate Red
+      recovery: 3,
     })
     const res = evaluateSlot(l, s, ctx())
 
-    expect(res.gate).toBe('Red')
-    expect(res.decision).toBe('Hold/reduce')
-    expect(res.nextLoad).toBe(95) // 100 - 5, floored at 0
-    expect(res.nextSets).toBe(2) // 3 - 1, floored at 1
+    expect(res.gate).toBe('Yellow')
+    expect(res.decision).toBe('Add 5 lb')
+    expect(res.nextLoad).toBe(105)
+    expect(res.nextSets).toBe(3)
   })
 
   it('T5: low pump plus low next-day soreness and solid work -> Add 1 set', () => {
@@ -161,19 +163,51 @@ describe('evaluateSlot — pinned decision cases (T1..T10)', () => {
     const l = strongLog({ bestReps: 12 })
     const res = evaluateSlot(l, s, ctx({ week: 1, deloadWeek: 5 }))
 
-    expect(res.decision).toBe('Add 1 rep')
+    expect(res.decision).toBe('Add 2 reps')
     expect(res.nextLoad).toBe(l.actualLoad)
-    expect(res.nextReps).toBe(13)
+    expect(res.nextReps).toBe(14)
     expect(res.nextSets).toBe(l.actualSets)
   })
 
   it('T8: hitRirOverride == "Skip" -> Skip', () => {
-    // Some data is present so the no-data branch (which precedes Skip) is skipped.
-    const l = log({ actualLoad: 100, actualRir: 3, hitRirOverride: 'Skip' })
-    const res = evaluateSlot(l, slot(), ctx())
+    const l = log({ hitRirOverride: 'Skip' })
+    const res = evaluateSlot(
+      l,
+      slot(),
+      ctx({
+        prescribedLoad: 100,
+        prescribedSets: 2,
+        prescribedReps: 10,
+      }),
+    )
 
     expect(res.hitRir).toBe('Skip')
     expect(res.decision).toBe('Skip')
+    expect(res.nextLoad).toBe(100)
+    expect(res.nextSets).toBe(2)
+    expect(res.nextReps).toBe(10)
+  })
+
+  it('preserves pre-deload targets when the deload exposure is skipped', () => {
+    const res = evaluateSlot(
+      log({ hitRirOverride: 'Skip' }),
+      slot(),
+      ctx({
+        week: 5,
+        deloadWeek: 5,
+        prevNextLoad: 100,
+        prevNextSets: 3,
+        prevNextReps: 12,
+        prescribedLoad: 90,
+        prescribedSets: 2,
+        prescribedReps: 10,
+      }),
+    )
+
+    expect(res.decision).toBe('Skip')
+    expect(res.nextLoad).toBe(100)
+    expect(res.nextSets).toBe(3)
+    expect(res.nextReps).toBe(12)
   })
 
   it('T9: no set data (load/reps/sets/rir all null), week 2 -> decision null', () => {
@@ -196,27 +230,94 @@ describe('evaluateSlot — pinned decision cases (T1..T10)', () => {
 /* ------------------------------------------------------------------ */
 
 describe('evaluateSlot — recovery gate', () => {
-  it('goes Red from performance Down + not good recovery -> Hold/reduce', () => {
+  it('requires two risk signals for Red and reduces only load', () => {
     const l = log({
       actualLoad: 100,
-      bestReps: 5,
-      actualSets: 3,
+      bestReps: 8,
+      actualSets: 2,
       actualRir: 3,
-      recovery: 5, // neither good (>=7) nor bad (<=4)
-      performance: 'Down', // perfdown && !goodrecovery -> Red
+      recovery: 3,
+      performance: 'Down',
     })
     const res = evaluateSlot(l, slot(), ctx())
 
     expect(res.flags.perfdown).toBe(true)
-    expect(res.flags.goodrecovery).toBe(false)
+    expect(res.flags.badrecovery).toBe(true)
     expect(res.gate).toBe('Red')
     expect(res.decision).toBe('Hold/reduce')
+    expect(res.nextLoad).toBe(95)
+    expect(res.nextSets).toBe(2)
   })
 
   it('goes Green on good recovery and Yellow on neutral inputs', () => {
     const base = { actualLoad: 100, bestReps: 5, actualSets: 2, actualRir: 3 }
     expect(evaluateSlot(log({ ...base, recovery: 8 }), slot(), ctx()).gate).toBe('Green')
     expect(evaluateSlot(log({ ...base, recovery: 6 }), slot(), ctx()).gate).toBe('Yellow')
+  })
+
+  it.each([
+    ['performance down', { performance: 'Down' as const }],
+    ['high next-day soreness', { nextDaySoreness: 8 }],
+    ['near-failure RIR', { actualRir: 1 }],
+  ])('holds for one %s risk signal without reducing', (_label, risk) => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 100,
+        bestReps: 10,
+        actualSets: 2,
+        actualRir: 3,
+        ...risk,
+      }),
+      slot(),
+      ctx(),
+    )
+
+    expect(res.gate).toBe('Yellow')
+    expect(res.decision).toBe('Maintain')
+    expect(res.nextLoad).toBe(100)
+    expect(res.nextSets).toBe(2)
+  })
+
+  it('reduces sets but keeps load when soreness is part of a Red gate', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 100,
+        bestReps: 10,
+        actualSets: 3,
+        actualRir: 3,
+        nextDaySoreness: 8,
+        recovery: 3,
+      }),
+      slot({ baseSets: 3 }),
+      ctx(),
+    )
+
+    expect(res.gate).toBe('Red')
+    expect(res.decision).toBe('Hold/reduce')
+    expect(res.flags.reduceSetsForSoreness).toBe(true)
+    expect(res.nextLoad).toBe(100)
+    expect(res.nextSets).toBe(2)
+  })
+
+  it('holds for high pain and reduces only load for severe pain', () => {
+    const base = {
+      actualLoad: 100,
+      bestReps: 10,
+      actualSets: 2,
+      actualRir: 3,
+    }
+    const high = evaluateSlot(log({ ...base, pain: 5 }), slot(), ctx())
+    const severe = evaluateSlot(log({ ...base, pain: 8 }), slot(), ctx())
+
+    expect(high.gate).toBe('Yellow')
+    expect(high.decision).toBe('Maintain')
+    expect(high.nextLoad).toBe(100)
+    expect(high.nextSets).toBe(2)
+
+    expect(severe.gate).toBe('Red')
+    expect(severe.decision).toBe('Hold/reduce')
+    expect(severe.nextLoad).toBe(95)
+    expect(severe.nextSets).toBe(2)
   })
 })
 
@@ -238,33 +339,34 @@ describe('evaluateSlot — growth score', () => {
   })
 
   it('keeps high soreness out of the score while using it as a safety gate', () => {
-    // -3 recovery, -2 perf down, +1 bad pump, 0 enjoyment, -0.5 low RIR
+    // -3 recovery, -2 perf down, 0 bad pump, 0 enjoyment, -0.5 low RIR
     const l = log({
       recovery: 3, // -3
       performance: 'Down', // -2
-      pump: 3, // badpump -> +1
+      pump: 3, // badpump -> 0 by default
       enjoyment: 5, // < 7 -> 0
-      soreness: 9, // recovery gate only
+      nextDaySoreness: 9, // recovery gate only
       actualRir: 1, // lowrir (< targetRir - 0.5 = 2.5) -> -1
       actualLoad: 100,
       bestReps: 5,
       actualSets: 2,
     })
     const result = evaluateSlot(l, slot(), ctx())
-    expect(result.score).toBe(-4.5)
+    expect(result.score).toBe(-5.5)
     expect(result.gate).toBe('Red')
   })
 })
 
 describe('evaluateSlot — Hold/reduce flooring', () => {
-  it('floors nextLoad at 0 and nextSets at 1', () => {
-    const s = slot({ loadIncrement: 5 })
+  it('floors the one reduced lever while preserving baseline sets', () => {
+    const s = slot({ loadIncrement: 5, baseSets: 1 })
     const l = log({
       actualLoad: 3, // 3 - 5 -> floored to 0
       bestReps: 5,
       actualSets: 1, // 1 - 1 -> floored to 1
       actualRir: 3,
-      recovery: 3, // gate Red -> Hold/reduce
+      recovery: 3,
+      performance: 'Down',
     })
     const res = evaluateSlot(l, s, ctx())
 
@@ -292,7 +394,11 @@ describe('evaluateSlot — decisionLabel', () => {
   })
 
   it('uses the canonical string for non-load decisions and "—" for null', () => {
-    const addRep = evaluateSlot(strongLog({ bestReps: 12 }), slot({ progressBias: 'Reps first' }), ctx())
+    const addRep = evaluateSlot(
+      log({ actualLoad: 80, bestReps: 12, actualSets: 2, actualRir: 3 }),
+      slot({ progressBias: 'Reps first' }),
+      ctx(),
+    )
     expect(addRep.decisionLabel).toBe('Add 1 rep')
 
     expect(evaluateSlot(log(), slot(), ctx()).decisionLabel).toBe('—')
@@ -354,6 +460,67 @@ describe('evaluateSlot — e1rm, tonnage, hitRir', () => {
     // Override wins over the auto read.
     expect(evaluateSlot(log({ ...base, actualRir: 2, hitRirOverride: 'Y' }), s, ctx()).hitRir).toBe('Y')
   })
+
+  it('uses override Y to suppress numeric easy/hard flags and validate intensity', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 40,
+        bestReps: 10,
+        actualSets: 2,
+        actualRir: 0,
+        hitRirOverride: 'Y',
+        pump: 4,
+        nextDaySoreness: 1,
+      }),
+      slot(),
+      ctx(),
+    )
+
+    expect(res.flags.rirValidated).toBe(true)
+    expect(res.flags.lowrir).toBe(false)
+    expect(res.flags.verylowrir).toBe(false)
+    expect(res.flags.tooeasy).toBe(false)
+    expect(res.flags.veryeasy).toBe(false)
+    expect(res.flags.appropriateSetIntensity).toBe(true)
+    expect(res.decision).toBe('Add 1 set')
+  })
+
+  it('lets override N keep baseline progress but blocks acceleration and set addition', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 40,
+        bestReps: 10,
+        actualSets: 2,
+        actualRir: 3,
+        hitRirOverride: 'N',
+        pump: 4,
+        nextDaySoreness: 1,
+        recovery: 8,
+        performance: 'Up',
+        enjoyment: 8,
+      }),
+      slot(),
+      ctx(),
+    )
+
+    expect(res.score).toBe(4)
+    expect(res.flags.rirMissed).toBe(true)
+    expect(res.flags.addSet).toBe(false)
+    expect(res.flags.accelerateReps).toBe(false)
+    expect(res.decision).toBe('Add 1 rep')
+  })
+
+  it('does not double a load jump when override N rejects a very-easy numeric RIR', () => {
+    const res = evaluateSlot(
+      strongLog({ actualLoad: 100, bestReps: 8, actualRir: 7, hitRirOverride: 'N' }),
+      slot({ progressBias: 'Load +5', loadIncrement: 5 }),
+      ctx(),
+    )
+
+    expect(res.flags.veryeasy).toBe(true)
+    expect(res.flags.bigJump).toBe(false)
+    expect(res.nextLoad).toBe(105)
+  })
 })
 
 describe('targetSets / targetLoad — per-week derivation', () => {
@@ -377,6 +544,245 @@ describe('targetSets / targetLoad — per-week derivation', () => {
     expect(targetSets(5, 5, s, 5)).toBe(3) // round(3.0)
     expect(targetLoad(5, 5, s, 200)).toBe(180) // round(180.0)
   })
+
+  it('restores pre-deload carry targets instead of carrying reduced performance forward', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 90,
+        bestReps: 8,
+        actualSets: 1,
+        actualRir: 4,
+      }),
+      slot({ repLow: 8, repHigh: 15, baseSets: 2 }),
+      ctx({
+        week: 5,
+        deloadWeek: 5,
+        prevNextLoad: 100,
+        prevNextSets: 3,
+        prevNextReps: 12,
+      }),
+    )
+
+    expect(res.decision).toBe('Deload / maintain')
+    expect(res.nextLoad).toBe(100)
+    expect(res.nextSets).toBe(3)
+    expect(res.nextReps).toBe(12)
+  })
+
+  it('keeps the legacy deload carry fallback when prior targets are unavailable', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 90,
+        bestReps: 8,
+        actualSets: 1,
+        actualRir: 4,
+      }),
+      slot({ repLow: 8, repHigh: 15, baseSets: 2 }),
+      ctx({ week: 5, deloadWeek: 5 }),
+    )
+
+    expect(res.nextLoad).toBe(90)
+    expect(res.nextSets).toBe(2)
+    expect(res.nextReps).toBe(8)
+  })
+})
+
+describe('objective prescription snapshots', () => {
+  const completed = {
+    actualLoad: 100,
+    bestReps: 10,
+    actualSets: 2,
+    actualRir: 3,
+  }
+
+  it('progresses neutral work when every supplied target was completed', () => {
+    const res = evaluateSlot(
+      log(completed),
+      slot(),
+      ctx({
+        prescribedLoad: 100,
+        prescribedSets: 2,
+        prescribedReps: 10,
+      }),
+    )
+
+    expect(res.flags.progressionSignal).toBe(true)
+    expect(res.decision).toBe('Add 1 rep')
+    expect(res.nextReps).toBe(11)
+  })
+
+  it('holds when prescribed load or reps were missed', () => {
+    const missedLoad = evaluateSlot(
+      log({ ...completed, actualLoad: 95 }),
+      slot(),
+      ctx({
+        prescribedLoad: 100,
+        prescribedSets: 2,
+        prescribedReps: 10,
+      }),
+    )
+    const missedReps = evaluateSlot(
+      log({ ...completed, bestReps: 9 }),
+      slot(),
+      ctx({
+        prescribedLoad: 100,
+        prescribedSets: 2,
+        prescribedReps: 10,
+      }),
+    )
+
+    expect(missedLoad.flags.enoughLoad).toBe(false)
+    expect(missedLoad.decision).toBe('Maintain')
+    expect(missedReps.flags.enoughReps).toBe(false)
+    expect(missedReps.decision).toBe('Maintain')
+  })
+
+  it('accepts tiny floating-point load drift at the target boundary', () => {
+    const res = evaluateSlot(
+      log({ ...completed, actualLoad: 99.9999995 }),
+      slot(),
+      ctx({ prescribedLoad: 100, prescribedSets: 2, prescribedReps: 10 }),
+    )
+
+    expect(res.flags.enoughLoad).toBe(true)
+    expect(res.decision).toBe('Add 1 rep')
+  })
+
+  it('exempts bodyweight load while still requiring prescribed reps and baseline sets', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: null,
+        bestReps: 8,
+        actualSets: 2,
+        actualRir: 3,
+      }),
+      slot({
+        isBodyweight: true,
+        repLow: 6,
+        repHigh: 12,
+        baseSets: 2,
+      }),
+      ctx({ prescribedLoad: 25, prescribedSets: 2, prescribedReps: 8 }),
+    )
+
+    expect(res.flags.enoughLoad).toBe(true)
+    expect(res.decision).toBe('Add 1 rep')
+  })
+
+  it('does not progress a weighted exercise logged with zero load', () => {
+    const res = evaluateSlot(
+      log({ ...completed, actualLoad: 0 }),
+      slot(),
+      ctx({ prescribedLoad: null, prescribedSets: 2, prescribedReps: 10 }),
+    )
+
+    expect(res.flags.completedWork).toBe(false)
+    expect(res.decision).toBe('Maintain')
+  })
+
+  it('prioritizes a severe-pain load reduction over a simultaneous soreness set reduction', () => {
+    const res = evaluateSlot(
+      log({
+        ...completed,
+        pain: 9,
+        nextDaySoreness: 9,
+      }),
+      slot({ loadIncrement: 5 }),
+      ctx({ prescribedLoad: 100, prescribedSets: 2, prescribedReps: 10 }),
+    )
+
+    expect(res.flags.reduceSetsForSoreness).toBe(false)
+    expect(res.nextLoad).toBe(95)
+    expect(res.nextSets).toBe(2)
+  })
+
+  it('evaluates effort against the RIR target saved with the workout', () => {
+    const res = evaluateSlot(
+      log({
+        ...completed,
+        actualRir: 0,
+      }),
+      slot({ targetRir: 3 }),
+      ctx({
+        prescribedLoad: 100,
+        prescribedSets: 2,
+        prescribedReps: 10,
+        prescribedRir: 0,
+      }),
+    )
+
+    expect(res.flags.verylowrir).toBe(false)
+    expect(res.decision).toBe('Add 1 rep')
+  })
+
+  it('carries a prescribed target through a pain-only stopped exposure', () => {
+    const res = evaluateSlot(
+      log({ pain: 6 }),
+      slot(),
+      ctx({
+        prescribedLoad: 100,
+        prescribedSets: 2,
+        prescribedReps: 10,
+        prescribedRir: 3,
+      }),
+    )
+
+    expect(res.decision).toBe('Maintain')
+    expect(res.nextLoad).toBe(100)
+    expect(res.nextSets).toBe(2)
+    expect(res.nextReps).toBe(10)
+  })
+})
+
+describe('deload safety precedence', () => {
+  const deloadContext = ctx({
+    week: 5,
+    deloadWeek: 5,
+    prevNextLoad: 100,
+    prevNextSets: 3,
+    prevNextReps: 12,
+    prescribedLoad: 90,
+    prescribedSets: 2,
+    prescribedReps: 10,
+  })
+
+  it('does not restore the full carry through severe pain', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 90,
+        bestReps: 10,
+        actualSets: 2,
+        actualRir: 3,
+        pain: 9,
+      }),
+      slot({ loadIncrement: 5 }),
+      deloadContext,
+    )
+
+    expect(res.gate).toBe('Red')
+    expect(res.decision).toBe('Hold/reduce')
+    expect(res.nextLoad).toBe(85)
+    expect(res.nextSets).toBe(2)
+  })
+
+  it('does not restore full volume through severe next-day soreness', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 90,
+        bestReps: 10,
+        actualSets: 2,
+        actualRir: 3,
+        nextDaySoreness: 10,
+      }),
+      slot(),
+      deloadContext,
+    )
+
+    expect(res.gate).toBe('Red')
+    expect(res.decision).toBe('Hold/reduce')
+    expect(res.nextLoad).toBe(90)
+    expect(res.nextSets).toBe(1)
+  })
 })
 
 /* ------------------------------------------------------------------ */
@@ -384,7 +790,7 @@ describe('targetSets / targetLoad — per-week derivation', () => {
 /* ------------------------------------------------------------------ */
 
 describe('smart layer — detrained ramp (don\'t stall a clean green session)', () => {
-  it('progresses on a green session scoring 4 (would Maintain under the old >=5 gate)', () => {
+  it('accelerates a green session scoring 4', () => {
     // recovery +2, perf up +1, enjoyment +1 = score 4; pump/soreness null so no
     // volume signal; RIR on target. Old engine needed >=5 here -> Maintain.
     const s = slot({ progressBias: 'Reps first', repLow: 8, repHigh: 15 })
@@ -400,8 +806,8 @@ describe('smart layer — detrained ramp (don\'t stall a clean green session)', 
     const res = evaluateSlot(l, s, ctx())
     expect(res.score).toBe(4)
     expect(res.gate).toBe('Green')
-    expect(res.decision).toBe('Add 1 rep')
-    expect(res.nextReps).toBe(11)
+    expect(res.decision).toBe('Add 2 reps')
+    expect(res.nextReps).toBe(12)
   })
 })
 
@@ -461,7 +867,11 @@ describe('smart layer — low pump earns a set (stimulus over load)', () => {
   })
 
   it('does NOT pile sets on a heavy compound (Load +5) from low pump', () => {
-    const s = slot({ progressBias: 'Load +5', baseSets: 3 })
+    const s = slot({
+      progressBias: 'Load +5',
+      baseSets: 3,
+      allowSetProgression: false,
+    })
     const l = log({
       actualLoad: 225,
       bestReps: 5,
@@ -474,6 +884,32 @@ describe('smart layer — low pump earns a set (stimulus over load)', () => {
     const res = evaluateSlot(l, s, ctx())
     expect(res.flags.addSet).toBe(false)
     expect(res.decision).not.toBe('Add 1 set')
+  })
+
+  it('does not let bodyweight status bypass set eligibility and still progresses reps', () => {
+    const res = evaluateSlot(
+      log({
+        actualLoad: 0,
+        bestReps: 8,
+        actualSets: 2,
+        actualRir: 3,
+        pump: 4,
+        nextDaySoreness: 1,
+        recovery: 6,
+        performance: 'Same',
+      }),
+      slot({
+        allowSetProgression: false,
+        isBodyweight: true,
+        repLow: 6,
+        repHigh: 12,
+      }),
+      ctx(),
+    )
+
+    expect(res.flags.addSet).toBe(false)
+    expect(res.decision).toBe('Add 1 rep')
+    expect(res.nextReps).toBe(9)
   })
 
   it('allows at most one set above the configured baseline', () => {
@@ -517,13 +953,15 @@ describe('smart layer — incoming soreness and DOMS', () => {
   it('treats mild soreness plus strong performance as compatible with progression', () => {
     const res = evaluateSlot(strongLog({ soreness: 5 }), slot(), ctx())
     expect(res.gate).toBe('Green')
-    expect(res.decision).toBe('Add 1 rep')
+    expect(res.decision).toBe('Add 2 reps')
   })
 
-  it('holds the next session after 10/10 soreness', () => {
+  it('does not let incoming same-day soreness gate future progression', () => {
     const result = evaluateSlot(strongLog({ soreness: 10 }), slot(), ctx({ week: 1 }))
-    expect(result.gate).toBe('Red')
-    expect(result.decision).toBe('Hold/reduce')
+    expect(result.flags.incomingseveresore).toBe(true)
+    expect(result.flags.severesore).toBe(false)
+    expect(result.gate).toBe('Green')
+    expect(result.decision).toBe('Add 2 reps')
   })
 })
 
@@ -541,6 +979,20 @@ describe('smart layer — configurable readiness weights', () => {
     const tuned = { ...DEFAULT_WEIGHTS, recoveryGood: 5 }
     expect(evaluateSlot(l, slot(), ctx({ weights: tuned })).score).toBe(5)
     expect(evaluateSlot(l, slot(), ctx()).score).toBe(2)
+  })
+
+  it('does not score low pump by default but permits an explicit custom weight', () => {
+    const l = log({
+      actualLoad: 100,
+      bestReps: 10,
+      actualSets: 2,
+      actualRir: 3,
+      pump: 3,
+    })
+    const tuned = { ...DEFAULT_WEIGHTS, pumpBad: 2 }
+
+    expect(evaluateSlot(l, slot(), ctx()).score).toBe(0)
+    expect(evaluateSlot(l, slot(), ctx({ weights: tuned })).score).toBe(2)
   })
 })
 
@@ -640,7 +1092,7 @@ describe('progression balance — performance leads and RIR stays secondary', ()
 
     expect(res.flags.enoughReps).toBe(false)
     expect(res.decision).toBe('Maintain')
-    expect(res.reason).toMatch(/below the range/i)
+    expect(res.reason).toMatch(/prescribed reps/i)
   })
 
   it('treats a previously added set as optional instead of changing the baseline', () => {
@@ -654,7 +1106,7 @@ describe('progression balance — performance leads and RIR stays secondary', ()
         performance: 'Up',
       }),
       slot({ baseSets: 2 }),
-      ctx({ prevNextSets: 3 }),
+      ctx({ prescribedSets: 3 }),
     )
 
     expect(res.flags.enoughSets).toBe(true)
@@ -711,7 +1163,7 @@ describe('progression balance — performance leads and RIR stays secondary', ()
       ctx(),
     )
 
-    expect(res.gate).toBe('Green')
+    expect(res.gate).toBe('Yellow')
     expect(res.flags.readyToProgress).toBe(false)
     expect(res.decision).toBe('Maintain')
   })
@@ -813,8 +1265,9 @@ describe('set progression - requires converging stimulus evidence', () => {
     )
 
     expect(res.flags.establishedLoad).toBe(false)
+    expect(res.flags.completedWork).toBe(false)
     expect(res.flags.addSet).toBe(false)
-    expect(res.decision).toBe('Add 1 rep')
+    expect(res.decision).toBe('Maintain')
   })
 
   it('uses day-after soreness as context without adding it to the growth score', () => {
@@ -843,6 +1296,8 @@ describe('set progression - requires converging stimulus evidence', () => {
     expect(res.flags.nextdayseveresore).toBe(true)
     expect(res.gate).toBe('Red')
     expect(res.decision).toBe('Hold/reduce')
+    expect(res.nextLoad).toBe(80)
+    expect(res.nextSets).toBe(1)
   })
 })
 
@@ -850,8 +1305,8 @@ describe('bodyweight — reps/sets only, never an automatic load bump', () => {
   it('adds a rep inside the range like any reps-first lift', () => {
     const s = slot({ isBodyweight: true, progressBias: 'Reps first', repLow: 6, repHigh: 10 })
     const res = evaluateSlot(strongLog({ actualLoad: 0, bestReps: 8 }), s, ctx())
-    expect(res.decision).toBe('Add 1 rep')
-    expect(res.nextReps).toBe(9)
+    expect(res.decision).toBe('Add 2 reps')
+    expect(res.nextReps).toBe(10)
   })
 
   it('at the rep cap, adds a SET instead of converting to load (room under cap)', () => {
@@ -888,9 +1343,9 @@ describe('bodyweight — reps/sets only, never an automatic load bump', () => {
 
   it('respects the user-entered added load (carries it forward unchanged)', () => {
     const s = slot({ isBodyweight: true, progressBias: 'Reps first', repLow: 6, repHigh: 10 })
-    // User strapped on 25 lb; strong session inside range -> add a rep, keep the 25.
+    // User strapped on 25 lb; strong session accelerates reps and keeps the 25.
     const res = evaluateSlot(strongLog({ actualLoad: 25, bestReps: 8 }), s, ctx())
-    expect(res.decision).toBe('Add 1 rep')
+    expect(res.decision).toBe('Add 2 reps')
     expect(res.nextLoad).toBe(25)
   })
 })

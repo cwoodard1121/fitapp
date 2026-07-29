@@ -236,6 +236,7 @@ export async function getSlotsForDay(dayId: string): Promise<ExerciseSlot[]> {
     .select('*')
     .eq('day_id', dayId)
     .eq('user_id', userId)
+    .gte('order_index', 0)
     .order('order_index', { ascending: true })
   if (error) throw error
   return data as ExerciseSlot[]

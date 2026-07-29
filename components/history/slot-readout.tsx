@@ -3,7 +3,7 @@ import { Stat } from "@/components/ui/stat"
 import { Separator } from "@/components/ui/separator"
 import { Sparkline } from "@/components/history/sparkline"
 import { cn } from "@/lib/utils"
-import type { SlotView, Unit } from "@/lib/types"
+import type { RirOverride, SlotView, Unit } from "@/lib/types"
 import type { Gate } from "@/lib/engine/engine"
 
 const gateText: Record<Gate, string> = {
@@ -60,6 +60,19 @@ function recoveryTone(v: number | null) {
   return "yellow" as const
 }
 
+function painTone(v: number | null) {
+  if (v == null) return "default" as const
+  if (v >= 5) return "red" as const
+  if (v >= 3) return "yellow" as const
+  return "green" as const
+}
+
+function rirOverrideLabel(value: RirOverride | null | undefined) {
+  if (value === "Y") return "Hit"
+  if (value === "N") return "Missed"
+  return value
+}
+
 export function SlotReadout({
   view,
   unit,
@@ -77,6 +90,18 @@ export function SlotReadout({
       log.actual_sets != null ||
       log.actual_rir != null)
   const logged = entries.length > 0 || aggLogged
+  const notes = log?.notes?.trim() || null
+  const hasExerciseFeedback =
+    log != null &&
+    (log.pump != null ||
+      log.pain != null ||
+      log.enjoyment != null ||
+      log.performance != null ||
+      log.hit_rir_override != null ||
+      log.soreness != null ||
+      log.next_day_soreness != null ||
+      notes != null)
+  const showFeedback = logged || hasExerciseFeedback
 
   return (
     <div className="rounded-lg border border-border bg-surface">
@@ -196,25 +221,43 @@ export function SlotReadout({
       ) : null}
 
       {/* Readiness ratings */}
-      {logged ? (
+      {showFeedback ? (
         <div className="border-t border-border p-4">
           <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted">
-            Readiness
+            Workout feedback
           </p>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             <RatingChip label="Pump" value={log?.pump ?? null} />
             <RatingChip label="Enjoy" value={log?.enjoyment ?? null} />
-            <RatingChip label="Sore" value={log?.soreness ?? null} />
+            <RatingChip
+              label="Pain"
+              value={log?.pain ?? null}
+              tone={painTone(log?.pain ?? null)}
+            />
             <RatingChip
               label="Recover"
               value={log?.recovery ?? null}
               tone={recoveryTone(log?.recovery ?? null)}
             />
             <RatingChip label="Perf" value={log?.performance ?? null} />
+            {log?.hit_rir_override != null ? (
+              <RatingChip
+                label="Target RIR"
+                value={rirOverrideLabel(log.hit_rir_override)}
+              />
+            ) : null}
+            {log?.next_day_soreness != null ? (
+              <RatingChip
+                label="Next-day sore"
+                value={log.next_day_soreness}
+              />
+            ) : log?.soreness != null ? (
+              <RatingChip label="Sore (legacy)" value={log.soreness} />
+            ) : null}
           </div>
-          {log?.notes ? (
+          {notes ? (
             <p className="mt-3 rounded-md border border-border bg-background p-2.5 text-sm text-muted">
-              {log.notes}
+              {notes}
             </p>
           ) : null}
         </div>

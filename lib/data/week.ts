@@ -4,7 +4,57 @@
  * and mesocycles repeat: week cycles 1..length_weeks.
  */
 
-const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+const DEFAULT_TIME_ZONE =
+  process.env.APP_TIME_ZONE || 'America/Toronto'
+
+function plainDateOrdinal(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const utc = Date.UTC(year, month - 1, day)
+  const parsed = new Date(utc)
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null
+  }
+  return Math.floor(utc / MS_PER_DAY)
+}
+
+function zonedDateOrdinal(date: Date, timeZone: string): number | null {
+  if (Number.isNaN(date.getTime())) return null
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date)
+    const byType = new Map(parts.map((part) => [part.type, part.value]))
+    return plainDateOrdinal(
+      `${byType.get('year')}-${byType.get('month')}-${byType.get('day')}`,
+    )
+  } catch {
+    return null
+  }
+}
+
+function completedWeeks(
+  startDate: string,
+  today: Date,
+  timeZone: string,
+): number | null {
+  const start = plainDateOrdinal(startDate)
+  const current = zonedDateOrdinal(today, timeZone)
+  if (start == null || current == null) return null
+  if (current < start) return 0
+  return Math.floor((current - start) / 7)
+}
 
 /**
  * Which mesocycle week a date falls in, given the program start date and length.
@@ -16,14 +66,12 @@ export function weekForDate(
   startDate: string | null | undefined,
   lengthWeeks: number,
   today: Date = new Date(),
+  timeZone: string = DEFAULT_TIME_ZONE,
 ): number {
   if (!startDate) return 1
-  const start = new Date(`${startDate.slice(0, 10)}T00:00:00`)
-  if (Number.isNaN(start.getTime())) return 1
-  const ms = today.getTime() - start.getTime()
-  if (ms < 0) return 1
+  const weeksElapsed = completedWeeks(startDate, today, timeZone)
+  if (weeksElapsed == null) return 1
   const len = Math.max(1, lengthWeeks)
-  const weeksElapsed = Math.floor(ms / MS_PER_WEEK)
   return (weeksElapsed % len) + 1
 }
 
@@ -32,12 +80,11 @@ export function mesocycleNumber(
   startDate: string | null | undefined,
   lengthWeeks: number,
   today: Date = new Date(),
+  timeZone: string = DEFAULT_TIME_ZONE,
 ): number {
   if (!startDate) return 0
-  const start = new Date(`${startDate.slice(0, 10)}T00:00:00`)
-  if (Number.isNaN(start.getTime())) return 0
-  const ms = today.getTime() - start.getTime()
-  if (ms < 0) return 0
+  const weeksElapsed = completedWeeks(startDate, today, timeZone)
+  if (weeksElapsed == null) return 0
   const len = Math.max(1, lengthWeeks)
-  return Math.floor(Math.floor(ms / MS_PER_WEEK) / len)
+  return Math.floor(weeksElapsed / len)
 }

@@ -26,23 +26,35 @@ export function NextDaySorenessCard({
 }) {
   const router = useRouter()
   const [pending, startTransition] = React.useTransition()
-  const [ratings, setRatings] = React.useState<Record<string, number>>(() =>
+  const [ratings, setRatings] = React.useState<
+    Record<string, number | null>
+  >(() =>
     Object.fromEntries(
       checkin.muscles.map((muscle) => [
         muscle.muscleArea,
-        muscle.soreness ?? 0,
+        muscle.soreness ?? null,
       ]),
     ),
   )
+  const allRated =
+    checkin.muscles.length > 0 &&
+    checkin.muscles.every((muscle) => ratings[muscle.muscleArea] != null)
 
   function save() {
+    const muscles: { muscleArea: string; soreness: number }[] = []
+    for (const muscle of checkin.muscles) {
+      const soreness = ratings[muscle.muscleArea]
+      if (soreness == null) {
+        toast.error('Rate every trained muscle before saving.')
+        return
+      }
+      muscles.push({ muscleArea: muscle.muscleArea, soreness })
+    }
+
     startTransition(async () => {
       const result = await saveSorenessCheckin({
         sessionId: checkin.sessionId,
-        muscles: checkin.muscles.map((muscle) => ({
-          muscleArea: muscle.muscleArea,
-          soreness: ratings[muscle.muscleArea] ?? 0,
-        })),
+        muscles,
       })
       if (!result.ok) {
         toast.error(result.error)
@@ -77,35 +89,87 @@ export function NextDaySorenessCard({
             const id = `next-day-soreness-${checkin.sessionId}-${muscle.muscleArea
               .toLocaleLowerCase()
               .replace(/[^a-z0-9]+/g, '-')}`
-            const value = ratings[muscle.muscleArea] ?? 0
+            const value = ratings[muscle.muscleArea] ?? null
+            const visualValue = value ?? 5
             return (
               <div key={muscle.muscleArea} className="flex flex-col gap-2">
                 <div className="flex items-baseline justify-between gap-3">
                   <Label htmlFor={id}>{muscle.muscleArea}</Label>
-                  <span className="font-mono text-base font-semibold tabular-nums text-signal">
-                    {value}
-                    <span className="ml-0.5 text-xs font-normal text-muted">
-                      /10
+                  {value == null ? (
+                    <span className="text-xs font-medium text-muted">
+                      Not rated
                     </span>
-                  </span>
+                  ) : (
+                    <span className="font-mono text-base font-semibold tabular-nums text-signal">
+                      {value}
+                      <span className="ml-0.5 text-xs font-normal text-muted">
+                        /10
+                      </span>
+                    </span>
+                  )}
                 </div>
                 <Slider
                   id={id}
                   min={0}
                   max={10}
                   step={1}
-                  value={[value]}
-                  onValueChange={(next) =>
+                  value={[visualValue]}
+                  onPointerDown={() => {
+                    if (value != null) return
                     setRatings((current) => ({
                       ...current,
-                      [muscle.muscleArea]: next[0] ?? value,
+                      [muscle.muscleArea]: visualValue,
                     }))
-                  }
+                  }}
+                  onValueChange={(next) => {
+                    const soreness = next[0]
+                    if (soreness == null) return
+                    setRatings((current) => ({
+                      ...current,
+                      [muscle.muscleArea]: soreness,
+                    }))
+                  }}
                   aria-label={`${muscle.muscleArea} soreness`}
+                  aria-valuetext={
+                    value == null
+                      ? 'Not rated; move slider to rate'
+                      : `${value} of 10`
+                  }
+                  className={value == null ? 'opacity-50' : undefined}
                 />
                 <div className="flex justify-between text-[11px] text-muted">
                   <span>Not sore</span>
                   <span>Extremely sore</span>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant={value === 0 ? 'secondary' : 'outline'}
+                    size="sm"
+                    onClick={() =>
+                      setRatings((current) => ({
+                        ...current,
+                        [muscle.muscleArea]: 0,
+                      }))
+                    }
+                  >
+                    Not sore (0)
+                  </Button>
+                  {value != null ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setRatings((current) => ({
+                          ...current,
+                          [muscle.muscleArea]: null,
+                        }))
+                      }
+                    >
+                      Clear
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             )
@@ -113,8 +177,13 @@ export function NextDaySorenessCard({
         </div>
       </CardContent>
 
-      <CardFooter className="justify-end">
-        <Button type="button" onClick={save} disabled={pending}>
+      <CardFooter className="flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-muted">
+          {allRated
+            ? 'Every trained muscle is rated.'
+            : 'Rate every muscle to save.'}
+        </p>
+        <Button type="button" onClick={save} disabled={pending || !allRated}>
           {pending ? (
             <>
               <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden />

@@ -93,8 +93,8 @@ export function ReadinessWeightsForm({
           {isCustom ? <Badge variant="outline">Custom</Badge> : null}
         </div>
         <CardDescription>
-          These tune the score behind progression. Severe recovery and soreness
-          still act as fixed safety stops.
+          These tune how strongly positive feedback accelerates progression.
+          Pain and next-day soreness still use fixed safety rules.
         </CardDescription>
       </CardHeader>
 

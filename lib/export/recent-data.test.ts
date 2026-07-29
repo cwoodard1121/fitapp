@@ -41,7 +41,15 @@ describe("formatRecentDataExport", () => {
                     { load: 185, reps: 7, rir: 1 },
                   ],
                   aggregate: null,
-                  feel: { pump: 4, enjoyment: 5, soreness: 2, recovery: 4 },
+                  feel: {
+                    pump: 4,
+                    enjoyment: 5,
+                    pain: 0,
+                    nextDaySoreness: 3,
+                    soreness: 2,
+                    recovery: 4,
+                  },
+                  hitRirOverride: "Y",
                   performance: "Up",
                   notes: "Strong; moved fast\nno pain",
                 },
@@ -54,9 +62,9 @@ describe("formatRecentDataExport", () => {
 
     expect(formatRecentDataExport(data)).toBe(
       [
-        "SimpleGym 14d 2026-07-09..2026-07-22 | BW/load=lb | sets=loadxreps@RIR | feel=pump/enjoyment/soreness/recovery(1-10)",
+        "SimpleGym 14d 2026-07-09..2026-07-22 | BW/load=lb | sets=loadxreps@RIR | hitRIR=Y/N/Skip | feel=pump/enjoyment/pain/next-day-soreness/legacy-soreness/recovery(0-10)",
         "26-07-21 | -",
-        "26-07-22 | B BW=180.3 BFbia=17.5% | N kcal=2200 P=180 C=210 F=70 | R steps=10543 sleep=7h32 deep=84 REM=101 RHR=52 HRV=47.3 | W Push: Bench press[185x8@2*2,185x7@1;feel=4/5/2/4;perf=up;note=Strong moved fast no pain]",
+        "26-07-22 | B BW=180.3 BFbia=17.5% | N kcal=2200 P=180 C=210 F=70 | R steps=10543 sleep=7h32 deep=84 REM=101 RHR=52 HRV=47.3 | W Push: Bench press[185x8@2*2,185x7@1;feel=4/5/0/3/2/4;hitRIR=Y;perf=up;note=Strong moved fast no pain]",
       ].join("\n"),
     )
   })
@@ -81,7 +89,15 @@ describe("formatRecentDataExport", () => {
                   isBodyweight: true,
                   sets: [],
                   aggregate: { load: 10, reps: 8, sets: 3, rir: 2 },
-                  feel: { pump: null, enjoyment: null, soreness: null, recovery: null },
+                  feel: {
+                    pump: null,
+                    enjoyment: null,
+                    pain: null,
+                    nextDaySoreness: null,
+                    soreness: null,
+                    recovery: null,
+                  },
+                  hitRirOverride: null,
                   performance: null,
                   notes: null,
                 },

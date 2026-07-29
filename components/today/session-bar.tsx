@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 import type { SessionStatus } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { finishSession, reopenSession } from '@/app/(app)/today/actions'
+import { flushTrainingSaves } from '@/lib/client/training-save-queue'
 
 interface SessionBarProps {
   sessionId: string
@@ -40,6 +41,18 @@ export function SessionBar({
 
   function onFinish() {
     startTransition(async () => {
+      // Clicking the button blurs the active set field first. Yield once so its
+      // onBlur can join the shared queue, then refuse to finish if that final
+      // edit did not persist.
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur()
+      }
+      await Promise.resolve()
+      const savesOk = await flushTrainingSaves(sessionId)
+      if (!savesOk) {
+        toast.error('Finish stopped because a set did not save. Try again.')
+        return
+      }
       const res = await finishSession({ sessionId })
       if (res.ok) toast.success('Session finished — nice work.')
       else toast.error(res.error)

@@ -4,8 +4,6 @@ import { createClient } from "@/lib/supabase/server"
 import {
   requireUserId,
   getProfile,
-  getActiveProgram,
-  mesocycleNumber,
 } from "@/lib/data"
 import type {
   ExerciseSlot,
@@ -16,6 +14,7 @@ import type {
   BodyMetric,
   NutritionLog,
   RecoveryMetric,
+  MuscleSorenessCheckin,
 } from "@/lib/types"
 import { HistoryList } from "@/components/history/history-list"
 import { CopyRecentData } from "@/components/history/copy-recent-data"
@@ -25,29 +24,17 @@ import {
   type RecentExportDay,
   type RecentExportWorkout,
 } from "@/lib/export/recent-data"
+import { sorenessLookupKey } from "@/lib/data/soreness"
+import { hasExerciseHistorySignal } from "@/lib/data/training-history"
 
 export const metadata = { title: "History" }
-
-function isLogged(log: SetLog): boolean {
-  return (
-    log.actual_load != null ||
-    log.best_reps != null ||
-    log.actual_sets != null ||
-    log.actual_rir != null
-  )
-}
 
 export default async function HistoryPage() {
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
 
-  const [profile, program] = await Promise.all([
-    getProfile(),
-    getActiveProgram(),
-  ])
+  const profile = await getProfile()
   const unit = profile?.unit ?? "lb"
-  const lengthWeeks = program?.length_weeks ?? 4
-  const anchorDate = program?.start_date ?? null
 
   const endDate = format(new Date(), "yyyy-MM-dd")
   const startDate = format(subDays(parseISO(endDate), 13), "yyyy-MM-dd")
@@ -108,7 +95,7 @@ export default async function HistoryPage() {
   // Group logged sets by session.
   const logsBySession = new Map<string, SetLog[]>()
   for (const log of logs) {
-    if (!isLogged(log)) continue
+    if (!hasExerciseHistorySignal(log)) continue
     const list = logsBySession.get(log.session_id)
     if (list) list.push(log)
     else logsBySession.set(log.session_id, [log])
@@ -142,13 +129,10 @@ export default async function HistoryPage() {
       }
 
       const dateIso = s.performed_at ?? s.created_at
-      const mesocycle =
-        mesocycleNumber(anchorDate, lengthWeeks, new Date(dateIso)) + 1
-
       return {
         id: s.id,
         week: s.week,
-        mesocycle,
+        mesocycle: s.mesocycle + 1,
         dayLabel: dayLabel.get(s.day_id) ?? "Workout",
         status: s.status,
         dateIso,
@@ -169,15 +153,34 @@ export default async function HistoryPage() {
     return date >= startDate && date <= endDate
   })
   let entries: SetEntry[] = []
+  const nextDaySoreness = new Map<string, number>()
   if (recentSessions.length > 0) {
-    const { data, error } = await supabase
-      .from("set_entries")
-      .select("*")
-      .eq("user_id", userId)
-      .in("session_id", recentSessions.map((session) => session.id))
-      .order("set_number", { ascending: true })
-    if (error) throw error
-    entries = (data as SetEntry[]) ?? []
+    const recentSessionIds = recentSessions.map((session) => session.id)
+    const [entryResult, sorenessResult] = await Promise.all([
+      supabase
+        .from("set_entries")
+        .select("*")
+        .eq("user_id", userId)
+        .in("session_id", recentSessionIds)
+        .order("set_number", { ascending: true }),
+      supabase
+        .from("muscle_soreness_checkins")
+        .select("session_id,muscle_area,soreness")
+        .eq("user_id", userId)
+        .in("session_id", recentSessionIds),
+    ])
+    if (entryResult.error) throw entryResult.error
+    if (sorenessResult.error) throw sorenessResult.error
+    entries = (entryResult.data as SetEntry[]) ?? []
+    for (const checkin of (sorenessResult.data ?? []) as Pick<
+      MuscleSorenessCheckin,
+      "session_id" | "muscle_area" | "soreness"
+    >[]) {
+      nextDaySoreness.set(
+        sorenessLookupKey(checkin.session_id, checkin.muscle_area),
+        checkin.soreness,
+      )
+    }
   }
 
   const entriesByLog = new Map<string, SetEntry[]>()
@@ -211,9 +214,16 @@ export default async function HistoryPage() {
         feel: {
           pump: log.pump,
           enjoyment: log.enjoyment,
+          pain: log.pain,
+          nextDaySoreness: slot?.muscle_area
+            ? (nextDaySoreness.get(
+                sorenessLookupKey(session.id, slot.muscle_area),
+              ) ?? null)
+            : null,
           soreness: log.soreness,
           recovery: log.recovery,
         },
+        hitRirOverride: log.hit_rir_override,
         performance: log.performance,
         notes: log.notes,
       }

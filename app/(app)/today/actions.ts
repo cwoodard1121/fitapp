@@ -13,15 +13,16 @@ import { revalidatePath } from 'next/cache'
 
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId, seedDefaultProgram } from '@/lib/data'
-import { aggregateFromEntries } from '@/lib/data/mappers'
 import { appCalendarDate } from '@/lib/data/soreness'
 
 const ROUTE = '/today'
 
 const nullableRating = z.union([z.number().finite().min(1).max(10), z.null()])
 const nullableLoad = z.union([z.number().finite().min(0).max(2000), z.null()])
+const nullableSets = z.union([z.number().int().min(1).max(30), z.null()])
 const nullableReps = z.union([z.number().int().min(1).max(100), z.null()])
 const nullableRir = z.union([z.number().finite().min(0).max(10), z.null()])
+const nullablePain = z.union([z.number().int().min(0).max(10), z.null()])
 const performanceSchema = z.enum(['Up', 'Same', 'Down']).nullable()
 const rirOverrideSchema = z.enum(['Y', 'N', 'Skip']).nullable()
 
@@ -40,6 +41,10 @@ const setEntriesSchema = z.object({
   slotId: z.string().uuid(),
   week: z.number().int().positive(),
   entries: z.array(setRowSchema).max(30),
+  targetLoad: nullableLoad,
+  targetSets: nullableSets,
+  targetReps: nullableReps,
+  targetRir: nullableRir,
 })
 
 export type SetEntriesInput = z.infer<typeof setEntriesSchema>
@@ -57,53 +62,24 @@ export async function saveSetEntries(
     return { ok: false, error: 'Those sets did not look right.' }
   }
   const v = parsed.data
-  // A performed set has reps (load alone = a prefilled row not yet done).
-  // Renumber 1..n in order.
-  const real = v.entries.filter((e) => e.reps != null)
 
   try {
     const supabase = await createClient()
     const userId = await requireUserId(supabase)
 
-    // Replace strategy: clear this slot's sets, then insert the current list.
-    const { error: delErr } = await supabase
-      .from('set_entries')
-      .delete()
-      .eq('user_id', userId)
-      .eq('session_id', v.sessionId)
-      .eq('slot_id', v.slotId)
-    if (delErr) throw delErr
-
-    if (real.length > 0) {
-      const rows = real.map((e, i) => ({
-        user_id: userId,
-        session_id: v.sessionId,
-        slot_id: v.slotId,
-        set_number: i + 1,
-        load: e.load,
-        reps: e.reps,
-        rir: e.rir,
-      }))
-      const { error: insErr } = await supabase.from('set_entries').insert(rows)
-      if (insErr) throw insErr
-    }
-
-    // Recompute the aggregate cache the engine reads (don't touch readiness).
-    const agg = aggregateFromEntries(real)
-    const { error: aggErr } = await supabase.from('set_logs').upsert(
-      {
-        user_id: userId,
-        session_id: v.sessionId,
-        slot_id: v.slotId,
-        week: v.week,
-        actual_load: agg.actual_load,
-        best_reps: agg.best_reps,
-        actual_sets: agg.actual_sets,
-        actual_rir: agg.actual_rir,
-      },
-      { onConflict: 'session_id,slot_id' },
-    )
-    if (aggErr) throw aggErr
+    // The RPC owns the replacement transaction, relationship checks, aggregate
+    // cache, and target snapshot. No partial delete/insert state can escape.
+    const { error } = await supabase.rpc('save_training_set_entries_atomic', {
+      p_session_id: v.sessionId,
+      p_slot_id: v.slotId,
+      p_week: v.week,
+      p_entries: v.entries,
+      p_target_load: v.targetLoad,
+      p_target_sets: v.targetSets,
+      p_target_reps: v.targetReps,
+      p_target_rir: v.targetRir,
+    })
+    if (error) throw error
 
     await bumpSessionInProgress(supabase, userId, v.sessionId)
 
@@ -124,7 +100,6 @@ const sessionReadinessSchema = z.object({
   sessionId: z.string().uuid(),
   week: z.number().int().positive(),
   recovery: nullableRating,
-  allSlotIds: z.array(z.string().uuid()).min(1),
 })
 
 export type SessionReadinessInput = z.infer<typeof sessionReadinessSchema>
@@ -142,19 +117,11 @@ export async function saveSessionReadiness(
     const supabase = await createClient()
     const userId = await requireUserId(supabase)
 
-    // Systemic recovery is the same for the whole session, so it goes onto every
-    // exercise of the day. Upserting just this column preserves each slot's sets,
-    // soreness, and outcome ratings.
-    const rows = v.allSlotIds.map((id) => ({
-      user_id: userId,
-      session_id: v.sessionId,
-      slot_id: id,
-      week: v.week,
-      recovery: v.recovery,
-    }))
-    const { error } = await supabase
-      .from('set_logs')
-      .upsert(rows, { onConflict: 'session_id,slot_id' })
+    const { error } = await supabase.rpc('save_training_session_readiness', {
+      p_session_id: v.sessionId,
+      p_week: v.week,
+      p_recovery: v.recovery,
+    })
     if (error) throw error
 
     await bumpSessionInProgress(supabase, userId, v.sessionId)
@@ -167,8 +134,8 @@ export async function saveSessionReadiness(
 }
 
 /* ------------------------------------------------------------------ */
-/* Exercise readiness — per-exercise: pump / soreness / performance /  */
-/* enjoyment / notes. Soreness is muscle-specific, so it lives here.   */
+/* Exercise feedback — per-exercise: pump / pain / performance /       */
+/* Pain is immediate; next-day soreness is stored separately by muscle. */
 /* ------------------------------------------------------------------ */
 
 const readinessSchema = z.object({
@@ -176,11 +143,15 @@ const readinessSchema = z.object({
   slotId: z.string().uuid(),
   week: z.number().int().positive(),
   pump: nullableRating,
-  soreness: nullableRating,
+  pain: nullablePain,
   enjoyment: nullableRating,
   performance: performanceSchema,
   hitRirOverride: rirOverrideSchema,
   notes: z.string().max(2000).nullable(),
+  targetLoad: nullableLoad,
+  targetSets: nullableSets,
+  targetReps: nullableReps,
+  targetRir: nullableRir,
 })
 
 export type ReadinessInput = z.infer<typeof readinessSchema>
@@ -198,23 +169,21 @@ export async function saveReadiness(
     const supabase = await createClient()
     const userId = await requireUserId(supabase)
 
-    // Per-exercise outcome ratings. Upserting just these columns preserves the
-    // slot's sets and the session-level recovery/soreness.
-    const { error } = await supabase.from('set_logs').upsert(
-      {
-        user_id: userId,
-        session_id: v.sessionId,
-        slot_id: v.slotId,
-        week: v.week,
-        pump: v.pump,
-        soreness: v.soreness,
-        enjoyment: v.enjoyment,
-        performance: v.performance,
-        hit_rir_override: v.hitRirOverride,
-        notes: v.notes,
-      },
-      { onConflict: 'session_id,slot_id' },
-    )
+    const { error } = await supabase.rpc('save_training_exercise_feedback', {
+      p_session_id: v.sessionId,
+      p_slot_id: v.slotId,
+      p_week: v.week,
+      p_pump: v.pump,
+      p_pain: v.pain,
+      p_enjoyment: v.enjoyment,
+      p_performance: v.performance,
+      p_hit_rir_override: v.hitRirOverride,
+      p_notes: v.notes,
+      p_target_load: v.targetLoad,
+      p_target_sets: v.targetSets,
+      p_target_reps: v.targetReps,
+      p_target_rir: v.targetRir,
+    })
     if (error) throw error
 
     await bumpSessionInProgress(supabase, userId, v.sessionId)

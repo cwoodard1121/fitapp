@@ -85,6 +85,8 @@ export interface Program {
   is_active: boolean;
   /** Per-program mesocycle anchor; the active program's date drives "current week". */
   start_date: string | null;
+  /** Immutable schedule epoch; rotates when timing metadata is re-anchored. */
+  schedule_version: string;
   /** Retired templates stay attached to historical sessions but leave active UI. */
   archived_at: string | null;
   created_at: string;
@@ -104,6 +106,8 @@ export interface ExerciseSlot {
   id: string;
   day_id: string;
   user_id: string;
+  /** Stable root identity retained across history-preserving program edits. */
+  lineage_slot_id?: string | null;
   slot_code: string;
   order_index: number;
   exercise_name: string;
@@ -126,6 +130,10 @@ export interface Session {
   user_id: string;
   program_id: string;
   day_id: string;
+  /** Program schedule epoch this session was created under. */
+  schedule_version: string;
+  /** Zero-based training cycle number. Week numbers repeat inside each cycle. */
+  mesocycle: number;
   week: number;
   performed_at: string | null;
   status: SessionStatus;
@@ -143,8 +151,23 @@ export interface SetLog {
   best_reps: number | null;
   actual_sets: number | null;
   actual_rir: number | null;
+  /** Prescription shown when these set entries were last saved. */
+  target_load: number | null;
+  target_sets: number | null;
+  target_reps: number | null;
+  target_rir: number | null;
   hit_rir_override: RirOverride | null;
   pump: number | null;
+  /** Pain reported immediately after this exercise: 0 = none, 10 = severe. */
+  pain: number | null;
+  /** Joined day-after muscle soreness used by reconstructed engine reads. */
+  next_day_soreness?: number | null;
+  /** Joined session context for chronological analytics (not DB columns). */
+  session_performed_at?: string | null;
+  session_created_at?: string | null;
+  session_mesocycle?: number | null;
+  session_schedule_version?: string | null;
+  session_program_id?: string | null;
   enjoyment: number | null;
   soreness: number | null;
   recovery: number | null;

@@ -12,6 +12,11 @@ import {
   buildTodayView,
 } from "@/lib/data"
 import { epley1RM } from "@/lib/engine/engine"
+import { attachNextDaySorenessToLogs } from "@/lib/data/soreness"
+import {
+  hasExerciseHistorySignal,
+  mergeSessionExerciseSlots,
+} from "@/lib/data/training-history"
 import type {
   ExerciseSlot,
   Program,
@@ -80,15 +85,22 @@ export default async function SessionDetailPage({
       getSetLogsForSession(session.id),
     ])
 
-  // A program reset can re-home a completed session while intentionally
-  // leaving unmatched lift logs on their historical slots. Include those rows
-  // in session detail so no completed exercise disappears from History.
-  const daySlotIds = new Set(daySlots.map((slot) => slot.id))
+  // Completed sessions show only exercises that actually received set or
+  // exercise-specific feedback. This prevents a later routine edit from
+  // backfilling old History pages with future slots. Retired slots that did
+  // receive feedback are fetched explicitly so their history remains visible.
+  const exerciseLogs = Object.values(logs).filter(hasExerciseHistorySignal)
+  const exerciseLogSlotIds = new Set(exerciseLogs.map((log) => log.slot_id))
+  const visibleDaySlots =
+    session.status === "done"
+      ? daySlots.filter((slot) => exerciseLogSlotIds.has(slot.id))
+      : daySlots
+  const visibleDaySlotIds = new Set(visibleDaySlots.map((slot) => slot.id))
   const historicalSlotIds = [
     ...new Set(
-      Object.values(logs)
+      exerciseLogs
         .map((log) => log.slot_id)
-        .filter((slotId) => !daySlotIds.has(slotId)),
+        .filter((slotId) => !visibleDaySlotIds.has(slotId)),
     ),
   ]
   let historicalSlots: ExerciseSlot[] = []
@@ -102,7 +114,23 @@ export default async function SessionDetailPage({
     if (error) throw error
     historicalSlots = (data ?? []) as ExerciseSlot[]
   }
-  const slots = [...daySlots, ...historicalSlots]
+  const slots = mergeSessionExerciseSlots(
+    visibleDaySlots,
+    historicalSlots,
+    exerciseLogSlotIds,
+  )
+  const visibleSlotIds = new Set(slots.map((slot) => slot.id))
+  const logsWithNextDaySoreness = await attachNextDaySorenessToLogs(
+    supabase,
+    userId,
+    Object.values(logs),
+    slots,
+  )
+  const visibleLogs = Object.fromEntries(
+    logsWithNextDaySoreness
+      .filter((log) => visibleSlotIds.has(log.slot_id))
+      .map((log) => [log.slot_id, log]),
+  )
 
   const program = programRow as Program | null
   const day = dayRow as ProgramDay | null
@@ -112,7 +140,7 @@ export default async function SessionDetailPage({
   const views = await buildTodayView(
     session,
     slots,
-    logs,
+    visibleLogs,
     deloadWeek,
     profile?.readiness_weights,
   )
@@ -120,14 +148,15 @@ export default async function SessionDetailPage({
   // e1RM trajectory per slot, up to and including this session's week.
   const slotIds = slots.map((s) => s.id)
   const e1rmBySlot = new Map<string, number[]>()
+  const dateIso = session.performed_at ?? session.created_at
   if (slotIds.length > 0) {
     const { data: histRows, error: hErr } = await supabase
       .from("set_logs")
       .select("*")
       .in("slot_id", slotIds)
       .eq("user_id", userId)
-      .lte("week", session.week)
-      .order("week", { ascending: true })
+      .lte("created_at", dateIso)
+      .order("created_at", { ascending: true })
     if (hErr) throw hErr
     for (const row of (histRows as SetLog[]) ?? []) {
       if (row.actual_load == null || row.best_reps == null) continue
@@ -137,7 +166,6 @@ export default async function SessionDetailPage({
     }
   }
 
-  const dateIso = session.performed_at ?? session.created_at
   const date = new Date(dateIso)
   const dateLabel = Number.isNaN(date.getTime())
     ? "—"
@@ -181,7 +209,7 @@ export default async function SessionDetailPage({
           {dateLabel}
           {session.performed_at == null ? " · not dated" : ""}
           {" · "}
-          {`Mesocycle wk ${session.week}`}
+          {`Mesocycle ${session.mesocycle + 1} · Week ${session.week}`}
         </p>
 
         <div className="mt-2 flex items-end gap-6 rounded-lg border border-border bg-surface p-4">

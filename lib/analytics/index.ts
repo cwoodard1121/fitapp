@@ -13,10 +13,13 @@ import type {
   ExerciseSlot,
   Goal,
   NutritionLog,
+  Session,
   SetLog,
 } from '@/lib/types'
-import { getActiveProgram, getProfile, getProgramFull, requireUserId } from '@/lib/data'
+import { getActiveProgram, getProfile, requireUserId } from '@/lib/data'
 import { createClient } from '@/lib/supabase/server'
+import { attachNextDaySorenessToLogs } from '@/lib/data/soreness'
+import { attachSessionContextToLogs } from '@/lib/data/training-history'
 
 import { computeAnalytics } from './compute'
 import type { TrainingAnalytics } from './types'
@@ -43,19 +46,22 @@ export async function gatherAnalytics(): Promise<TrainingAnalytics> {
   const userId = await requireUserId(supabase)
 
   const [program, profile] = await Promise.all([getActiveProgram(), getProfile()])
-  let slots: ExerciseSlot[] = []
-  if (program) {
-    const full = await getProgramFull(program.id)
-    slots = full?.slots ?? []
-  }
 
-  const [logsRes, goalsRes, bodyRes, nutritionRes, blockRes] = await Promise.all([
+  const [
+    logsRes,
+    slotsRes,
+    sessionsRes,
+    goalsRes,
+    bodyRes,
+    nutritionRes,
+    blockRes,
+  ] = await Promise.all([
     supabase
       .from('set_logs')
       .select('*')
-      .eq('user_id', userId)
-      .order('week', { ascending: true })
-      .order('created_at', { ascending: true }),
+      .eq('user_id', userId),
+    supabase.from('exercise_slots').select('*').eq('user_id', userId),
+    supabase.from('sessions').select('*').eq('user_id', userId),
     supabase.from('goals').select('*').eq('user_id', userId),
     supabase
       .from('body_metrics')
@@ -78,7 +84,17 @@ export async function gatherAnalytics(): Promise<TrainingAnalytics> {
       .limit(1),
   ])
 
-  const logs = (logsRes.data as SetLog[]) ?? []
+  const slots = (slotsRes.data as ExerciseSlot[]) ?? []
+  const timedLogs = attachSessionContextToLogs(
+    (logsRes.data as SetLog[]) ?? [],
+    (sessionsRes.data as Session[]) ?? [],
+  )
+  const logs = await attachNextDaySorenessToLogs(
+    supabase,
+    userId,
+    timedLogs,
+    slots,
+  )
   const goals = (goalsRes.data as Goal[]) ?? []
   const bodyMetrics = (bodyRes.data as BodyMetric[]) ?? []
   const nutrition = (nutritionRes.data as NutritionLog[]) ?? []

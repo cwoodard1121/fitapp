@@ -71,6 +71,39 @@ export async function getSorenessBySessionAndMuscle(
 }
 
 /**
+ * Join muscle-level next-day feedback onto set logs for pure engine/analytics
+ * consumers that otherwise only receive flat SetLog rows.
+ */
+export async function attachNextDaySorenessToLogs(
+  supabase: SupabaseClient,
+  userId: string,
+  logs: SetLog[],
+  slots: ExerciseSlot[],
+): Promise<SetLog[]> {
+  if (logs.length === 0 || slots.length === 0) return logs
+
+  const sessionIds = [...new Set(logs.map((log) => log.session_id))]
+  const soreness = await getSorenessBySessionAndMuscle(
+    supabase,
+    userId,
+    sessionIds,
+  )
+  const muscleBySlot = new Map(
+    slots.map((slot) => [slot.id, slot.muscle_area?.trim() || null]),
+  )
+
+  return logs.map((log) => {
+    const muscleArea = muscleBySlot.get(log.slot_id)
+    return {
+      ...log,
+      next_day_soreness: muscleArea
+        ? (soreness.get(sorenessLookupKey(log.session_id, muscleArea)) ?? null)
+        : null,
+    }
+  })
+}
+
+/**
  * Return the most recent completed session from a prior app-calendar day that
  * still needs muscle-level soreness feedback. Only muscles with actual logged
  * work are included; an old completed-but-empty session never creates a prompt.
