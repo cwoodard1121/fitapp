@@ -29,6 +29,7 @@ describe('DEFAULT_PROGRAM', () => {
         ['Barbell Row', 2, 6, 10],
         ['Incline Dumbbell Bench Press', 2, 6, 12],
         ['Cable Lateral Raise', 2, 8, 15],
+        ['Dumbbell Wrist Curl', 3, 10, 15],
       ],
       [
         ['Barbell Squat', 3, 6, 12],
