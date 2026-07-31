@@ -8,13 +8,13 @@ import {
   getProgramFull,
   getSessionForDay,
   getSetLogsForSession,
+  getPendingSorenessCheckIns,
   ensureWeekSessions,
   buildTodayView,
   weekForDate,
   mesocycleNumber,
   requireUserId,
 } from '@/lib/data'
-import { getPendingSorenessCheckin } from '@/lib/data/soreness'
 import type {
   BodyMetric,
   ExerciseSlot,
@@ -45,7 +45,7 @@ import { SlotRow } from '@/components/today/slot-row'
 import { SessionBar } from '@/components/today/session-bar'
 import { EmptyState } from '@/components/today/empty-state'
 import { WeeklyNavyPrompt } from '@/components/today/weekly-navy-prompt'
-import { NextDaySorenessCard } from '@/components/today/next-day-soreness-card'
+import { SorenessCheckIn } from '@/components/today/soreness-check-in'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,10 +56,9 @@ export default async function TodayPage({
 }) {
   const { day: dayParam } = await searchParams
 
-  const [profile, programs, pendingSoreness] = await Promise.all([
+  const [profile, programs] = await Promise.all([
     getProfile(),
     getPrograms(),
-    getPendingSorenessCheckin(),
   ])
   const program = programs.find((p) => p.is_active) ?? null
 
@@ -67,12 +66,16 @@ export default async function TodayPage({
   const today = format(new Date(), 'yyyy-MM-dd')
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
-  const { data: bodyRows, error: bodyError } = await supabase
-    .from('body_metrics')
-    .select('*')
-    .eq('user_id', userId)
-    .order('measured_on', { ascending: false })
-    .limit(30)
+  const [bodyResult, sorenessPrompts] = await Promise.all([
+    supabase
+      .from('body_metrics')
+      .select('*')
+      .eq('user_id', userId)
+      .order('measured_on', { ascending: false })
+      .limit(30),
+    getPendingSorenessCheckIns(),
+  ])
+  const { data: bodyRows, error: bodyError } = bodyResult
   if (bodyError) throw bodyError
   const bodyEntries = (bodyRows ?? []) as BodyMetric[]
   const weeklyNavyDue =
@@ -83,15 +86,10 @@ export default async function TodayPage({
     return (
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <Header unit={unit} />
-        {pendingSoreness ? (
-          <NextDaySorenessCard
-            key={pendingSoreness.sessionId}
-            checkin={pendingSoreness}
-          />
-        ) : null}
         {weeklyNavyDue ? (
           <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
         ) : null}
+        <SorenessCheckIn prompts={sorenessPrompts} />
         <EmptyState />
       </div>
     )
@@ -102,15 +100,10 @@ export default async function TodayPage({
     return (
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <Header unit={unit} />
-        {pendingSoreness ? (
-          <NextDaySorenessCard
-            key={pendingSoreness.sessionId}
-            checkin={pendingSoreness}
-          />
-        ) : null}
         {weeklyNavyDue ? (
           <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
         ) : null}
+        <SorenessCheckIn prompts={sorenessPrompts} />
         <EmptyState />
       </div>
     )
@@ -288,18 +281,13 @@ export default async function TodayPage({
         </div>
       </Header>
 
-      {pendingSoreness ? (
-        <NextDaySorenessCard
-          key={pendingSoreness.sessionId}
-          checkin={pendingSoreness}
-        />
-      ) : null}
-
       {weeklyNavyDue ? (
         <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
       ) : null}
 
       <ActiveProgramSelect programs={programs} activeId={program.id} />
+
+      <SorenessCheckIn prompts={sorenessPrompts} />
 
       {latestRecovery ? (
         <div className="mt-4">

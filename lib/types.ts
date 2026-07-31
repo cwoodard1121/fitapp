@@ -176,6 +176,16 @@ export interface SetLog {
   created_at: string;
 }
 
+/** A muscle trained one or two calendar days ago that is due for today's check-in. */
+export interface SorenessCheckInPrompt {
+  sourceSessionId: string;
+  muscleKey: string;
+  muscleArea: string;
+  performedAt: string;
+  daysAfter: 1 | 2;
+  exerciseNames: string[];
+}
+
 /** set_entries — one row per actual set; unique (session_id, slot_id, set_number) */
 export interface SetEntry {
   id: string;

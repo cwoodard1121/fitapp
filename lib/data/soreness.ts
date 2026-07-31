@@ -8,7 +8,9 @@ import type {
   ProgramDay,
   Session,
   SetLog,
+  SorenessCheckInPrompt,
 } from '@/lib/types'
+import { buildSorenessCheckInPrompts } from '@/lib/soreness/checkins'
 
 const CHECKIN_LOOKBACK_DAYS = 7
 const APP_TIME_ZONE = process.env.APP_TIME_ZONE || 'America/Toronto'
@@ -65,7 +67,8 @@ export async function getSorenessBySessionAndMuscle(
     MuscleSorenessCheckin,
     'session_id' | 'muscle_area' | 'soreness'
   >[]) {
-    result.set(sorenessLookupKey(row.session_id, row.muscle_area), row.soreness)
+    const key = sorenessLookupKey(row.session_id, row.muscle_area)
+    result.set(key, Math.max(result.get(key) ?? 0, row.soreness))
   }
   return result
 }
@@ -258,4 +261,88 @@ export async function getPendingSorenessCheckin(): Promise<PendingSorenessChecki
   }
 
   return null
+}
+
+/**
+ * Find muscles with performed work on either of the previous two calendar days
+ * that have not been checked in today. Reads are intentionally bounded before
+ * the in-memory muscle grouping.
+ */
+export async function getPendingSorenessCheckIns(): Promise<
+  SorenessCheckInPrompt[]
+> {
+  const supabase = await createClient()
+  const userId = await requireUserId(supabase)
+  const today = appCalendarDate(new Date())
+  const earliest = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+
+  const [sessionsResult, slotsResult, reportsResult] = await Promise.all([
+    supabase
+      .from('sessions')
+      .select('id,performed_at')
+      .eq('user_id', userId)
+      .eq('status', 'done')
+      .not('performed_at', 'is', null)
+      .gte('performed_at', earliest)
+      .lt('performed_at', new Date().toISOString())
+      .order('performed_at', { ascending: false }),
+    supabase
+      .from('exercise_slots')
+      .select('id,exercise_name,muscle_area')
+      .eq('user_id', userId),
+    supabase
+      .from('muscle_soreness_checkins')
+      .select('muscle_area')
+      .eq('user_id', userId)
+      .eq('checked_on', today),
+  ])
+
+  if (sessionsResult.error) throw sessionsResult.error
+  if (slotsResult.error) throw slotsResult.error
+  if (reportsResult.error) throw reportsResult.error
+
+  // Normalize timestamps to their app-calendar dates before the pure helper
+  // compares days. This keeps Toronto day boundaries stable on UTC hosts.
+  const sessions = ((sessionsResult.data ?? []) as Pick<
+    Session,
+    'id' | 'performed_at'
+  >[]).map((session) => ({
+    ...session,
+    performed_at: session.performed_at
+      ? `${appCalendarDate(session.performed_at)}T12:00:00.000Z`
+      : null,
+  }))
+  if (sessions.length === 0) return []
+
+  const { data: logsData, error: logsError } = await supabase
+    .from('set_logs')
+    .select('session_id,slot_id,actual_load,best_reps,actual_sets,actual_rir')
+    .eq('user_id', userId)
+    .in(
+      'session_id',
+      sessions.map((session) => session.id),
+    )
+  if (logsError) throw logsError
+
+  return buildSorenessCheckInPrompts({
+    today,
+    sessions,
+    logs: (logsData ?? []) as Pick<
+      SetLog,
+      | 'session_id'
+      | 'slot_id'
+      | 'actual_load'
+      | 'best_reps'
+      | 'actual_sets'
+      | 'actual_rir'
+    >[],
+    slots: (slotsResult.data ?? []) as Pick<
+      ExerciseSlot,
+      'id' | 'exercise_name' | 'muscle_area'
+    >[],
+    reportedMuscleKeys: ((reportsResult.data ?? []) as Pick<
+      MuscleSorenessCheckin,
+      'muscle_area'
+    >[]).map((report) => report.muscle_area),
+  })
 }

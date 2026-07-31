@@ -17,6 +17,7 @@ export {
 } from '@/lib/data/programs'
 export { seedDefaultProgram } from '@/lib/data/seed'
 export { weekForDate, mesocycleNumber } from '@/lib/data/week'
+export { getPendingSorenessCheckIns } from '@/lib/data/soreness'
 export {
   ensureWeekSessions,
   getSessionForDay,
