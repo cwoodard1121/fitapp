@@ -13,6 +13,7 @@ import {
   buildTodayView,
   weekForDate,
   mesocycleNumber,
+  resolveTrainingWeek,
   requireUserId,
 } from '@/lib/data'
 import type {
@@ -39,6 +40,7 @@ import { RecoveryStrip } from '@/components/today/recovery-strip'
 import { AnalysisFocus } from '@/components/analysis/analysis-focus'
 import { ExerciseAdvice } from '@/components/today/exercise-advice'
 import { ActiveProgramSelect } from '@/components/program/active-program-select'
+import { WeekSelector } from '@/components/today/week-selector'
 import { DaySelector } from '@/components/today/day-selector'
 import { SessionReadiness } from '@/components/today/session-readiness'
 import { SlotRow } from '@/components/today/slot-row'
@@ -52,9 +54,13 @@ export const dynamic = 'force-dynamic'
 export default async function TodayPage({
   searchParams,
 }: {
-  searchParams: Promise<{ day?: string }>
+  searchParams: Promise<{
+    day?: string | string[]
+    week?: string | string[]
+  }>
 }) {
-  const { day: dayParam } = await searchParams
+  const params = await searchParams
+  const dayParam = typeof params.day === 'string' ? params.day : undefined
 
   const [profile, programs] = await Promise.all([
     getProfile(),
@@ -111,7 +117,12 @@ export default async function TodayPage({
 
   // Each program owns its mesocycle anchor; a null start_date means Week 1.
   const startDate = program.start_date
-  const week = weekForDate(startDate, program.length_weeks)
+  const currentWeek = weekForDate(startDate, program.length_weeks)
+  const week = resolveTrainingWeek(
+    params.week,
+    currentWeek,
+    program.length_weeks,
+  )
   const meso = mesocycleNumber(startDate, program.length_weeks)
   const isDeload = week === program.deload_week
 
@@ -287,6 +298,14 @@ export default async function TodayPage({
 
       <ActiveProgramSelect programs={programs} activeId={program.id} />
 
+      <div className="mt-4">
+        <WeekSelector
+          lengthWeeks={program.length_weeks}
+          selectedWeek={week}
+          currentWeek={currentWeek}
+        />
+      </div>
+
       <SorenessCheckIn prompts={sorenessPrompts} />
 
       {latestRecovery ? (
@@ -306,6 +325,7 @@ export default async function TodayPage({
           days={full.days}
           selectedDayId={selectedDay.id}
           statusByDay={statusByDay}
+          weekOverride={week === currentWeek ? undefined : week}
         />
       </div>
 

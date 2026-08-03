@@ -150,15 +150,18 @@ function WeekCard({ row }: { row: WeekRow }) {
         ) : null}
       </ul>
 
-      {row.isCurrent ? (
-        <Link
-          href="/today"
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-signal px-4 text-sm font-semibold text-signal-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-        >
-          Go to today
-          <ArrowRight className="h-4 w-4" aria-hidden />
-        </Link>
-      ) : null}
+      <Link
+        href={row.isCurrent ? '/today' : `/today?week=${row.week}`}
+        className={cn(
+          'inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
+          row.isCurrent
+            ? 'border-signal bg-signal text-signal-foreground hover:bg-signal/90'
+            : 'border-border bg-background text-foreground hover:bg-border/50',
+        )}
+      >
+        {row.isCurrent ? 'Open current week' : `Open week ${row.week}`}
+        <ArrowRight className="h-4 w-4" aria-hidden />
+      </Link>
     </div>
   )
 }

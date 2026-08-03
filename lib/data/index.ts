@@ -16,7 +16,11 @@ export {
   setProgramStartDate,
 } from '@/lib/data/programs'
 export { seedDefaultProgram } from '@/lib/data/seed'
-export { weekForDate, mesocycleNumber } from '@/lib/data/week'
+export {
+  weekForDate,
+  mesocycleNumber,
+  resolveTrainingWeek,
+} from '@/lib/data/week'
 export { getPendingSorenessCheckIns } from '@/lib/data/soreness'
 export {
   ensureWeekSessions,

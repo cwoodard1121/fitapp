@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { mesocycleNumber, weekForDate } from './week'
+import { mesocycleNumber, resolveTrainingWeek, weekForDate } from './week'
 
 describe('calendar-based training weeks', () => {
   it('rolls the week at the athlete calendar midnight, not server UTC midnight', () => {
@@ -43,5 +43,26 @@ describe('calendar-based training weeks', () => {
         'America/Toronto',
       ),
     ).toBe(1)
+  })
+})
+
+describe('manual training week selection', () => {
+  it('accepts every configured week boundary', () => {
+    expect(resolveTrainingWeek('1', 3, 5)).toBe(1)
+    expect(resolveTrainingWeek('5', 3, 5)).toBe(5)
+  })
+
+  it('falls back to the calendar week for missing or malformed values', () => {
+    expect(resolveTrainingWeek(undefined, 3, 5)).toBe(3)
+    expect(resolveTrainingWeek(['2', '4'], 3, 5)).toBe(3)
+    expect(resolveTrainingWeek('0', 3, 5)).toBe(3)
+    expect(resolveTrainingWeek('-1', 3, 5)).toBe(3)
+    expect(resolveTrainingWeek('2.5', 3, 5)).toBe(3)
+    expect(resolveTrainingWeek('week-2', 3, 5)).toBe(3)
+    expect(resolveTrainingWeek('6', 3, 5)).toBe(3)
+  })
+
+  it('uses week one when the fallback is outside the configured range', () => {
+    expect(resolveTrainingWeek('999', 9, 0)).toBe(1)
   })
 })

@@ -1,7 +1,7 @@
 /**
- * Mesocycle week math. The "current week" is derived from the program start
- * date (profiles.start_date) so the Today view always opens on the right week,
- * and mesocycles repeat: week cycles 1..length_weeks.
+ * Mesocycle week math. The default "current week" is derived from the program
+ * start date (profiles.start_date), and mesocycles repeat: week cycles
+ * 1..length_weeks. Today may temporarily select another validated week.
  */
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
@@ -87,4 +87,29 @@ export function mesocycleNumber(
   if (weeksElapsed == null) return 0
   const len = Math.max(1, lengthWeeks)
   return Math.floor(weeksElapsed / len)
+}
+
+/**
+ * Resolve an optional week query parameter without allowing a URL to create
+ * sessions outside the program's configured week range.
+ */
+export function resolveTrainingWeek(
+  value: string | string[] | null | undefined,
+  currentWeek: number,
+  lengthWeeks: number,
+): number {
+  const len = Math.max(1, Math.trunc(lengthWeeks))
+  const fallback =
+    Number.isInteger(currentWeek) && currentWeek >= 1 && currentWeek <= len
+      ? currentWeek
+      : 1
+
+  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) {
+    return fallback
+  }
+
+  const requested = Number(value)
+  return Number.isSafeInteger(requested) && requested <= len
+    ? requested
+    : fallback
 }

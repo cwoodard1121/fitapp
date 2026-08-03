@@ -8,16 +8,19 @@ interface DaySelectorProps {
   days: ProgramDay[]
   selectedDayId: string
   statusByDay: Record<string, SessionStatus>
+  weekOverride?: number
 }
 
 /**
  * Horizontal day picker across the program's training days. Each chip links to
- * the same route with `?day=<id>`; the server re-renders for the chosen day.
+ * the same route; a manually selected week stays pinned while calendar-current
+ * mode intentionally omits it so the URL can roll forward with time.
  */
 export function DaySelector({
   days,
   selectedDayId,
   statusByDay,
+  weekOverride,
 }: DaySelectorProps) {
   return (
     <nav
@@ -29,10 +32,11 @@ export function DaySelector({
         const status = statusByDay[day.id]
         const done = status === 'done'
         const started = status === 'in_progress'
+        const weekQuery = weekOverride == null ? '' : `week=${weekOverride}&`
         return (
           <Link
             key={day.id}
-            href={`/today?day=${day.id}`}
+            href={`/today?${weekQuery}day=${day.id}`}
             scroll={false}
             aria-current={active ? 'page' : undefined}
             className={cn(
