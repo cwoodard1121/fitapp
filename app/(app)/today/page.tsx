@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { format } from 'date-fns'
 import { CalendarDays } from 'lucide-react'
 
 import {
@@ -9,6 +8,7 @@ import {
   getSessionForDay,
   getSetLogsForSession,
   getPendingSorenessCheckIns,
+  getDailyHabitSummaries,
   ensureWeekSessions,
   buildTodayView,
   weekForDate,
@@ -16,6 +16,7 @@ import {
   resolveTrainingWeek,
   requireUserId,
 } from '@/lib/data'
+import { appCalendarDate } from '@/lib/data/soreness'
 import type {
   BodyMetric,
   ExerciseSlot,
@@ -48,6 +49,7 @@ import { SessionBar } from '@/components/today/session-bar'
 import { EmptyState } from '@/components/today/empty-state'
 import { WeeklyNavyPrompt } from '@/components/today/weekly-navy-prompt'
 import { SorenessCheckIn } from '@/components/today/soreness-check-in'
+import { DailyHabitsCard } from '@/components/today/daily-habits-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,10 +71,10 @@ export default async function TodayPage({
   const program = programs.find((p) => p.is_active) ?? null
 
   const unit = profile?.unit ?? 'lb'
-  const today = format(new Date(), 'yyyy-MM-dd')
+  const today = appCalendarDate(new Date())
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
-  const [bodyResult, sorenessPrompts] = await Promise.all([
+  const [bodyResult, sorenessPrompts, habitSummaries] = await Promise.all([
     supabase
       .from('body_metrics')
       .select('*')
@@ -80,6 +82,7 @@ export default async function TodayPage({
       .order('measured_on', { ascending: false })
       .limit(30),
     getPendingSorenessCheckIns(),
+    getDailyHabitSummaries(supabase, userId, today),
   ])
   const { data: bodyRows, error: bodyError } = bodyResult
   if (bodyError) throw bodyError
@@ -95,6 +98,7 @@ export default async function TodayPage({
         {weeklyNavyDue ? (
           <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
         ) : null}
+        <DailyHabitsCard summaries={habitSummaries} />
         <SorenessCheckIn prompts={sorenessPrompts} />
         <EmptyState />
       </div>
@@ -109,6 +113,7 @@ export default async function TodayPage({
         {weeklyNavyDue ? (
           <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
         ) : null}
+        <DailyHabitsCard summaries={habitSummaries} />
         <SorenessCheckIn prompts={sorenessPrompts} />
         <EmptyState />
       </div>
@@ -295,6 +300,8 @@ export default async function TodayPage({
       {weeklyNavyDue ? (
         <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
       ) : null}
+
+      <DailyHabitsCard summaries={habitSummaries} />
 
       <ActiveProgramSelect programs={programs} activeId={program.id} />
 

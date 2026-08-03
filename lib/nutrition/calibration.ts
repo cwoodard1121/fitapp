@@ -29,6 +29,8 @@ export const CALIBRATION_ESTIMATE_WEIGH_INS = 5
 export const CALIBRATION_ESTIMATE_WEIGHT_SPAN_DAYS = 6
 export const CALIBRATION_RELIABLE_WEIGH_INS = 10
 export const CALIBRATION_RELIABLE_WEIGHT_SPAN_DAYS = 13
+/** A recent six-week window adapts without letting an old calorie regime dominate. */
+export const CALIBRATION_LOOKBACK_DAYS = 42
 
 export interface CalibrationInput {
   /** body_metrics ascending by measured_on. */
@@ -43,6 +45,8 @@ export interface CalibrationInput {
   unit: Unit
   /** Active diet-block start, or the earliest reliable tracking date. */
   windowStart: Date
+  /** Completed days below this intake are treated as under-logged. null = off. */
+  minimumCalories?: number | null
   /** Today's yyyy-MM-dd; today is never used because it is incomplete. */
   today: string
 }
@@ -65,6 +69,9 @@ export interface Calibration {
   status: 'collecting' | 'provisional' | 'ready'
   checklist: CalibrationChecklistItem[]
   stepBaseline: number
+  /** Day the current calibration regime began, before water settling. */
+  calibrationStart: string
+  lookbackDays: number
   analysisStart: string | null
   analysisEnd: string | null
   analysisDays: number
@@ -72,6 +79,7 @@ export interface Calibration {
   stepsLogged: number
   bodyReadings: number
   bodySpanDays: number
+  ignoredLowDays: number
   /** User units/week; positive means losing, negative means gaining. */
   actualWeeklyLoss: number | null
   scaleBasis: 'theil_sen'
@@ -143,6 +151,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
     weightKg,
     unit,
     windowStart,
+    minimumCalories = null,
     today,
   } = input
   const todayDate = parseISO(today)
@@ -159,26 +168,21 @@ export function computeCalibration(input: CalibrationInput): Calibration {
   const availableDays = waterComplete
     ? differenceInCalendarDays(completedEnd, settledStart) + 1
     : 0
-  // Every later completed block day remains in the model. Fourteen days is a
-  // reliability milestone, not a cap on how long the estimate can improve.
-  const analysisDays = Math.max(0, availableDays)
+  // Fourteen days is a reliability milestone, not a fixed estimate. After six
+  // weeks, roll forward so a much older calorie/weight regime cannot dominate
+  // the user's current maintenance.
+  const analysisDays = Math.min(
+    CALIBRATION_LOOKBACK_DAYS,
+    Math.max(0, availableDays),
+  )
   const analysisEnd = analysisDays > 0 ? completedEnd : null
-  const analysisStart = analysisEnd != null ? settledStart : null
+  const analysisStart =
+    analysisEnd != null ? addDays(analysisEnd, -(analysisDays - 1)) : null
   const dates =
     analysisStart && analysisEnd ? calendarDates(analysisStart, analysisEnd) : []
 
   const logsByDate = new Map(logs.map((log) => [log.logged_on, log]))
-  const calories = dates.flatMap((date) => {
-    const value = logsByDate.get(date)?.calories
-    const numeric = Number(value)
-    return value == null || !Number.isFinite(numeric) || numeric < 0 ? [] : [numeric]
-  })
-  const steps = dates.flatMap((date) => {
-    const value = stepsByDate[date]
-    const numeric = Number(value)
-    return value == null || !Number.isFinite(numeric) || numeric < 0 ? [] : [numeric]
-  })
-  const completeTrackingDates = dates.filter((date) => {
+  const pairedTrackingDates = dates.filter((date) => {
     const rawCalories = logsByDate.get(date)?.calories
     const rawSteps = stepsByDate[date]
     const caloriesValue = Number(rawCalories)
@@ -192,6 +196,15 @@ export function computeCalibration(input: CalibrationInput): Calibration {
       stepsValue >= 0
     )
   })
+  const completeTrackingDates = pairedTrackingDates.filter((date) => {
+    if (minimumCalories == null) return true
+    return Number(logsByDate.get(date)?.calories) >= minimumCalories
+  })
+  const ignoredLowDays = pairedTrackingDates.length - completeTrackingDates.length
+  const calories = completeTrackingDates.map((date) =>
+    Number(logsByDate.get(date)!.calories),
+  )
+  const steps = completeTrackingDates.map((date) => Number(stepsByDate[date]))
 
   const weightPoints: WeightPoint[] = analysisStart && analysisEnd
     ? bodyEntries
@@ -245,7 +258,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
       label: 'Water settling',
       complete: waterComplete,
       detail: waterComplete
-        ? 'First 6 block days excluded'
+        ? 'First 6 calibration days excluded'
         : `${settlingDays}/${CALIBRATION_SETTLE_DAYS} days`,
     },
     {
@@ -255,7 +268,9 @@ export function computeCalibration(input: CalibrationInput): Calibration {
       detail: `${Math.min(
         CALIBRATION_ESTIMATE_DAYS,
         completeTrackingDates.length,
-      )}/${CALIBRATION_ESTIMATE_DAYS} complete calorie + step days`,
+      )}/${CALIBRATION_ESTIMATE_DAYS} complete calorie + step days${
+        ignoredLowDays > 0 ? ` · ${ignoredLowDays} low ignored` : ''
+      }`,
     },
     {
       key: 'scale',
@@ -323,6 +338,8 @@ export function computeCalibration(input: CalibrationInput): Calibration {
     status: ready ? 'ready' : canEstimate ? 'provisional' : 'collecting',
     checklist,
     stepBaseline,
+    calibrationStart: dateKey(windowStart),
+    lookbackDays: CALIBRATION_LOOKBACK_DAYS,
     analysisStart: analysisStart ? dateKey(analysisStart) : null,
     analysisEnd: analysisEnd ? dateKey(analysisEnd) : null,
     analysisDays,
@@ -330,6 +347,7 @@ export function computeCalibration(input: CalibrationInput): Calibration {
     stepsLogged: steps.length,
     bodyReadings: weightPoints.length,
     bodySpanDays,
+    ignoredLowDays,
     actualWeeklyLoss,
     scaleBasis: 'theil_sen',
     avgCalories,

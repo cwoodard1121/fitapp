@@ -23,6 +23,10 @@ export {
 } from '@/lib/data/week'
 export { getPendingSorenessCheckIns } from '@/lib/data/soreness'
 export {
+  getDailyHabitSummaries,
+  type DailyHabitSummary,
+} from '@/lib/data/habits'
+export {
   ensureWeekSessions,
   getSessionForDay,
   getSetLogsForSession,

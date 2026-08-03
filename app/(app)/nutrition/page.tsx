@@ -1,7 +1,8 @@
-import { format, parseISO } from 'date-fns'
+import { parseISO } from 'date-fns'
 
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId, getProfile } from '@/lib/data'
+import { appCalendarDate } from '@/lib/data/soreness'
 import type { Block, BodyMetric, NutritionLog } from '@/lib/types'
 import { computeCalibration, type Calibration } from '@/lib/nutrition/calibration'
 import {
@@ -28,7 +29,7 @@ export default async function NutritionPage() {
   const stepBaseline = profile?.maintenance_step_baseline ?? DEFAULT_STEP_BASELINE
   const minCalories = profile ? profile.nutrition_min_calories : 1200
 
-  const today = format(new Date(), 'yyyy-MM-dd')
+  const today = appCalendarDate(new Date())
 
   // Active diet block (kind=diet, is_active) supplies the targets we measure
   // today's intake against. There should be at most one.
@@ -83,11 +84,18 @@ export default async function NutritionPage() {
     ...bodyMetrics.map((entry) => entry.measured_on),
   ].sort()
   const observedStart = observedDates[0] ? parseISO(observedDates[0]) : parseISO(today)
-  const calibrationStart = activeBlock?.start_date
-    ? parseISO(activeBlock.start_date)
-    : observedStart > TRACKING_START
-      ? observedStart
-      : TRACKING_START
+  const resetStartedOn = profile?.maintenance_calibration_started_at
+    ? appCalendarDate(profile.maintenance_calibration_started_at)
+    : null
+  const calibrationStart = [
+    TRACKING_START,
+    observedStart,
+    activeBlock?.start_date ? parseISO(activeBlock.start_date) : null,
+    resetStartedOn ? parseISO(resetStartedOn) : null,
+  ].reduce<Date>((latest, candidate) => {
+    if (candidate == null) return latest
+    return candidate > latest ? candidate : latest
+  }, TRACKING_START)
   const calibration: Calibration = computeCalibration({
     bodyEntries: bodyMetrics,
     logs,
@@ -97,8 +105,16 @@ export default async function NutritionPage() {
     weightKg: weightKg ?? 0,
     unit,
     windowStart: calibrationStart,
+    minimumCalories: minCalories,
     today,
   })
+  const calibrationEpoch = resetStartedOn
+    ? {
+        startedOn: resetStartedOn,
+        reason: profile?.maintenance_calibration_reason ?? null,
+        target: profile?.maintenance_calibration_target ?? null,
+      }
+    : null
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-5 sm:pb-10">
@@ -125,6 +141,7 @@ export default async function NutritionPage() {
         stepBaseline={stepBaseline}
         minCalories={minCalories}
         calibration={calibration}
+        calibrationEpoch={calibrationEpoch}
       />
     </div>
   )

@@ -17,7 +17,10 @@ import { TargetsProgress } from './targets-progress'
 import { DeficitTracker } from './weekly-deficit'
 import { RecentDays } from './recent-days'
 import { CaloriesTrend } from './calories-trend'
-import { MaintenanceCheck } from './maintenance-check'
+import {
+  MaintenanceCheck,
+  type MaintenanceCalibrationEpoch,
+} from './maintenance-check'
 
 function blankForm(date: string): IntakeFormValues {
   return {
@@ -59,6 +62,8 @@ interface NutritionClientProps {
   minCalories: number | null
   /** Predicted-vs-actual maintenance calibration. */
   calibration: Calibration | null
+  /** Persisted manual/automatic boundary for the current calorie regime. */
+  calibrationEpoch: MaintenanceCalibrationEpoch | null
 }
 
 /** Recent days kept on screen for the list + trend (the deficit tracker uses all). */
@@ -75,6 +80,7 @@ export function NutritionClient({
   stepBaseline,
   minCalories,
   calibration,
+  calibrationEpoch,
 }: NutritionClientProps) {
   const router = useRouter()
   const [pending, startTransition] = React.useTransition()
@@ -167,6 +173,7 @@ export function NutritionClient({
           calibration={calibration}
           unit={unit}
           currentMaintenance={maintenance}
+          epoch={calibrationEpoch}
         />
       ) : null}
 

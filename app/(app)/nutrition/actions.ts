@@ -133,6 +133,46 @@ export async function setMaintenanceCalories(
   return { ok: true }
 }
 
+/**
+ * Start a new maintenance-analysis epoch without deleting any historical data
+ * or clearing the user's currently saved maintenance value.
+ */
+export async function resetMaintenanceCalibration(): Promise<ActionResult> {
+  const supabase = await createClient()
+  let userId: string
+  try {
+    userId = await requireUserId(supabase)
+  } catch {
+    return { ok: false, error: 'Your session expired. Sign in again.' }
+  }
+
+  const { data: block, error: blockError } = await supabase
+    .from('blocks')
+    .select('calorie_target')
+    .eq('user_id', userId)
+    .eq('kind', 'diet')
+    .eq('is_active', true)
+    .order('start_date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (blockError) return { ok: false, error: blockError.message }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      maintenance_calibration_started_at: new Date().toISOString(),
+      maintenance_calibration_reason: 'manual',
+      maintenance_calibration_target:
+        (block as { calorie_target: number | null } | null)?.calorie_target ?? null,
+    })
+    .eq('id', userId)
+
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath(ROUTE)
+  return { ok: true }
+}
+
 const outlierSchema = z.object({
   // null = filter off; a value = ignore completed days under this many calories.
   min_calories: z
@@ -164,6 +204,7 @@ export async function setNutritionOutlier(
     .update({ nutrition_min_calories: parsed.data.min_calories })
     .eq('id', userId)
   if (error) return { ok: false, error: error.message }
+  revalidatePath(ROUTE)
   return { ok: true }
 }
 

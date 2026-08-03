@@ -166,7 +166,12 @@ export function DeficitTracker({
   /** Persist the outlier filter to the profile (null = off). Fire-and-forget. */
   function persistOutlier(min: number | null) {
     void setNutritionOutlier({ min_calories: min }).then((res) => {
-      if (!res.ok) toast.error(res.error)
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      // Maintenance calibration uses the same outlier setting server-side.
+      router.refresh()
     })
   }
   function toggleIgnore(checked: boolean) {

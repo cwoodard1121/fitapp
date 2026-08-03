@@ -41,6 +41,10 @@ export type BlockKind = "training" | "diet";
 export type TrainingPhase = "hypertrophy" | "strength" | "peak" | "maintain";
 export type DietPhase = "cut" | "bulk" | "recomp" | "maintain";
 export type BlockPhase = TrainingPhase | DietPhase;
+export type MaintenanceCalibrationReason =
+  | "manual"
+  | "diet_target_change"
+  | "diet_block_change";
 
 export type GoalMetricType =
   | "bodyweight"
@@ -71,6 +75,12 @@ export interface Profile {
   maintenance_step_baseline: number | null;
   /** Deficit outlier filter: ignore completed days under this many kcal. null = off. */
   nutrition_min_calories: number | null;
+  /** Latest maintenance-analysis epoch. Advancing it never deletes old logs. */
+  maintenance_calibration_started_at: string | null;
+  /** Why the current maintenance-analysis epoch was started. */
+  maintenance_calibration_reason: MaintenanceCalibrationReason | null;
+  /** Calorie target captured when the current epoch began, when available. */
+  maintenance_calibration_target: number | null;
   /** Whether strength data may make a small, capped body-fat estimate adjustment. */
   created_at: string;
 }
@@ -283,6 +293,27 @@ export interface NutritionLog {
   notes: string | null;
   /** 'manual' (app entry) | 'wearable' (imported). Manual is never overwritten. */
   source: string;
+  created_at: string;
+}
+
+/** habits — user-defined daily streaks such as creatine or mobility. */
+export interface Habit {
+  id: string;
+  user_id: string;
+  name: string;
+  started_on: string;
+  sort_order: number;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** habit_completions — at most one completion per habit per calendar day. */
+export interface HabitCompletion {
+  id: string;
+  habit_id: string;
+  user_id: string;
+  completed_on: string;
   created_at: string;
 }
 
