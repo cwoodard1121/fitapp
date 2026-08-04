@@ -1,7 +1,8 @@
+import { differenceInCalendarDays, format, parseISO } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 
 import type { NutritionLog } from '@/lib/types'
-import { accumulateDeficit, estimateWeeklyTissueChange } from './deficit'
+import { accumulateDeficit, estimateWeeklyTissueChange, rolling30DayStart } from './deficit'
 
 function nutritionLog(loggedOn: string, calories: number): NutritionLog {
   return {
@@ -91,5 +92,15 @@ describe('estimateWeeklyTissueChange', () => {
 
   it('returns zero when there are no logged day-equivalents', () => {
     expect(estimateWeeklyTissueChange(3500, 0, 'lb')).toBe(0)
+  })
+})
+
+describe('rolling30DayStart', () => {
+  it('uses the latest 30 days inclusively instead of the calendar month', () => {
+    const today = '2026-08-03'
+    const start = rolling30DayStart(today)
+
+    expect(format(start, 'yyyy-MM-dd')).toBe('2026-07-05')
+    expect(differenceInCalendarDays(parseISO(today), start) + 1).toBe(30)
   })
 })

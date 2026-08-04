@@ -6,7 +6,7 @@
  * Pure + framework-free (no React, no server deps) so it imports cleanly into
  * both a client component and a server component.
  */
-import { parseISO } from 'date-fns'
+import { parseISO, subDays } from 'date-fns'
 
 import type { NutritionLog } from '@/lib/types'
 
@@ -27,6 +27,11 @@ export const DEFAULT_STEP_BASELINE = 10000
 export const KCAL_PER_STEP = 0.04
 export const REF_WEIGHT_KG = 70
 export const DEFAULT_WEIGHT_KG = 70
+
+/** Inclusive start for a rolling 30-day window ending on `today`. */
+export function rolling30DayStart(today: string): Date {
+  return subDays(parseISO(today), 29)
+}
 
 export interface DeficitInput {
   logs: NutritionLog[]

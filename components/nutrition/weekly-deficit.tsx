@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { parseISO, startOfWeek, subDays, format } from 'date-fns'
+import { parseISO, startOfWeek, format } from 'date-fns'
 import { Flame, Pencil, TrendingDown, TrendingUp, Footprints } from 'lucide-react'
 
 import type { NutritionLog, Unit } from '@/lib/types'
@@ -22,9 +22,10 @@ import {
   TRACKING_START,
   estimateWeeklyTissueChange,
   kcalPerUnit,
+  rolling30DayStart,
 } from '@/lib/nutrition/deficit'
 
-type Win = 'week' | 'month' | 'block' | 'all'
+type Win = 'week' | '30-days' | 'block' | 'all'
 
 /** Goal framing — derived from the active diet block's phase (default cut). */
 type Mode = 'cut' | 'surplus' | 'maintain'
@@ -92,9 +93,9 @@ function computeWindow(
     case 'week':
       start = startOfWeek(todayD, { weekStartsOn: 1 })
       break
-    case 'month':
+    case '30-days':
       // Rolling 30-day window, inclusive of today (not the calendar month).
-      start = subDays(todayD, 29)
+      start = rolling30DayStart(today)
       break
     case 'block':
       start = blockStart ? parseISO(blockStart) : startOfWeek(todayD, { weekStartsOn: 1 })
@@ -130,7 +131,7 @@ function computeWindow(
 
 const WIN_LABEL: Record<Win, string> = {
   week: 'Week',
-  month: 'Month',
+  '30-days': '30 days',
   block: 'Block',
   all: 'All',
 }
@@ -293,7 +294,7 @@ export function DeficitTracker({
       : DEFAULT_STEP_BASELINE
   // With an active block, every window is clamped to its start, so a separate
   // "All" would just equal "Block" — drop it.
-  const windows: Win[] = blockStart ? ['week', 'month', 'block'] : ['week', 'month', 'all']
+  const windows: Win[] = blockStart ? ['week', '30-days', 'block'] : ['week', '30-days', 'all']
   const active = windows.includes(win) ? win : 'week'
 
   const r = computeWindow(
@@ -340,7 +341,7 @@ export function DeficitTracker({
       ? 'all time'
       : active === 'block'
         ? `since ${format(r.start, 'MMM d')}`
-        : active === 'month'
+        : active === '30-days'
           ? `since ${format(r.start, 'MMM d')}`
           : `week of ${format(r.start, 'MMM d')}`
 
