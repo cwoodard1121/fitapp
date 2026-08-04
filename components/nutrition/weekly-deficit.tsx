@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { parseISO, startOfWeek, format } from 'date-fns'
+import { parseISO, format } from 'date-fns'
 import { Flame, Pencil, TrendingDown, TrendingUp, Footprints } from 'lucide-react'
 
 import type { NutritionLog, Unit } from '@/lib/types'
@@ -19,13 +19,13 @@ import {
   accumulateDeficit,
   DEFAULT_STEP_BASELINE,
   DEFAULT_WEIGHT_KG,
-  TRACKING_START,
+  deficitWindowStart,
   estimateWeeklyTissueChange,
   kcalPerUnit,
-  rolling30DayStart,
+  type DeficitWindow,
 } from '@/lib/nutrition/deficit'
 
-type Win = 'week' | '30-days' | 'block' | 'all'
+type Win = DeficitWindow
 
 /** Goal framing — derived from the active diet block's phase (default cut). */
 type Mode = 'cut' | 'surplus' | 'maintain'
@@ -88,31 +88,7 @@ function computeWindow(
   stepBaseline: number,
 ): WindowResult {
   const todayD = parseISO(today)
-  let start: Date
-  switch (win) {
-    case 'week':
-      start = startOfWeek(todayD, { weekStartsOn: 1 })
-      break
-    case '30-days':
-      // Rolling 30-day window, inclusive of today (not the calendar month).
-      start = rolling30DayStart(today)
-      break
-    case 'block':
-      start = blockStart ? parseISO(blockStart) : startOfWeek(todayD, { weekStartsOn: 1 })
-      break
-    case 'all':
-      start = new Date(0)
-      break
-  }
-
-  // The active diet block's start is a HARD floor — every window stays inside the
-  // block, so a week/30-day window can't reach back before the block began.
-  if (blockStart) {
-    const bs = parseISO(blockStart)
-    if (start < bs) start = bs
-  }
-  // ...and never before the tracking start (pre-cut data is noise for averages).
-  if (start < TRACKING_START) start = TRACKING_START
+  const start = deficitWindowStart(win, today, blockStart)
 
   const r = accumulateDeficit({
     logs,
@@ -536,7 +512,8 @@ export function DeficitTracker({
             ) : null}
 
             <p className="font-mono text-[11px] tabular-nums text-muted">
-              {r.daysLogged} days logged · {rangeLabel} · {Math.round(r.sumCalories).toLocaleString()}{' '}
+              {r.daysLogged} {r.daysLogged === 1 ? 'day' : 'days'} logged · {rangeLabel} ·{' '}
+              {Math.round(r.sumCalories).toLocaleString()}{' '}
               kcal eaten vs {Math.round(r.sumMaint).toLocaleString()} adj. maintenance ({avgAdjustedMaint.toLocaleString()}/day)
             </p>
           </>

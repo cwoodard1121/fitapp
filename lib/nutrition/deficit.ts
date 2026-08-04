@@ -6,7 +6,7 @@
  * Pure + framework-free (no React, no server deps) so it imports cleanly into
  * both a client component and a server component.
  */
-import { parseISO, subDays } from 'date-fns'
+import { parseISO, startOfWeek, subDays } from 'date-fns'
 
 import type { NutritionLog } from '@/lib/types'
 
@@ -28,9 +28,43 @@ export const KCAL_PER_STEP = 0.04
 export const REF_WEIGHT_KG = 70
 export const DEFAULT_WEIGHT_KG = 70
 
-/** Inclusive start for a rolling 30-day window ending on `today`. */
+export type DeficitWindow = 'week' | '30-days' | 'block' | 'all'
+
+/** Product boundary for the nutrition 30-day view (Aug 3 -> Jul 3). */
 export function rolling30DayStart(today: string): Date {
-  return subDays(parseISO(today), 29)
+  return subDays(parseISO(today), 31)
+}
+
+/** Resolve a nutrition preset while keeping 30 days independent of the active block. */
+export function deficitWindowStart(
+  window: DeficitWindow,
+  today: string,
+  blockStart: string | null,
+): Date {
+  const todayDate = parseISO(today)
+  let start: Date
+
+  switch (window) {
+    case 'week':
+      start = startOfWeek(todayDate, { weekStartsOn: 1 })
+      break
+    case '30-days':
+      start = rolling30DayStart(today)
+      break
+    case 'block':
+      start = blockStart ? parseISO(blockStart) : startOfWeek(todayDate, { weekStartsOn: 1 })
+      break
+    case 'all':
+      start = new Date(0)
+      break
+  }
+
+  if (blockStart && window !== '30-days') {
+    const blockDate = parseISO(blockStart)
+    if (start < blockDate) start = blockDate
+  }
+
+  return start < TRACKING_START ? TRACKING_START : start
 }
 
 export interface DeficitInput {

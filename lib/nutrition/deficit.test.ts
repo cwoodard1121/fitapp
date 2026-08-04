@@ -1,8 +1,13 @@
-import { differenceInCalendarDays, format, parseISO } from 'date-fns'
+import { format } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 
 import type { NutritionLog } from '@/lib/types'
-import { accumulateDeficit, estimateWeeklyTissueChange, rolling30DayStart } from './deficit'
+import {
+  accumulateDeficit,
+  deficitWindowStart,
+  estimateWeeklyTissueChange,
+  rolling30DayStart,
+} from './deficit'
 
 function nutritionLog(loggedOn: string, calories: number): NutritionLog {
   return {
@@ -96,11 +101,18 @@ describe('estimateWeeklyTissueChange', () => {
 })
 
 describe('rolling30DayStart', () => {
-  it('uses the latest 30 days inclusively instead of the calendar month', () => {
-    const today = '2026-08-03'
-    const start = rolling30DayStart(today)
+  it('reaches July 3 from August 3', () => {
+    expect(format(rolling30DayStart('2026-08-03'), 'yyyy-MM-dd')).toBe('2026-07-03')
+  })
 
-    expect(format(start, 'yyyy-MM-dd')).toBe('2026-07-05')
-    expect(differenceInCalendarDays(parseISO(today), start) + 1).toBe(30)
+  it('is not overridden by a newer active block', () => {
+    const blockStart = '2026-08-01'
+
+    expect(format(deficitWindowStart('30-days', '2026-08-03', blockStart), 'yyyy-MM-dd')).toBe(
+      '2026-07-03',
+    )
+    expect(format(deficitWindowStart('block', '2026-08-03', blockStart), 'yyyy-MM-dd')).toBe(
+      blockStart,
+    )
   })
 })
