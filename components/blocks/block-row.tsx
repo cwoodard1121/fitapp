@@ -7,6 +7,8 @@ import {
   Pencil,
   Trash2,
   Check,
+  CircleCheckBig,
+  RotateCcw,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -28,7 +30,12 @@ import {
   phaseLabel,
   type TimeState,
 } from "@/components/blocks/utils"
-import { setActiveBlock, deleteBlock } from "@/app/(app)/blocks/actions"
+import {
+  completeBlock,
+  deleteBlock,
+  reopenBlock,
+  setActiveBlock,
+} from "@/app/(app)/blocks/actions"
 
 const stateMeta: Record<
   TimeState,
@@ -38,21 +45,32 @@ const stateMeta: Record<
   upcoming: { label: "Upcoming", variant: "signal" },
   past: { label: "Past", variant: "muted" },
   undated: { label: "Undated", variant: "warning" },
+  completed: { label: "Complete", variant: "success" },
 }
 
 interface BlockRowProps {
   block: Block
   onEdit: (block: Block) => void
   onViewStats: (block: Block) => void
+  onCompleted: (block: Block) => void
 }
 
-export function BlockRow({ block, onEdit, onViewStats }: BlockRowProps) {
+export function BlockRow({
+  block,
+  onEdit,
+  onViewStats,
+  onCompleted,
+}: BlockRowProps) {
   const [pending, startTransition] = useTransition()
   const p = computeProgress(block)
   const phase = phaseLabel(block.kind, block.phase)
   const meta = stateMeta[p.state]
   const weekLabel = currentWeekLabel(p)
   const isDiet = block.kind === "diet"
+  const completed = block.completed_at != null
+  const canComplete =
+    !completed && p.state !== "upcoming" && p.state !== "undated"
+  const canSetActive = !completed && p.state !== "past"
 
   function onSetActive() {
     startTransition(async () => {
@@ -66,6 +84,31 @@ export function BlockRow({ block, onEdit, onViewStats }: BlockRowProps) {
     startTransition(async () => {
       const res = await deleteBlock(block.id)
       if (res.ok) toast.success("Block deleted")
+      else toast.error(res.error)
+    })
+  }
+
+  function onComplete() {
+    startTransition(async () => {
+      const res = await completeBlock(block.id)
+      if (res.ok) {
+        toast.success("Block complete — here’s your recap")
+        onCompleted({
+          ...block,
+          completed_at: res.completedAt,
+          end_date: res.endDate,
+          is_active: false,
+        })
+      } else {
+        toast.error(res.error)
+      }
+    })
+  }
+
+  function onReopen() {
+    startTransition(async () => {
+      const res = await reopenBlock(block.id)
+      if (res.ok) toast.success("Block reopened")
       else toast.error(res.error)
     })
   }
@@ -127,7 +170,7 @@ export function BlockRow({ block, onEdit, onViewStats }: BlockRowProps) {
           onClick={() => onViewStats(block)}
         >
           <ChartNoAxesCombined aria-hidden />
-          View stats
+          {completed ? "View recap" : "View stats"}
         </Button>
       </div>
 
@@ -149,7 +192,19 @@ export function BlockRow({ block, onEdit, onViewStats }: BlockRowProps) {
               <Pencil aria-hidden />
               Edit
             </DropdownMenuItem>
-            {!block.is_active ? (
+            {completed ? (
+              <DropdownMenuItem onSelect={onReopen}>
+                <RotateCcw aria-hidden />
+                Reopen block
+              </DropdownMenuItem>
+            ) : null}
+            {canComplete ? (
+              <DropdownMenuItem onSelect={onComplete}>
+                <CircleCheckBig aria-hidden />
+                Mark complete
+              </DropdownMenuItem>
+            ) : null}
+            {!block.is_active && canSetActive ? (
               <DropdownMenuItem onSelect={onSetActive}>
                 <Check aria-hidden />
                 Set active
@@ -166,7 +221,28 @@ export function BlockRow({ block, onEdit, onViewStats }: BlockRowProps) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {!block.is_active ? (
+        {completed ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={onReopen}
+            disabled={pending}
+          >
+            <RotateCcw aria-hidden />
+            Reopen
+          </Button>
+        ) : canComplete && p.state === "past" ? (
+          <Button
+            size="sm"
+            className="h-8"
+            onClick={onComplete}
+            disabled={pending}
+          >
+            <CircleCheckBig aria-hidden />
+            Complete
+          </Button>
+        ) : !block.is_active && canSetActive ? (
           <Button
             variant="outline"
             size="sm"

@@ -28,6 +28,7 @@ const block: Block = {
   carb_target: null,
   fat_target: null,
   is_active: true,
+  completed_at: null,
   notes: null,
   created_at: "2026-07-01T00:00:00.000Z",
 }
@@ -319,6 +320,39 @@ describe("computeBlockStats", () => {
     })
 
     expect(stats.training.sessions).toBe(2)
+  })
+
+  it("uses interpreted blended body fat instead of the raw BIA stream", () => {
+    const first = body("2026-07-01", 200, 20)
+    const blendedDay: BodyMetric = {
+      ...body("2026-07-07", 198, 24),
+      height_cm: 180,
+      neck_cm: 40,
+      waist_cm: 88,
+      navy_bodyfat_pct: 18,
+    }
+    const end = body("2026-07-15", 196, 22)
+
+    const stats = computeBlockStats({
+      block,
+      today: "2026-07-21",
+      sessions: [],
+      setLogs: [],
+      setEntries: [],
+      slots: [],
+      recoveryMetrics: [],
+      stepBaseline: 10_000,
+      nutritionLogs: [],
+      bodyMetrics: [first, blendedDay, end],
+    })
+
+    expect(stats.body.startBodyfat).toBe(20)
+    expect(stats.body.trend[1]).toMatchObject({
+      date: "2026-07-07",
+      bodyfat: 19.4,
+    })
+    expect(stats.body.endBodyfat).toBe(19.4)
+    expect(stats.body.avgBodyfat).toBeCloseTo(19.6)
   })
 
   it("returns an empty scope for upcoming and undated blocks", () => {

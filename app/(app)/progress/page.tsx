@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import type { ReactNode } from "react"
+import { addDays, format, parseISO } from "date-fns"
 
 import type {
   Block,
@@ -49,6 +50,7 @@ import type {
   ExercisePoint,
   ExerciseSeries,
   GoalProgressRow,
+  ProgressBlockOverlay,
   ProgressData,
   VolumeWeekRow,
 } from "@/components/progress/types"
@@ -108,18 +110,45 @@ export default async function ProgressPage() {
         .order("measured_on", { ascending: true }),
       supabase
         .from("blocks")
-        .select("phase,start_date")
+        .select("*")
         .eq("user_id", userId)
-        .eq("kind", "diet")
-        .eq("is_active", true)
         .order("start_date", { ascending: false })
-        .limit(1),
     ])
   const goalsRaw = (goalRows as Goal[]) ?? []
   const bodyMetrics = (bodyRows as BodyMetric[]) ?? []
   const interpretedBodyMetrics = interpretBodyMetrics(bodyMetrics)
+  const blocks = (blockRows as Block[]) ?? []
   const activeDietBlock =
-    (blockRows?.[0] as Pick<Block, "phase" | "start_date"> | undefined) ?? null
+    blocks.find(
+      (block) =>
+        block.kind === "diet" &&
+        block.is_active &&
+        block.completed_at == null,
+    ) ?? null
+  const blockOverlays: ProgressBlockOverlay[] = blocks.flatMap((block) => {
+    if (!block.start_date) return []
+    const endDate =
+      block.end_date ??
+      (block.length_weeks != null && block.length_weeks > 0
+        ? format(
+            addDays(parseISO(block.start_date), block.length_weeks * 7 - 1),
+            "yyyy-MM-dd",
+          )
+        : null)
+    if (!endDate) return []
+    return [
+      {
+        id: block.id,
+        name: block.name,
+        kind: block.kind,
+        phase: block.phase,
+        startDate: block.start_date,
+        endDate,
+        isActive: block.is_active,
+        completedAt: block.completed_at,
+      },
+    ]
+  })
 
   const deloadWeek = program.deload_week
 
@@ -379,6 +408,7 @@ export default async function ProgressPage() {
     bodyWeightBasis: normalizedBody.basis,
     bodyWeightChange: normalizedBodyChange,
     bodyFatBlockStartDate,
+    blockOverlays,
   }
 
   return (

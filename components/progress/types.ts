@@ -67,6 +67,18 @@ export interface BodyTrendPoint {
   estimatedBodyfat: number | null
 }
 
+/** A dated phase that can be overlaid on the body-progress timeline. */
+export interface ProgressBlockOverlay {
+  id: string
+  name: string
+  kind: "training" | "diet"
+  phase: string | null
+  startDate: string
+  endDate: string
+  isActive: boolean
+  completedAt: string | null
+}
+
 export interface ProgressData {
   exercises: ExerciseSeries[]
   volume: VolumeWeekRow[]
@@ -82,4 +94,5 @@ export interface ProgressData {
   bodyWeightBasis: WeightBasis
   bodyWeightChange: number | null
   bodyFatBlockStartDate: string | null
+  blockOverlays: ProgressBlockOverlay[]
 }

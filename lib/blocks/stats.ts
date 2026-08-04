@@ -17,6 +17,7 @@ import type {
   SetEntry,
   SetLog,
 } from "@/lib/types"
+import { interpretBodyMetrics } from "@/lib/body/body-fat"
 
 export type BlockStatsStatus = "observed" | "upcoming" | "undated"
 
@@ -75,6 +76,13 @@ export interface BodyBlockStats {
   endBodyfat: number | null
   avgBodyfat: number | null
   bodyfatChange: number | null
+  trend: BodyBlockTrendPoint[]
+}
+
+export interface BodyBlockTrendPoint {
+  date: string
+  weight: number | null
+  bodyfat: number | null
 }
 
 export interface BlockStats {
@@ -344,7 +352,10 @@ export function computeBlockStats(input: ComputeBlockStatsInput): BlockStats {
   const stepValues = scopedRecovery.map((metric) => metric.steps)
   const avgSteps = average(stepValues)
 
-  const scopedBody = bodyMetrics
+  // Keep block stats on the same interpreted body-fat stream as the Body and
+  // Progress screens: accepted weekly Navy measurements blended with the
+  // trailing seven-day BIA median (raw BIA only before Navy data exists).
+  const scopedBody = interpretBodyMetrics(bodyMetrics)
     .filter((metric) => inWindow(metric.measured_on, window))
     .sort((a, b) => a.measured_on.localeCompare(b.measured_on))
   const weightRows = scopedBody.filter(
@@ -461,6 +472,18 @@ export function computeBlockStats(input: ComputeBlockStatsInput): BlockStats {
         startBodyfat != null && endBodyfat != null && bodyfatRows.length > 1
           ? endBodyfat - startBodyfat
           : null,
+      trend: scopedBody.flatMap((metric) => {
+        const interpretedBodyfat = bodyfat(metric)
+        return metric.bodyweight == null && interpretedBodyfat == null
+          ? []
+          : [
+              {
+                date: metric.measured_on,
+                weight: metric.bodyweight,
+                bodyfat: interpretedBodyfat,
+              },
+            ]
+      }),
     },
   }
 }

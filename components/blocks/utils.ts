@@ -53,7 +53,12 @@ export function formatRange(block: Block): string {
   return "No dates set"
 }
 
-export type TimeState = "upcoming" | "current" | "past" | "undated"
+export type TimeState =
+  | "upcoming"
+  | "current"
+  | "past"
+  | "undated"
+  | "completed"
 
 export interface BlockProgress {
   /** Weeks elapsed since start (clamped to [0, length]). */
@@ -110,6 +115,7 @@ export function computeProgress(block: Block, today: Date = new Date()): BlockPr
     : null
 
   if (plannedEnd && isAfter(today, plannedEnd)) state = "past"
+  if (block.completed_at != null) state = "completed"
 
   return {
     weeksElapsed,
@@ -123,6 +129,7 @@ export function computeProgress(block: Block, today: Date = new Date()): BlockPr
 /** Current week index (1-based) for display, e.g. "Week 3 of 6". */
 export function currentWeekLabel(p: BlockProgress): string | null {
   if (!p.totalWeeks) return null
+  if (p.state === "completed") return `${p.totalWeeks} wk complete`
   if (p.state === "upcoming") return `Starts soon · ${p.totalWeeks} wk`
   const wk = Math.min(p.totalWeeks, Math.floor(p.weeksElapsed) + 1)
   return `Week ${wk} of ${p.totalWeeks}`

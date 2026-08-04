@@ -261,6 +261,7 @@ export interface Block {
   carb_target: number | null;
   fat_target: number | null;
   is_active: boolean;
+  completed_at: string | null;
   notes: string | null;
   created_at: string;
 }

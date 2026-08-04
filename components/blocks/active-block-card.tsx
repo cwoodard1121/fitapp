@@ -8,6 +8,7 @@ import {
   Pencil,
   CalendarRange,
   ChartNoAxesCombined,
+  CircleCheckBig,
   MoreVertical,
   Trash2,
 } from "lucide-react"
@@ -33,7 +34,7 @@ import {
   formatRange,
   phaseLabel,
 } from "@/components/blocks/utils"
-import { deleteBlock } from "@/app/(app)/blocks/actions"
+import { completeBlock, deleteBlock } from "@/app/(app)/blocks/actions"
 
 interface ActiveBlockCardProps {
   kind: BlockKind
@@ -42,6 +43,7 @@ interface ActiveBlockCardProps {
   onEdit: (block: Block) => void
   onCreate: () => void
   onViewStats: (block: Block) => void
+  onCompleted: (block: Block) => void
 }
 
 export function ActiveBlockCard({
@@ -51,6 +53,7 @@ export function ActiveBlockCard({
   onEdit,
   onCreate,
   onViewStats,
+  onCompleted,
 }: ActiveBlockCardProps) {
   const [pending, startTransition] = useTransition()
   const isDiet = kind === "diet"
@@ -62,6 +65,23 @@ export function ActiveBlockCard({
       const res = await deleteBlock(target.id)
       if (res.ok) toast.success("Block deleted")
       else toast.error(res.error)
+    })
+  }
+
+  function onComplete(target: Block) {
+    startTransition(async () => {
+      const res = await completeBlock(target.id)
+      if (res.ok) {
+        toast.success("Block complete — here’s your recap")
+        onCompleted({
+          ...target,
+          completed_at: res.completedAt,
+          end_date: res.endDate,
+          is_active: false,
+        })
+      } else {
+        toast.error(res.error)
+      }
     })
   }
 
@@ -216,10 +236,14 @@ export function ActiveBlockCard({
         </>
       ) : null}
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="outline" size="sm" onClick={() => onViewStats(block)}>
           <ChartNoAxesCombined aria-hidden />
           View block stats
+        </Button>
+        <Button size="sm" onClick={() => onComplete(block)} disabled={pending}>
+          <CircleCheckBig aria-hidden />
+          {p.state === "past" ? "Mark complete" : "Finish block"}
         </Button>
       </div>
     </Card>

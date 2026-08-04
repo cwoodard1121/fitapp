@@ -57,6 +57,10 @@ export type ActionResult =
   | { ok: true; id: string }
   | { ok: false; error: string }
 
+export type CompleteBlockResult =
+  | { ok: true; id: string; completedAt: string; endDate: string }
+  | { ok: false; error: string }
+
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
@@ -101,6 +105,17 @@ export async function saveBlock(input: BlockFormInput): Promise<ActionResult> {
     }
   }
   const v = parsed.data
+
+  if (
+    v.is_active &&
+    v.end_date != null &&
+    v.end_date < new Date().toISOString().slice(0, 10)
+  ) {
+    return {
+      ok: false,
+      error: "A block whose end date has passed cannot be set active.",
+    }
+  }
 
   try {
     const supabase = await createClient()
@@ -152,6 +167,7 @@ export async function saveBlock(input: BlockFormInput): Promise<ActionResult> {
     }
 
     revalidatePath("/blocks")
+    revalidatePath("/progress")
     return { ok: true, id: savedId! }
   } catch (e) {
     return {
@@ -172,12 +188,30 @@ export async function setActiveBlock(
     // Need the kind to scope the deactivation of siblings.
     const { data: existing, error: readErr } = await supabase
       .from("blocks")
-      .select("id, kind")
+      .select("id, kind, end_date, completed_at")
       .eq("id", id)
       .eq("user_id", userId)
       .single()
     if (readErr) throw readErr
-    const kind = (existing as Pick<Block, "kind">).kind
+    const target = existing as Pick<
+      Block,
+      "kind" | "end_date" | "completed_at"
+    >
+    const kind = target.kind
+
+    if (active && target.completed_at != null) {
+      return { ok: false, error: "Reopen this block before setting it active." }
+    }
+    if (
+      active &&
+      target.end_date != null &&
+      target.end_date < new Date().toISOString().slice(0, 10)
+    ) {
+      return {
+        ok: false,
+        error: "This block has ended. Mark it complete or edit its end date.",
+      }
+    }
 
     if (active) {
       await deactivateOthers(supabase, userId, kind, id)
@@ -191,6 +225,7 @@ export async function setActiveBlock(
     if (error) throw error
 
     revalidatePath("/blocks")
+    revalidatePath("/progress")
     return { ok: true, id }
   } catch (e) {
     return {
@@ -213,11 +248,92 @@ export async function deleteBlock(id: string): Promise<ActionResult> {
     if (error) throw error
 
     revalidatePath("/blocks")
+    revalidatePath("/progress")
     return { ok: true, id }
   } catch (e) {
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Could not delete the block.",
+    }
+  }
+}
+
+/** Finish a block now and freeze its analytics window. */
+export async function completeBlock(id: string): Promise<CompleteBlockResult> {
+  try {
+    const supabase = await createClient()
+    const userId = await requireUserId(supabase)
+    const { data: existing, error: readError } = await supabase
+      .from("blocks")
+      .select("id, end_date, completed_at")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .single()
+    if (readError) throw readError
+
+    const completedAt = new Date()
+    const today = completedAt.toISOString().slice(0, 10)
+    const target = existing as Pick<Block, "end_date" | "completed_at">
+    if (target.completed_at != null) {
+      return {
+        ok: true,
+        id,
+        completedAt: target.completed_at,
+        endDate: target.end_date ?? today,
+      }
+    }
+
+    const endDate =
+      target.end_date != null && target.end_date < today
+        ? target.end_date
+        : today
+
+    const { error } = await supabase
+      .from("blocks")
+      .update({
+        completed_at: completedAt.toISOString(),
+        end_date: endDate,
+        is_active: false,
+      })
+      .eq("id", id)
+      .eq("user_id", userId)
+    if (error) throw error
+
+    revalidatePath("/blocks")
+    revalidatePath("/progress")
+    return {
+      ok: true,
+      id,
+      completedAt: completedAt.toISOString(),
+      endDate,
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not complete the block.",
+    }
+  }
+}
+
+/** Return a completed block to the timeline without making it active. */
+export async function reopenBlock(id: string): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+    const userId = await requireUserId(supabase)
+    const { error } = await supabase
+      .from("blocks")
+      .update({ completed_at: null, is_active: false })
+      .eq("id", id)
+      .eq("user_id", userId)
+    if (error) throw error
+
+    revalidatePath("/blocks")
+    revalidatePath("/progress")
+    return { ok: true, id }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not reopen the block.",
     }
   }
 }

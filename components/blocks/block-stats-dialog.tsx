@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog"
 import { Stat } from "@/components/ui/stat"
 import { formatRange, phaseLabel } from "@/components/blocks/utils"
+import { BlockWrappedRecap } from "@/components/blocks/block-wrapped-recap"
 
 interface BlockStatsDialogProps {
   block: Block | null
@@ -111,7 +112,22 @@ export function BlockStatsDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        className={
+          block.completed_at != null && stats.status === "observed"
+            ? "max-h-[94svh] w-[calc(100%-1rem)] overflow-y-auto p-0 sm:max-w-5xl"
+            : "max-h-[92vh] overflow-y-auto sm:max-w-2xl"
+        }
+      >
+        {block.completed_at != null && stats.status === "observed" ? (
+          <BlockWrappedRecap
+            block={block}
+            stats={stats}
+            unit={unit}
+            onDone={() => onOpenChange(false)}
+          />
+        ) : (
+          <>
         <DialogHeader className="pr-6">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="signal">Block stats</Badge>
@@ -373,6 +389,8 @@ export function BlockStatsDialog({
               />
             </StatsSection>
           </div>
+        )}
+          </>
         )}
       </DialogContent>
     </Dialog>

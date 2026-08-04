@@ -380,14 +380,18 @@ export function BlockForm({
                   Set as active {isDiet ? "diet" : "training"} block
                 </p>
                 <p className="text-xs text-muted">
-                  Deactivates any other active {isDiet ? "diet" : "training"}{" "}
-                  block.
+                  {block?.completed_at
+                    ? "Reopen this block before making it active again."
+                    : `Deactivates any other active ${
+                        isDiet ? "diet" : "training"
+                      } block.`}
                 </p>
               </div>
               <Switch
                 checked={state.is_active}
                 onCheckedChange={(v) => set("is_active", v)}
                 aria-label="Set as active block"
+                disabled={block?.completed_at != null}
               />
             </div>
 

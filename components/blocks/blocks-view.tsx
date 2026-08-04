@@ -27,7 +27,8 @@ function sortTimeline(a: Block, b: Block): number {
     upcoming: 0,
     current: 1,
     undated: 2,
-    past: 3,
+    completed: 3,
+    past: 4,
   }
   const pa = computeProgress(a)
   const pb = computeProgress(b)
@@ -36,7 +37,9 @@ function sortTimeline(a: Block, b: Block): number {
   // Within a group, sort by start date ascending for upcoming/current, desc for past.
   const sa = a.start_date ?? ""
   const sb = b.start_date ?? ""
-  if (pa.state === "past") return sb.localeCompare(sa)
+  if (pa.state === "past" || pa.state === "completed") {
+    return sb.localeCompare(sa)
+  }
   return sa.localeCompare(sb)
 }
 
@@ -110,6 +113,7 @@ export function BlocksView({
             onCreate={() => openCreate("training")}
             onEdit={openEdit}
             onViewStats={setStatsBlock}
+            onCompleted={setStatsBlock}
           />
         </TabsContent>
 
@@ -121,6 +125,7 @@ export function BlocksView({
             onCreate={() => openCreate("diet")}
             onEdit={openEdit}
             onViewStats={setStatsBlock}
+            onCompleted={setStatsBlock}
           />
         </TabsContent>
       </Tabs>
@@ -160,6 +165,7 @@ interface KindSectionProps {
   onCreate: () => void
   onEdit: (block: Block) => void
   onViewStats: (block: Block) => void
+  onCompleted: (block: Block) => void
 }
 
 function KindSection({
@@ -169,8 +175,9 @@ function KindSection({
   onCreate,
   onEdit,
   onViewStats,
+  onCompleted,
 }: KindSectionProps) {
-  const active = list.find((b) => b.is_active) ?? null
+  const active = list.find((b) => b.is_active && b.completed_at == null) ?? null
   const rest = list.filter((b) => b.id !== active?.id).sort(sortTimeline)
 
   return (
@@ -182,6 +189,7 @@ function KindSection({
         onEdit={onEdit}
         onCreate={onCreate}
         onViewStats={onViewStats}
+        onCompleted={onCompleted}
       />
 
       <div>
@@ -218,6 +226,7 @@ function KindSection({
                 block={block}
                 onEdit={onEdit}
                 onViewStats={onViewStats}
+                onCompleted={onCompleted}
               />
             ))}
           </div>

@@ -39,6 +39,7 @@ export function ProgressView({ data }: { data: ProgressData }) {
     bodyWeightBasis,
     bodyWeightChange,
     bodyFatBlockStartDate,
+    blockOverlays,
   } = data
 
   const [selected, setSelected] = React.useState<string>(
@@ -217,6 +218,7 @@ export function ProgressView({ data }: { data: ProgressData }) {
         weightBasis={bodyWeightBasis}
         weightChange={bodyWeightChange}
         bodyFatBlockStartDate={bodyFatBlockStartDate}
+        blockOverlays={blockOverlays}
       />
     </div>
   )

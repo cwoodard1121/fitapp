@@ -1,11 +1,15 @@
 "use client"
 
+import { useState } from "react"
 import { format, parseISO } from "date-fns"
 import { Scale } from "lucide-react"
 import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceArea,
+  ReferenceDot,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -19,12 +23,17 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Stat,
 } from "@/components/ui"
 import type { WeightBasis } from "@/lib/body/metrics"
 import type { Unit } from "@/lib/types"
 
-import type { BodyTrendPoint } from "./types"
+import type { BodyTrendPoint, ProgressBlockOverlay } from "./types"
 
 // Design tokens (charts take literal colors, not tailwind classes).
 const COLORS = {
@@ -113,6 +122,7 @@ export function BodyTrend({
   weightBasis,
   weightChange,
   bodyFatBlockStartDate,
+  blockOverlays,
 }: {
   points: BodyTrendPoint[]
   unit: Unit
@@ -121,7 +131,15 @@ export function BodyTrend({
   weightBasis: WeightBasis
   weightChange: number | null
   bodyFatBlockStartDate: string | null
+  blockOverlays: ProgressBlockOverlay[]
 }) {
+  const defaultOverlay =
+    blockOverlays.find((block) => block.isActive)?.id ??
+    blockOverlays.find((block) => block.completedAt != null)?.id ??
+    blockOverlays[0]?.id ??
+    "none"
+  const [selectedOverlayId, setSelectedOverlayId] = useState(defaultOverlay)
+
   if (points.length === 0) return null
 
   const data: ChartRow[] = points.map((p) => ({
@@ -145,6 +163,34 @@ export function BodyTrend({
 
   const fat = firstLast(bodyFatData.map((p) => p.bodyfat))
   const bodyFatYAxisDomain = percentDomain(bodyFatData)
+  const selectedOverlay =
+    blockOverlays.find((block) => block.id === selectedOverlayId) ?? null
+  const overlayPoints =
+    selectedOverlay == null
+      ? []
+      : points.filter(
+          (point) =>
+            point.date >= selectedOverlay.startDate &&
+            point.date <= selectedOverlay.endDate,
+        )
+  const overlayStart = overlayPoints[0]?.date
+  const overlayEnd = overlayPoints.at(-1)?.date
+  const overlayIsActive = selectedOverlay?.isActive === true
+  const overlayEndMarkerLabel = overlayIsActive ? "TO DATE" : "END"
+  const overlayWeightPoints = overlayPoints.filter(
+    (point) => point.bodyweight != null,
+  )
+  const overlayWeightStart = overlayWeightPoints[0] ?? null
+  const overlayWeightEnd = overlayWeightPoints.at(-1) ?? null
+  const overlayBodyfat = firstLast(overlayPoints.map((point) => point.bodyfat))
+  const overlayWeightChange =
+    overlayWeightStart?.bodyweight != null && overlayWeightEnd?.bodyweight != null
+      ? overlayWeightEnd.bodyweight - overlayWeightStart.bodyweight
+      : null
+  const overlayBodyfatChange =
+    overlayBodyfat.first != null && overlayBodyfat.last != null
+      ? overlayBodyfat.last - overlayBodyfat.first
+      : null
 
   const axisProps = {
     stroke: COLORS.muted,
@@ -168,8 +214,65 @@ export function BodyTrend({
               : "; body fat over your logged range."
             : "."}
         </CardDescription>
+        {blockOverlays.length > 0 ? (
+          <div className="mt-3 w-full sm:max-w-sm">
+            <label
+              htmlFor="body-block-overlay"
+              className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.16em] text-muted"
+            >
+              Block overlay
+            </label>
+            <Select value={selectedOverlayId} onValueChange={setSelectedOverlayId}>
+              <SelectTrigger id="body-block-overlay" className="h-10">
+                <SelectValue placeholder="Choose a block" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No block overlay</SelectItem>
+                {blockOverlays.map((block) => (
+                  <SelectItem key={block.id} value={block.id}>
+                    {block.name} · {block.kind === "diet" ? "Diet" : "Training"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
+        {selectedOverlay ? (
+          <div
+            className="border-l-2 border-signal bg-signal/[0.04] px-3 py-2 text-xs text-muted"
+            aria-label={`${selectedOverlay.name} block from ${safeLabel(selectedOverlay.startDate)} to ${safeLabel(selectedOverlay.endDate)}`}
+          >
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <span className="font-medium text-foreground">{selectedOverlay.name}</span>
+              <span aria-hidden>·</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-signal">
+                Start
+              </span>
+              <span>{safeLabel(selectedOverlay.startDate)}</span>
+              <span aria-hidden>→</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-signal">
+                {overlayIsActive ? "Planned end" : "End"}
+              </span>
+              <span>{safeLabel(selectedOverlay.endDate)}</span>
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              {overlayWeightChange != null ? (
+                <span className="font-mono text-signal">
+                  {overlayWeightChange > 0 ? "+" : ""}
+                  {overlayWeightChange.toFixed(1)} {unit}
+                </span>
+              ) : null}
+              {overlayBodyfatChange != null ? (
+                <span className="font-mono text-foreground">
+                  {overlayBodyfatChange > 0 ? "+" : ""}
+                  {overlayBodyfatChange.toFixed(1)} body-fat pts
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         <div className="grid grid-cols-3 gap-3">
           <Stat
             label={weightBasis === "block_floor" ? "Scale floor" : "Latest"}
@@ -213,8 +316,48 @@ export function BodyTrend({
 
         <div className="h-52 w-full" aria-label="Bodyweight trend chart">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+            <LineChart data={data} margin={{ top: 24, right: 8, bottom: 0, left: -16 }}>
               <CartesianGrid stroke={COLORS.border} strokeDasharray="3 3" vertical={false} />
+              {overlayStart && overlayEnd ? (
+                <ReferenceArea
+                  x1={safeLabel(overlayStart)}
+                  x2={safeLabel(overlayEnd)}
+                  fill={COLORS.signal}
+                  fillOpacity={0.07}
+                  stroke={COLORS.signal}
+                  strokeOpacity={0.22}
+                />
+              ) : null}
+              {overlayStart ? (
+                <ReferenceLine
+                  x={safeLabel(overlayStart)}
+                  stroke={COLORS.signal}
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.7}
+                  label={{
+                    value: "START",
+                    position: "insideTopLeft",
+                    fill: COLORS.signal,
+                    fontSize: 9,
+                    fontWeight: 600,
+                  }}
+                />
+              ) : null}
+              {overlayEnd && overlayEnd !== overlayStart ? (
+                <ReferenceLine
+                  x={safeLabel(overlayEnd)}
+                  stroke={COLORS.signal}
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.7}
+                  label={{
+                    value: overlayEndMarkerLabel,
+                    position: "insideTopRight",
+                    fill: COLORS.signal,
+                    fontSize: 9,
+                    fontWeight: 600,
+                  }}
+                />
+              ) : null}
               <XAxis dataKey="label" minTickGap={24} {...axisProps} />
               <YAxis domain={["auto", "auto"]} width={44} allowDecimals={false} {...axisProps} />
               <Tooltip
@@ -232,6 +375,28 @@ export function BodyTrend({
                 connectNulls
                 isAnimationActive={false}
               />
+              {overlayWeightStart?.bodyweight != null ? (
+                <ReferenceDot
+                  x={safeLabel(overlayWeightStart.date)}
+                  y={overlayWeightStart.bodyweight}
+                  r={5}
+                  fill={COLORS.surface}
+                  stroke={COLORS.signal}
+                  strokeWidth={2}
+                  isFront
+                />
+              ) : null}
+              {overlayWeightEnd?.bodyweight != null ? (
+                <ReferenceDot
+                  x={safeLabel(overlayWeightEnd.date)}
+                  y={overlayWeightEnd.bodyweight}
+                  r={5}
+                  fill={COLORS.signal}
+                  stroke={COLORS.surface}
+                  strokeWidth={2}
+                  isFront
+                />
+              ) : null}
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -260,8 +425,48 @@ export function BodyTrend({
             </div>
             <div className="h-40 w-full" aria-label="Body fat trend chart">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={bodyFatData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+                <LineChart data={bodyFatData} margin={{ top: 24, right: 8, bottom: 0, left: -16 }}>
                   <CartesianGrid stroke={COLORS.border} strokeDasharray="3 3" vertical={false} />
+                  {overlayStart && overlayEnd ? (
+                    <ReferenceArea
+                      x1={safeLabel(overlayStart)}
+                      x2={safeLabel(overlayEnd)}
+                      fill={COLORS.signal}
+                      fillOpacity={0.07}
+                      stroke={COLORS.signal}
+                      strokeOpacity={0.22}
+                    />
+                  ) : null}
+                  {overlayStart ? (
+                    <ReferenceLine
+                      x={safeLabel(overlayStart)}
+                      stroke={COLORS.signal}
+                      strokeDasharray="4 4"
+                      strokeOpacity={0.7}
+                      label={{
+                        value: "START",
+                        position: "insideTopLeft",
+                        fill: COLORS.signal,
+                        fontSize: 9,
+                        fontWeight: 600,
+                      }}
+                    />
+                  ) : null}
+                  {overlayEnd && overlayEnd !== overlayStart ? (
+                    <ReferenceLine
+                      x={safeLabel(overlayEnd)}
+                      stroke={COLORS.signal}
+                      strokeDasharray="4 4"
+                      strokeOpacity={0.7}
+                      label={{
+                        value: overlayEndMarkerLabel,
+                        position: "insideTopRight",
+                        fill: COLORS.signal,
+                        fontSize: 9,
+                        fontWeight: 600,
+                      }}
+                    />
+                  ) : null}
                   <XAxis dataKey="label" minTickGap={24} {...axisProps} />
                   <YAxis
                     domain={bodyFatYAxisDomain}
