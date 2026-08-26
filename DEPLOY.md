@@ -55,7 +55,23 @@ migration**, so no extra security setup is required.
 > Note: `supabase/seed.sql` is intentionally empty. Seeding is app-side (see
 > part C); there is nothing to load manually.
 
-### 3. Enable email auth (magic link)
+### 3. Apply future migrations automatically
+
+The repository includes `.github/workflows/deploy-supabase-migrations.yml`.
+Whenever a migration under `supabase/migrations/` reaches `main`, GitHub Actions
+links the production project and runs `supabase db push`.
+
+Add these encrypted repository secrets once under **GitHub → Settings → Secrets
+and variables → Actions**:
+
+- `SUPABASE_ACCESS_TOKEN` — a Supabase personal access token
+- `SUPABASE_DB_PASSWORD` — the production project's database password
+- `SUPABASE_PROJECT_ID` — the production project ref
+
+The workflow also supports a manual run from the GitHub Actions page. Pending
+migrations are tracked by Supabase and are applied once, in filename order.
+
+### 4. Enable email auth (magic link)
 
 1. Open **Authentication → Providers → Email** and make sure it's enabled.
 2. Magic links are the sign-in method this app uses
