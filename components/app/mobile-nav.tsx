@@ -5,7 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Menu } from "lucide-react"
 
-import { cn } from "@/lib/utils"
+import { cn, TAP_SCALE } from "@/lib/utils"
 import {
   Sheet,
   SheetClose,
@@ -43,10 +43,21 @@ export function MobileNav() {
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal active:bg-border/40 motion-reduce:transition-none",
+                    TAP_SCALE,
                     active ? "text-signal" : "text-muted hover:text-foreground",
                   )}
                 >
-                  <Icon className="size-5 shrink-0" aria-hidden />
+                  <span className="relative flex size-8 items-center justify-center">
+                    {active && (
+                      // Named so it morphs to the next tab's position across a
+                      // navigation instead of popping (see route-progress.tsx).
+                      <span
+                        aria-hidden
+                        className="absolute inset-0 rounded-full bg-signal/15 [view-transition-name:nav-pill-mobile]"
+                      />
+                    )}
+                    <Icon className="relative size-5 shrink-0" aria-hidden />
+                  </span>
                   <span>{item.label}</span>
                 </Link>
               </li>
@@ -62,10 +73,19 @@ export function MobileNav() {
               aria-current={moreActive ? "page" : undefined}
               className={cn(
                 "flex h-16 w-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal active:bg-border/40 motion-reduce:transition-none",
+                TAP_SCALE,
                 moreActive ? "text-signal" : "text-muted hover:text-foreground",
               )}
             >
-              <Menu className="size-5 shrink-0" aria-hidden />
+              <span className="relative flex size-8 items-center justify-center">
+                {moreActive && (
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 rounded-full bg-signal/15 [view-transition-name:nav-pill-mobile]"
+                  />
+                )}
+                <Menu className="relative size-5 shrink-0" aria-hidden />
+              </span>
               <span>More</span>
             </button>
           </li>
@@ -92,6 +112,7 @@ export function MobileNav() {
                       aria-current={active ? "page" : undefined}
                       className={cn(
                         "flex h-20 flex-col items-center justify-center gap-2 rounded-md border text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface motion-reduce:transition-none",
+                        TAP_SCALE,
                         active
                           ? "border-signal/40 bg-background text-foreground"
                           : "border-border bg-background text-muted hover:text-foreground",

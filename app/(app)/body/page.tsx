@@ -47,6 +47,7 @@ export default async function BodyPage() {
         heightCm={profile.height_cm}
         activeDietBlock={activeDietBlock}
         today={today}
+        trackNavy={profile.track_navy_bodyfat !== false}
       />
     </div>
   )

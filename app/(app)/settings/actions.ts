@@ -23,6 +23,7 @@ export interface ProfileInput {
   unit: 'lb' | 'kg'
   height_cm: number | null
   deload_week: number
+  track_navy_bodyfat: boolean
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number) {
@@ -49,10 +50,11 @@ export async function updateProfile(input: ProfileInput): Promise<ActionResult> 
       return { ok: false, error: 'Height must be between 100 and 250 cm.' }
     }
     const deload_week = clampInt(input.deload_week, 0, 52, 0)
+    const track_navy_bodyfat = input.track_navy_bodyfat !== false
 
     const { error } = await supabase
       .from('profiles')
-      .update({ display_name, unit, height_cm, deload_week })
+      .update({ display_name, unit, height_cm, deload_week, track_navy_bodyfat })
       .eq('id', userId)
 
     if (error) return { ok: false, error: error.message }

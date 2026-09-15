@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Check } from 'lucide-react'
 
 import type { ProgramDay, SessionStatus } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import { cn, TAP_SCALE } from '@/lib/utils'
 
 interface DaySelectorProps {
   days: ProgramDay[]
@@ -41,6 +41,7 @@ export function DaySelector({
             aria-current={active ? 'page' : undefined}
             className={cn(
               'flex min-h-11 shrink-0 flex-col justify-center rounded-md border px-3 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+              TAP_SCALE,
               active
                 ? 'border-signal bg-signal/10'
                 : 'border-border bg-surface hover:bg-border/50',

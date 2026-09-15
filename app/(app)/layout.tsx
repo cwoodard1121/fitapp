@@ -8,6 +8,7 @@ import { Header } from "@/components/app/header"
 import { Nav } from "@/components/app/nav"
 import { MobileNav } from "@/components/app/mobile-nav"
 import { CoachWidget } from "@/components/coach/coach-widget"
+import { WearableAutoSync } from "@/components/wearables/wearable-auto-sync"
 
 /**
  * Authenticated app shell. As a Server Component it first makes sure the user
@@ -77,6 +78,9 @@ export default async function AppLayout({
       {/* Floating AI coach — grounded in the user's analytics, allowlisted only.
           The /api/coach route enforces the same gate defensively. */}
       {isEmailAllowed(user?.email) ? <CoachWidget /> : null}
+
+      {/* Silent Fitbit sync on every fresh app open (see component doc). */}
+      <WearableAutoSync />
     </div>
   )
 }

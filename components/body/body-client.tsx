@@ -38,6 +38,8 @@ interface BodyClientProps {
   activeDietBlock: Pick<Block, 'phase' | 'start_date'> | null
   /** yyyy-MM-dd for "today" (computed server-side for stable SSR). */
   today: string
+  /** Off when the athlete has no tape measure — hides the Navy readings card. */
+  trackNavy: boolean
 }
 
 export function BodyClient({
@@ -46,6 +48,7 @@ export function BodyClient({
   heightCm,
   activeDietBlock,
   today,
+  trackNavy,
 }: BodyClientProps) {
   const [open, setOpen] = React.useState(false)
   const [navyOpen, setNavyOpen] = React.useState(false)
@@ -139,13 +142,15 @@ export function BodyClient({
               </Button>
             </CardContent>
           </Card>
-          <NavyWeekCard
-            entries={entries}
-            heightCm={heightCm}
-            today={today}
-            onAdd={openAddNavy}
-            onEdit={openEditNavy}
-          />
+          {trackNavy ? (
+            <NavyWeekCard
+              entries={entries}
+              heightCm={heightCm}
+              today={today}
+              onAdd={openAddNavy}
+              onEdit={openEditNavy}
+            />
+          ) : null}
         </>
       ) : (
         <>
@@ -155,13 +160,15 @@ export function BodyClient({
             </CardContent>
           </Card>
 
-          <NavyWeekCard
-            entries={entries}
-            heightCm={heightCm}
-            today={today}
-            onAdd={openAddNavy}
-            onEdit={openEditNavy}
-          />
+          {trackNavy ? (
+            <NavyWeekCard
+              entries={entries}
+              heightCm={heightCm}
+              today={today}
+              onAdd={openAddNavy}
+              onEdit={openEditNavy}
+            />
+          ) : null}
 
           {entries.length >= 2 ? (
             <TrendChart

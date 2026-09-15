@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Stat } from '@/components/ui/stat'
 import { navyBodyFatSummaryInISOWeek } from '@/lib/body/body-fat'
 import type { BodyMetric } from '@/lib/types'
 
@@ -61,22 +62,20 @@ export function NavyWeekCard({
           <>
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-md border border-border bg-background p-3">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                  Weekly average
-                </p>
-                <p className="mt-1 font-mono text-xl font-semibold tabular-nums text-signal">
-                  {summary.bodyfatPct == null
-                    ? '—'
-                    : `${summary.bodyfatPct.toFixed(1)}%`}
-                </p>
+                <Stat
+                  label="Weekly average"
+                  tone="signal"
+                  value={summary.bodyfatPct}
+                  precision={1}
+                  unit={summary.bodyfatPct == null ? undefined : '%'}
+                  animated
+                />
               </div>
               <div className="rounded-md border border-border bg-background p-3">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                  Included
-                </p>
-                <p className="mt-1 font-mono text-xl font-semibold tabular-nums">
-                  {summary.acceptedSampleCount}/{summary.totalSampleCount}
-                </p>
+                <Stat
+                  label="Included"
+                  value={`${summary.acceptedSampleCount}/${summary.totalSampleCount}`}
+                />
               </div>
             </div>
 

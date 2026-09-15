@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
   // Type-checking (next build) still runs and catches real bugs; ESLint is a
   // stylistic gate we don't want blocking deploys of this personal app.
   eslint: { ignoreDuringBuilds: true },
+  // NOTE: deliberately NOT using experimental.viewTransition — it requires
+  // swapping react/react-dom to their unstable "experimental" channel
+  // (needsExperimentalReact() in Next's own source), which is too much risk
+  // for a personal daily-use app. Page-transition crossfades are instead
+  // wired by hand with the standard, stable View Transitions API — see
+  // components/app/route-progress.tsx.
 };
 
 export default nextConfig;

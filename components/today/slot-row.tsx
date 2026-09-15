@@ -452,6 +452,7 @@ export function SlotRow({ view, sessionId, week, unit }: SlotRowProps) {
                 unit={unit}
                 tone="signal"
                 precision={1}
+                animated
               />
               {result.gate ? (
                 <Badge variant={GATE_BADGE[result.gate]}>{result.gate}</Badge>

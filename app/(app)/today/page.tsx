@@ -87,7 +87,9 @@ export default async function TodayPage({
   const { data: bodyRows, error: bodyError } = bodyResult
   if (bodyError) throw bodyError
   const bodyEntries = (bodyRows ?? []) as BodyMetric[]
+  const trackNavy = profile?.track_navy_bodyfat !== false
   const weeklyNavyDue =
+    trackNavy &&
     (navyBodyFatSummaryInISOWeek(bodyEntries, today)?.acceptedSampleCount ?? 0) === 0
 
   // No program -> friendly empty state with the next action.
@@ -123,9 +125,17 @@ export default async function TodayPage({
   // Each program owns its mesocycle anchor; a null start_date means Week 1.
   const startDate = program.start_date
   const currentWeek = weekForDate(startDate, program.length_weeks)
+  // No explicit ?week= -> reopen on the athlete's last manual pick (if still
+  // in range) rather than snapping back to the calendar-derived current week.
+  // An explicit ?week= (from the strip, or a bookmarked link) always wins.
+  const remembered = profile?.last_selected_week
+  const defaultWeek =
+    remembered != null && remembered >= 1 && remembered <= program.length_weeks
+      ? remembered
+      : currentWeek
   const week = resolveTrainingWeek(
     params.week,
-    currentWeek,
+    defaultWeek,
     program.length_weeks,
   )
   const meso = mesocycleNumber(startDate, program.length_weeks)

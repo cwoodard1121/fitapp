@@ -1,6 +1,7 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { AnimatedNumber } from "./animated-number"
 
 type StatTone =
   | "default"
@@ -45,6 +46,10 @@ export interface StatProps
   labelClassName?: string
   valueClassName?: string
   unitClassName?: string
+  /** Tween the digits when a numeric value changes instead of popping to it.
+   *  Opt-in — only worth it for a handful of "hero" readouts, not every Stat
+   *  on the page (see overdrive.md's "layering competing moments" warning). */
+  animated?: boolean
 }
 
 function formatValue(
@@ -79,12 +84,14 @@ const Stat = React.forwardRef<HTMLDivElement, StatProps>(
       labelClassName,
       valueClassName,
       unitClassName,
+      animated = false,
       ...props
     },
     ref
   ) => {
     const display = formatValue(value, precision, placeholder)
     const isPlaceholder = display === placeholder
+    const canAnimate = animated && !isPlaceholder && typeof value === "number"
 
     return (
       <div
@@ -110,7 +117,11 @@ const Stat = React.forwardRef<HTMLDivElement, StatProps>(
             valueClassName
           )}
         >
-          {display}
+          {canAnimate ? (
+            <AnimatedNumber value={value as number} precision={precision} />
+          ) : (
+            display
+          )}
           {unit && !isPlaceholder ? (
             <span
               className={cn(

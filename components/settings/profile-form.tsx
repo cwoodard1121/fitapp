@@ -27,6 +27,7 @@ export function ProfileForm({ profile }: { profile: Profile }) {
     profile.height_cm != null ? String(profile.height_cm) : '',
   )
   const [deloadWeek, setDeloadWeek] = useState(String(profile.deload_week ?? 0))
+  const [trackNavy, setTrackNavy] = useState(profile.track_navy_bodyfat !== false)
   const [pending, startTransition] = useTransition()
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -37,6 +38,7 @@ export function ProfileForm({ profile }: { profile: Profile }) {
         unit,
         height_cm: heightCm.trim() === '' ? null : Number(heightCm),
         deload_week: Number(deloadWeek),
+        track_navy_bodyfat: trackNavy,
       })
       if (res.ok) toast.success('Saved your profile.')
       else toast.error(res.error)
@@ -81,6 +83,23 @@ export function ProfileForm({ profile }: { profile: Profile }) {
             <p className="text-xs text-muted">
               Used for the weekly Navy body-fat calculation.
             </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="track_navy_bodyfat">Weekly Navy tape reminder</Label>
+              <p className="text-sm text-muted">
+                {trackNavy
+                  ? 'Today nags you for a neck + waist reading each week, and Body shows the readings card.'
+                  : "Off — no tape measure. Today and Body stay clear of it."}
+              </p>
+            </div>
+            <Switch
+              id="track_navy_bodyfat"
+              checked={trackNavy}
+              onCheckedChange={setTrackNavy}
+              aria-label="Toggle the weekly Navy body-fat tape reminder"
+            />
           </div>
 
           <div className="flex items-center justify-between gap-4">

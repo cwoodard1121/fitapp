@@ -116,4 +116,32 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* View Transition pseudo-elements live outside the regular tree, so the
+     universal rule above never reaches them — cut separately. */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Page navigations (components/app/route-progress.tsx wraps them in
+   document.startViewTransition): a quick, snappy cross-fade rather than the
+   browser's slower 250ms default — this is what turns a route change from a
+   hard cut into one continuous surface. */
+@media not (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 150ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0.2, 1);
+  }
+
+  /* Named elements (the nav pill) get a touch more time so the slide/resize
+     between tabs reads as a deliberate glide, not a flicker. */
+  ::view-transition-group(nav-pill-desktop),
+  ::view-transition-group(nav-pill-mobile) {
+    animation-duration: 220ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0.2, 1);
+  }
 }

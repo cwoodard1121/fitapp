@@ -334,6 +334,41 @@ export async function seedStarterProgram(): Promise<
 }
 
 /* ------------------------------------------------------------------ */
+/* Remembered training week — sticks across visits until changed again */
+/* or explicitly cleared via "Back to current".                        */
+/* ------------------------------------------------------------------ */
+
+const lastSelectedWeekSchema = z.object({
+  week: z.number().int().min(1).max(52).nullable(),
+})
+
+/**
+ * Persist (or clear) the athlete's manually-picked training week so the next
+ * visit with no explicit ?week= reopens on it instead of snapping back to the
+ * calendar-derived current week. Fire-and-forget from the client — never
+ * blocks navigation, so a failure here is silent (the URL param still works).
+ */
+export async function setLastSelectedWeek(
+  input: z.infer<typeof lastSelectedWeekSchema>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = lastSelectedWeekSchema.safeParse(input)
+  if (!parsed.success) return { ok: false, error: 'Unknown week.' }
+
+  try {
+    const supabase = await createClient()
+    const userId = await requireUserId(supabase)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ last_selected_week: parsed.data.week })
+      .eq('id', userId)
+    if (error) throw error
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'Could not remember that week.' }
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 

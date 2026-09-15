@@ -81,6 +81,10 @@ export interface Profile {
   maintenance_calibration_reason: MaintenanceCalibrationReason | null;
   /** Calorie target captured when the current epoch began, when available. */
   maintenance_calibration_target: number | null;
+  /** Weekly Navy tape prompt + card. Off when the athlete has no tape measure. */
+  track_navy_bodyfat: boolean;
+  /** Last mesocycle week manually picked in Today; null defers to the current week. */
+  last_selected_week: number | null;
   /** Whether strength data may make a small, capped body-fat estimate adjustment. */
   created_at: string;
 }

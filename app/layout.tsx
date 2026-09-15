@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Toaster } from "sonner";
 import { ServiceWorker } from "@/components/app/service-worker";
+import { RouteProgress } from "@/components/app/route-progress";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -42,6 +44,9 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
+        <Suspense fallback={null}>
+          <RouteProgress />
+        </Suspense>
         {children}
         {/* Toasts are lifted above the mobile tab bar in globals.css, keyed to
             the same md breakpoint as the nav (Sonner's own mobileOffset only

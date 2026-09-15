@@ -1,6 +1,9 @@
+'use client'
+
 import Link from 'next/link'
 
-import { cn } from '@/lib/utils'
+import { cn, TAP_SCALE } from '@/lib/utils'
+import { setLastSelectedWeek } from '@/app/(app)/today/actions'
 
 interface WeekSelectorProps {
   lengthWeeks: number
@@ -8,10 +11,16 @@ interface WeekSelectorProps {
   currentWeek: number
 }
 
+/** Fire-and-forget: never awaited, never blocks the click's own navigation. */
+function rememberWeek(week: number | null) {
+  void setLastSelectedWeek({ week })
+}
+
 /**
  * Switches the session logger between weeks in the current mesocycle. Changing
  * weeks deliberately clears the selected day so the destination week can open
- * its first unfinished workout.
+ * its first unfinished workout. The pick also sticks across visits (see
+ * rememberWeek) until "Back to current" clears it.
  */
 export function WeekSelector({
   lengthWeeks,
@@ -35,6 +44,7 @@ export function WeekSelector({
           <Link
             href="/today"
             scroll={false}
+            onClick={() => rememberWeek(null)}
             className="text-xs font-medium text-signal hover:underline"
           >
             Back to current
@@ -57,10 +67,12 @@ export function WeekSelector({
               key={week}
               href={href}
               scroll={false}
+              onClick={() => rememberWeek(current ? null : week)}
               aria-current={active ? 'page' : undefined}
               aria-label={`Week ${week}${current ? ', current week' : ''}`}
               className={cn(
                 'flex h-11 min-w-16 shrink-0 items-center justify-center gap-1.5 rounded-md border px-3 font-mono text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                TAP_SCALE,
                 active
                   ? 'border-signal bg-signal/10 text-signal'
                   : 'border-border bg-surface text-foreground hover:bg-border/50',

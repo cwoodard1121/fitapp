@@ -73,6 +73,13 @@ export {
 } from "./dropdown-menu"
 export { Skeleton } from "./skeleton"
 export {
+  SkeletonPage,
+  SkeletonHeaderBar,
+  SkeletonBlock,
+  SkeletonChips,
+  SkeletonRow,
+} from "./page-skeleton"
+export {
   Table,
   TableHeader,
   TableBody,
