@@ -146,7 +146,14 @@ export function BlockForm({
     startTransition(async () => {
       const res = await saveBlock(input)
       if (res.ok) {
-        toast.success(isEditing ? "Block updated" : "Block created")
+        const paused = res.deactivated?.[0]
+        toast.success(
+          paused
+            ? `${isEditing ? "Block updated" : "Block created"} — paused "${paused.name}"`
+            : isEditing
+              ? "Block updated"
+              : "Block created",
+        )
         onOpenChange(false)
       } else {
         toast.error(res.error)
@@ -382,9 +389,7 @@ export function BlockForm({
                 <p className="text-xs text-muted">
                   {block?.completed_at
                     ? "Reopen this block before making it active again."
-                    : `Deactivates any other active ${
-                        isDiet ? "diet" : "training"
-                      } block.`}
+                    : "Only one block runs at a time — this pauses whatever else is active."}
                 </p>
               </div>
               <Switch

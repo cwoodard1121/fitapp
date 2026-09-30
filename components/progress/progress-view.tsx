@@ -20,7 +20,8 @@ import {
   Badge,
 } from "@/components/ui"
 
-import { TrendChart, VolumeChart } from "./charts"
+import { VolumeChart } from "./charts"
+import { CanvasTrendChart } from "./canvas-trend-chart"
 import { GoalsProgress } from "./goals-progress"
 import { BodyTrend } from "./body-trend"
 import type { ProgressData, ExerciseSeries } from "./types"
@@ -151,7 +152,7 @@ export function ProgressView({ data }: { data: ProgressData }) {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-2">
-          <TrendChart points={current.points} dataKey="e1rm" unit={unit} label="e1RM" />
+          <CanvasTrendChart points={current.points} dataKey="e1rm" unit={unit} label="e1RM" />
         </CardContent>
       </Card>
 
@@ -165,7 +166,7 @@ export function ProgressView({ data }: { data: ProgressData }) {
           <CardDescription>The working load you logged over time.</CardDescription>
         </CardHeader>
         <CardContent className="pt-2">
-          <TrendChart points={current.points} dataKey="load" unit={unit} label="Load" />
+          <CanvasTrendChart points={current.points} dataKey="load" unit={unit} label="Load" />
         </CardContent>
       </Card>
 

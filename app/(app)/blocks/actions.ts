@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 import { createClient } from "@/lib/supabase/server"
-import { requireUserId } from "@/lib/data"
+import { requireUserId, getActiveProgram, setProgramStartDate } from "@/lib/data"
+import { resetMaintenanceCalibration } from "@/app/(app)/nutrition/actions"
 import type { Block, BlockKind } from "@/lib/types"
 
 /* ------------------------------------------------------------------ */
@@ -53,8 +54,24 @@ const baseSchema = z.object({
 
 export type BlockFormInput = z.input<typeof baseSchema>
 
+/** A block that got paused because a different block was just made active. */
+export interface DeactivatedBlock {
+  id: string
+  kind: BlockKind
+  name: string
+}
+
 export type ActionResult =
-  | { ok: true; id: string }
+  | { ok: true; id: string; deactivated?: DeactivatedBlock[] }
+  | { ok: false; error: string }
+
+export type RestartResult =
+  | {
+      ok: true
+      programRestarted: boolean
+      trainingBlockRestarted: boolean
+      dietBlockRestarted: boolean
+    }
   | { ok: false; error: string }
 
 export type CompleteBlockResult =
@@ -65,22 +82,35 @@ export type CompleteBlockResult =
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-/** Deactivate every other block of the same kind for this user. */
+/**
+ * Deactivate every other active block for this user, regardless of kind — only
+ * one block runs at a time. Returns what got paused so the caller can tell the
+ * athlete what just happened.
+ */
 async function deactivateOthers(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  kind: BlockKind,
   exceptId?: string,
-) {
-  let q = supabase
+): Promise<DeactivatedBlock[]> {
+  let readQ = supabase
+    .from("blocks")
+    .select("id, kind, name")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+  if (exceptId) readQ = readQ.neq("id", exceptId)
+  const { data: others, error: readErr } = await readQ
+  if (readErr) throw readErr
+
+  const rows = (others ?? []) as DeactivatedBlock[]
+  if (rows.length === 0) return []
+
+  const { error } = await supabase
     .from("blocks")
     .update({ is_active: false })
-    .eq("user_id", userId)
-    .eq("kind", kind)
-    .eq("is_active", true)
-  if (exceptId) q = q.neq("id", exceptId)
-  const { error } = await q
+    .in("id", rows.map((r) => r.id))
   if (error) throw error
+
+  return rows
 }
 
 function normalizePhase(kind: BlockKind, phase: string | null): string | null {
@@ -161,14 +191,16 @@ export async function saveBlock(input: BlockFormInput): Promise<ActionResult> {
       savedId = (data as { id: string }).id
     }
 
-    // Enforce single-active per kind when this block is set active.
+    // Only one block runs at a time — activating this one pauses whatever
+    // else was active, training or diet.
+    let deactivated: DeactivatedBlock[] = []
     if (v.is_active && savedId) {
-      await deactivateOthers(supabase, userId, v.kind, savedId)
+      deactivated = await deactivateOthers(supabase, userId, savedId)
     }
 
     revalidatePath("/blocks")
     revalidatePath("/progress")
-    return { ok: true, id: savedId! }
+    return { ok: true, id: savedId!, deactivated }
   } catch (e) {
     return {
       ok: false,
@@ -185,19 +217,14 @@ export async function setActiveBlock(
     const supabase = await createClient()
     const userId = await requireUserId(supabase)
 
-    // Need the kind to scope the deactivation of siblings.
     const { data: existing, error: readErr } = await supabase
       .from("blocks")
-      .select("id, kind, end_date, completed_at")
+      .select("id, end_date, completed_at")
       .eq("id", id)
       .eq("user_id", userId)
       .single()
     if (readErr) throw readErr
-    const target = existing as Pick<
-      Block,
-      "kind" | "end_date" | "completed_at"
-    >
-    const kind = target.kind
+    const target = existing as Pick<Block, "end_date" | "completed_at">
 
     if (active && target.completed_at != null) {
       return { ok: false, error: "Reopen this block before setting it active." }
@@ -213,8 +240,11 @@ export async function setActiveBlock(
       }
     }
 
+    // Only one block runs at a time — activating this one pauses whatever
+    // else was active, training or diet.
+    let deactivated: DeactivatedBlock[] = []
     if (active) {
-      await deactivateOthers(supabase, userId, kind, id)
+      deactivated = await deactivateOthers(supabase, userId, id)
     }
 
     const { error } = await supabase
@@ -226,7 +256,7 @@ export async function setActiveBlock(
 
     revalidatePath("/blocks")
     revalidatePath("/progress")
-    return { ok: true, id }
+    return { ok: true, id, deactivated }
   } catch (e) {
     return {
       ok: false,
@@ -334,6 +364,72 @@ export async function reopenBlock(id: string): Promise<ActionResult> {
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Could not reopen the block.",
+    }
+  }
+}
+
+/**
+ * "Start this cycle over" — re-anchors the active program's week counter to
+ * today, restarts the active training/diet blocks' own timelines, and begins
+ * a fresh maintenance-calibration epoch. Nothing is deleted: set logs, body
+ * readings, and nutrition history all stay exactly as logged — only the
+ * "count from here" anchors move to today.
+ */
+export async function restartCurrentBlock(): Promise<RestartResult> {
+  try {
+    const supabase = await createClient()
+    const userId = await requireUserId(supabase)
+    const today = new Date().toISOString().slice(0, 10)
+
+    const [activeProgram, { data: activeBlockRows, error: blocksErr }] =
+      await Promise.all([
+        getActiveProgram(),
+        supabase
+          .from("blocks")
+          .select("id, kind")
+          .eq("user_id", userId)
+          .eq("is_active", true)
+          .is("completed_at", null),
+      ])
+    if (blocksErr) throw blocksErr
+
+    const activeBlocks = (activeBlockRows ?? []) as Pick<Block, "id" | "kind">[]
+    if (!activeProgram && activeBlocks.length === 0) {
+      return { ok: false, error: "Nothing active to restart yet." }
+    }
+
+    if (activeProgram) {
+      await setProgramStartDate(activeProgram.id, today)
+    }
+
+    if (activeBlocks.length > 0) {
+      const { error } = await supabase
+        .from("blocks")
+        .update({ start_date: today })
+        .in("id", activeBlocks.map((b) => b.id))
+      if (error) throw error
+    }
+
+    const calibrationRes = await resetMaintenanceCalibration()
+    if (!calibrationRes.ok) throw new Error(calibrationRes.error)
+
+    revalidatePath("/blocks")
+    revalidatePath("/mesocycle")
+    revalidatePath("/today")
+    revalidatePath("/nutrition")
+    revalidatePath("/progress")
+    revalidatePath("/body")
+
+    return {
+      ok: true,
+      programRestarted: Boolean(activeProgram),
+      trainingBlockRestarted: activeBlocks.some((b) => b.kind === "training"),
+      dietBlockRestarted: activeBlocks.some((b) => b.kind === "diet"),
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not restart.",
     }
   }
 }

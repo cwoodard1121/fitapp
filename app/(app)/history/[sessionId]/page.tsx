@@ -199,20 +199,28 @@ export default async function SessionDetailPage({
       </div>
 
       <header className="mb-5 space-y-2">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {day?.label ?? "Workout"}
-          </h1>
-          {statusBadge(session.status)}
+        <div
+          className="space-y-2"
+          style={{ viewTransitionName: `session-title-${session.id}` }}
+        >
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {day?.label ?? "Workout"}
+            </h1>
+            {statusBadge(session.status)}
+          </div>
+          <p className="font-mono text-sm tabular-nums text-muted">
+            {dateLabel}
+            {session.performed_at == null ? " · not dated" : ""}
+            {" · "}
+            {`Mesocycle ${session.mesocycle + 1} · Week ${session.week}`}
+          </p>
         </div>
-        <p className="font-mono text-sm tabular-nums text-muted">
-          {dateLabel}
-          {session.performed_at == null ? " · not dated" : ""}
-          {" · "}
-          {`Mesocycle ${session.mesocycle + 1} · Week ${session.week}`}
-        </p>
 
-        <div className="mt-2 flex items-end gap-6 rounded-lg border border-border bg-surface p-4">
+        <div
+          className="mt-2 flex items-end gap-6 rounded-lg border border-border bg-surface p-4"
+          style={{ viewTransitionName: `session-stats-${session.id}` }}
+        >
           <Stat label="Lifts logged" value={loggedCount} size="default" />
           <Stat
             label="Total tonnage"

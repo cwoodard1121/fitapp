@@ -40,6 +40,9 @@ interface ActiveBlockCardProps {
   kind: BlockKind
   block: Block | null
   programName: string | null
+  /** Name of the other-kind block currently running, if one is — only one
+   *  block runs at a time, so this explains why this tab looks empty. */
+  otherActiveName: string | null
   onEdit: (block: Block) => void
   onCreate: () => void
   onViewStats: (block: Block) => void
@@ -50,6 +53,7 @@ export function ActiveBlockCard({
   kind,
   block,
   programName,
+  otherActiveName,
   onEdit,
   onCreate,
   onViewStats,
@@ -95,7 +99,9 @@ export function ActiveBlockCard({
           </span>
         </div>
         <p className="text-sm text-muted">
-          No active {kindName} block. Create one to start tracking this phase.
+          {otherActiveName
+            ? `No active ${kindName} block — "${otherActiveName}" is the one running right now. Only one block runs at a time.`
+            : `No active ${kindName} block. Create one to start tracking this phase.`}
         </p>
         <Button variant="outline" size="sm" onClick={onCreate}>
           New {kindName} block

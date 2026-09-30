@@ -75,8 +75,16 @@ export function BlockRow({
   function onSetActive() {
     startTransition(async () => {
       const res = await setActiveBlock(block.id, true)
-      if (res.ok) toast.success(`${block.name} is now active`)
-      else toast.error(res.error)
+      if (res.ok) {
+        const paused = res.deactivated?.[0]
+        toast.success(
+          paused
+            ? `${block.name} is now active — paused "${paused.name}"`
+            : `${block.name} is now active`,
+        )
+      } else {
+        toast.error(res.error)
+      }
     })
   }
 

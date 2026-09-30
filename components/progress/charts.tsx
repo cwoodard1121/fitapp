@@ -3,8 +3,6 @@
 import * as React from "react"
 import { format, parseISO } from "date-fns"
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -15,7 +13,7 @@ import {
   YAxis,
 } from "recharts"
 
-import type { ExercisePoint, VolumeWeekRow } from "./types"
+import type { VolumeWeekRow } from "./types"
 
 /* ------------------------------------------------------------------ */
 /* Dark "instrument panel" chart palette (recharts wants literal hex). */
@@ -35,7 +33,7 @@ const reduceMotion =
   typeof window !== "undefined" &&
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
 
-function fmtDate(iso: string): string {
+export function fmtDate(iso: string): string {
   try {
     return format(parseISO(iso), "MMM d")
   } catch {
@@ -43,22 +41,22 @@ function fmtDate(iso: string): string {
   }
 }
 
-function fmtNum(n: number): string {
+export function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1)
 }
 
 /* ------------------------------------------------------------------ */
-/* Shared surfaced tooltip                                             */
+/* Shared surfaced tooltip — also used by CanvasTrendChart.            */
 /* ------------------------------------------------------------------ */
 
-interface TipRow {
+export interface TipRow {
   label: string
   value: number | string
   color?: string
   unit?: string
 }
 
-function PanelTooltip({
+export function PanelTooltip({
   title,
   rows,
 }: {
@@ -90,96 +88,6 @@ function PanelTooltip({
         ))}
       </ul>
     </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/* Single-metric trend (e1RM / top-set load) over time                 */
-/* ------------------------------------------------------------------ */
-
-export function TrendChart({
-  points,
-  dataKey,
-  unit,
-  label,
-}: {
-  points: ExercisePoint[]
-  dataKey: "e1rm" | "load"
-  unit: string
-  label: string
-}) {
-  const data = React.useMemo(
-    () =>
-      points
-        .filter((p) => p[dataKey] != null)
-        .map((p) => ({
-          x: fmtDate(p.date),
-          week: p.week,
-          value: p[dataKey] as number,
-        })),
-    [points, dataKey]
-  )
-
-  if (data.length === 0) {
-    return (
-      <p className="flex h-[200px] items-center justify-center text-sm text-muted">
-        No {label.toLowerCase()} logged yet.
-      </p>
-    )
-  }
-
-  const gradId = `grad-${dataKey}`
-
-  return (
-    <ResponsiveContainer width="100%" height={200}>
-      <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={SIGNAL} stopOpacity={0.25} />
-            <stop offset="100%" stopColor={SIGNAL} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis
-          dataKey="x"
-          tick={axisTick}
-          tickLine={false}
-          axisLine={{ stroke: GRID }}
-          minTickGap={16}
-        />
-        <YAxis
-          tick={axisTick}
-          tickLine={false}
-          axisLine={false}
-          width={40}
-          domain={["dataMin - 5", "dataMax + 5"]}
-          allowDecimals={false}
-        />
-        <Tooltip
-          cursor={{ stroke: MUTED, strokeWidth: 1, strokeDasharray: "3 3" }}
-          content={({ active, payload }) => {
-            if (!active || !payload?.length) return null
-            const p = payload[0].payload as { x: string; week: number; value: number }
-            return (
-              <PanelTooltip
-                title={`${p.x} · week ${p.week}`}
-                rows={[{ label, value: p.value, unit, color: SIGNAL }]}
-              />
-            )
-          }}
-        />
-        <Area
-          type="monotone"
-          dataKey="value"
-          stroke={SIGNAL}
-          strokeWidth={2}
-          fill={`url(#${gradId})`}
-          dot={{ r: 2.5, fill: SIGNAL, stroke: SURFACE, strokeWidth: 1 }}
-          activeDot={{ r: 4, fill: SIGNAL, stroke: SURFACE, strokeWidth: 1.5 }}
-          isAnimationActive={!reduceMotion}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
   )
 }
 

@@ -12,6 +12,7 @@ import { ActiveBlockCard } from "@/components/blocks/active-block-card"
 import { BlockRow } from "@/components/blocks/block-row"
 import { BlockForm } from "@/components/blocks/block-form"
 import { BlockStatsDialog } from "@/components/blocks/block-stats-dialog"
+import { RestartBlockDialog } from "@/components/blocks/restart-block-dialog"
 import { computeProgress } from "@/components/blocks/utils"
 
 interface BlocksViewProps {
@@ -61,6 +62,13 @@ export function BlocksView({
     return { training, diet }
   }, [blocks])
 
+  // Only one block runs at a time — whichever kind holds it, the other tab's
+  // empty state should say so instead of just "no active block."
+  const globallyActive = useMemo(
+    () => blocks.find((b) => b.is_active && b.completed_at == null) ?? null,
+    [blocks],
+  )
+
   function openCreate(kind: BlockKind) {
     setFormKind(kind)
     setEditing(null)
@@ -83,14 +91,17 @@ export function BlocksView({
             Plan training and diet phases on a timeline.
           </p>
         </div>
-        <Button
-          size="sm"
-          className="hidden sm:inline-flex"
-          onClick={() => openCreate(tab)}
-        >
-          <Plus aria-hidden />
-          New block
-        </Button>
+        <div className="hidden items-center gap-2 sm:flex">
+          <RestartBlockDialog />
+          <Button size="sm" onClick={() => openCreate(tab)}>
+            <Plus aria-hidden />
+            New block
+          </Button>
+        </div>
+      </div>
+
+      <div className="mb-4 flex items-center justify-between gap-2 sm:hidden">
+        <RestartBlockDialog />
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as BlockKind)}>
@@ -110,6 +121,11 @@ export function BlocksView({
             kind="training"
             list={byKind.training}
             activeProgramName={activeProgram?.name ?? null}
+            otherActiveName={
+              globallyActive && globallyActive.kind !== "training"
+                ? globallyActive.name
+                : null
+            }
             onCreate={() => openCreate("training")}
             onEdit={openEdit}
             onViewStats={setStatsBlock}
@@ -122,6 +138,11 @@ export function BlocksView({
             kind="diet"
             list={byKind.diet}
             activeProgramName={activeProgram?.name ?? null}
+            otherActiveName={
+              globallyActive && globallyActive.kind !== "diet"
+                ? globallyActive.name
+                : null
+            }
             onCreate={() => openCreate("diet")}
             onEdit={openEdit}
             onViewStats={setStatsBlock}
@@ -162,6 +183,7 @@ interface KindSectionProps {
   kind: BlockKind
   list: Block[]
   activeProgramName: string | null
+  otherActiveName: string | null
   onCreate: () => void
   onEdit: (block: Block) => void
   onViewStats: (block: Block) => void
@@ -172,6 +194,7 @@ function KindSection({
   kind,
   list,
   activeProgramName,
+  otherActiveName,
   onCreate,
   onEdit,
   onViewStats,
@@ -186,6 +209,7 @@ function KindSection({
         kind={kind}
         block={active}
         programName={activeProgramName}
+        otherActiveName={otherActiveName}
         onEdit={onEdit}
         onCreate={onCreate}
         onViewStats={onViewStats}

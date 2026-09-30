@@ -137,8 +137,18 @@
     animation-timing-function: cubic-bezier(0.2, 0, 0.2, 1);
   }
 
-  /* Named elements (the nav pill) get a touch more time so the slide/resize
-     between tabs reads as a deliberate glide, not a flicker. */
+  /* Named elements (the nav pill, and any other element carrying a
+     view-transition-name — e.g. a History row morphing into its session
+     detail header) get a touch more time so the slide/resize reads as a
+     deliberate glide, not a flicker. Specific idents below win over this
+     wildcard, so root keeps its own faster crossfade. */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 220ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0.2, 1);
+  }
+
   ::view-transition-group(nav-pill-desktop),
   ::view-transition-group(nav-pill-mobile) {
     animation-duration: 220ms;

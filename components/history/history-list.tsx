@@ -170,7 +170,10 @@ function SessionRow({
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       )}
     >
-      <div className="min-w-0 flex-1 space-y-1">
+      <div
+        className="min-w-0 flex-1 space-y-1"
+        style={{ viewTransitionName: `session-title-${session.id}` }}
+      >
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-medium text-foreground">
             {session.dayLabel}
@@ -183,7 +186,10 @@ function SessionRow({
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div
+        className="flex items-center gap-4"
+        style={{ viewTransitionName: `session-stats-${session.id}` }}
+      >
         <Stat
           label="Lifts"
           value={session.exerciseCount}
