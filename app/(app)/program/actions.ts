@@ -18,6 +18,7 @@ import { createClient } from '@/lib/supabase/server'
 import {
   requireUserId,
   createProgram,
+  duplicateProgram,
   setActiveProgram,
   deleteProgram,
 } from '@/lib/data'
@@ -27,7 +28,7 @@ import { nextGeneratedSlotCode } from '@/lib/exercises/identity'
 const ROUTE = '/program'
 
 /** Routes whose server-rendered data depends on which program is active. */
-const ACTIVE_PROGRAM_ROUTES = ['/program', '/today', '/mesocycle', '/progress']
+const ACTIVE_PROGRAM_ROUTES = ['/program', '/today', '/progress']
 function revalidateActiveProgram() {
   for (const r of ACTIVE_PROGRAM_ROUTES) revalidatePath(r)
 }
@@ -149,6 +150,24 @@ export async function createProgramAction(
 }
 
 const programIdSchema = z.object({ programId: z.string().uuid() })
+
+/**
+ * Duplicate a program's structure into a new, inactive program — a fresh
+ * clone with zero logged history, named "<original> (copy)". Lets the user
+ * branch a program to tweak without disturbing the one they're running.
+ */
+export async function duplicateProgramAction(
+  input: z.input<typeof programIdSchema>,
+): Promise<ActionResult<Program>> {
+  try {
+    const { programId } = programIdSchema.parse(input)
+    const program = await duplicateProgram(programId)
+    revalidateActiveProgram()
+    return { ok: true, data: program }
+  } catch (e) {
+    return fail(e)
+  }
+}
 
 /** Make a program the user's single active program (atomic switch). */
 export async function setActiveProgramAction(

@@ -1,7 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { calculateHabitStreak } from '@/lib/habits/streak'
-import type { Habit, HabitCompletion } from '@/lib/types'
+import {
+  calculateHabitStreak,
+  countRecentCompletions,
+  recentCompletionStrip,
+  type RecentDay,
+} from '@/lib/habits/streak'
+import type { Habit, HabitCompletion, HabitKind } from '@/lib/types'
+
+const RECENT_WINDOW_DAYS = 7
 
 export interface DailyHabitSummary {
   id: string
@@ -10,6 +17,14 @@ export interface DailyHabitSummary {
   currentStreak: number
   bestStreak: number
   totalCompletions: number
+  /** Optional "N times a week" target. Null = plain daily streak, no goal shown. */
+  goalPerWeek: number | null
+  /** build = did the thing, break = avoided the thing. Labeling only. */
+  kind: HabitKind
+  /** Completions within the trailing 7-day window ending today. */
+  completionsThisWeek: number
+  /** Last 7 days (oldest first, ending today) for the backfill strip. */
+  recentDays: RecentDay[]
 }
 
 const COMPLETION_PAGE_SIZE = 1000
@@ -78,9 +93,16 @@ export async function getDailyHabitSummaries(
     datesByHabit.set(completion.habit_id, dates)
   }
 
-  return habits.map((habit) => ({
-    id: habit.id,
-    name: habit.name,
-    ...calculateHabitStreak(datesByHabit.get(habit.id) ?? [], today),
-  }))
+  return habits.map((habit) => {
+    const dates = datesByHabit.get(habit.id) ?? []
+    return {
+      id: habit.id,
+      name: habit.name,
+      ...calculateHabitStreak(dates, today),
+      goalPerWeek: habit.goal_per_week,
+      kind: habit.kind,
+      completionsThisWeek: countRecentCompletions(dates, today, RECENT_WINDOW_DAYS),
+      recentDays: recentCompletionStrip(dates, today, RECENT_WINDOW_DAYS),
+    }
+  })
 }

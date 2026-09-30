@@ -414,7 +414,7 @@ export async function restartCurrentBlock(): Promise<RestartResult> {
     if (!calibrationRes.ok) throw new Error(calibrationRes.error)
 
     revalidatePath("/blocks")
-    revalidatePath("/mesocycle")
+    revalidatePath("/program")
     revalidatePath("/today")
     revalidatePath("/nutrition")
     revalidatePath("/progress")

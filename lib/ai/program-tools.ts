@@ -297,7 +297,6 @@ function revalidateProgramSurfaces(): void {
   for (const path of [
     '/program',
     '/today',
-    '/mesocycle',
     '/progress',
     '/history',
   ]) {

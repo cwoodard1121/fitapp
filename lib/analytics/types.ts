@@ -66,6 +66,11 @@ export interface GoalAnalytic {
 export interface BodyAnalytic {
   latestWeight: number | null
   weightBasis: 'latest' | 'block_floor'
+  /** Date `latestWeight` was measured on — the day the block floor was set,
+   *  when `weightBasis` is 'block_floor'. Lets the UI explain a jump (a new
+   *  block/restart re-anchors the floor window) instead of showing a bare
+   *  number that looks inconsistent with a rolling N-day change. */
+  weightDate: string | null
   weightChange: number | null
   /** Slope of bodyweight over the window (units per week). */
   weeklyRate: number | null

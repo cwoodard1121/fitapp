@@ -302,12 +302,17 @@ export interface NutritionLog {
 }
 
 /** habits — user-defined daily streaks such as creatine or mobility. */
+export type HabitKind = "build" | "break";
+
 export interface Habit {
   id: string;
   user_id: string;
   name: string;
   started_on: string;
   sort_order: number;
+  goal_per_week: number | null;
+  /** build = did the thing, break = avoided the thing. Labeling only. */
+  kind: HabitKind;
   archived_at: string | null;
   created_at: string;
   updated_at: string;

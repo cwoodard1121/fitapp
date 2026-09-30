@@ -251,13 +251,20 @@ function BodyCard({
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat
-            label={body.weightBasis === 'block_floor' ? 'Scale floor' : 'Weight'}
-            value={body.latestWeight}
-            unit={unit}
-            precision={1}
-            tone="signal"
-          />
+          <div className="flex flex-col gap-0.5">
+            <Stat
+              label={body.weightBasis === 'block_floor' ? 'Scale floor' : 'Weight'}
+              value={body.latestWeight}
+              unit={unit}
+              precision={1}
+              tone="signal"
+            />
+            {body.weightBasis === 'block_floor' && body.weightDate ? (
+              <span className="text-[10px] text-muted">
+                since {format(parseISO(body.weightDate), 'MMM d')}
+              </span>
+            ) : null}
+          </div>
           <Stat
             label="Δ weight"
             value={body.weightChange != null ? signed(body.weightChange, 1) : null}

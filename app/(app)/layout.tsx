@@ -33,13 +33,17 @@ export default async function AppLayout({
   } = await supabase.auth.getUser()
 
   return (
-    <div className="min-h-svh bg-background text-foreground">
+    // Pinned to the viewport (not a normal scrolling document) so the shell
+    // — sidebar, header, tab bar — never moves or rubber-bands. `<main>`
+    // below is the one region that actually scrolls; this is what makes the
+    // installed PWA feel like an app shell instead of a scrolling website.
+    <div className="fixed inset-0 overflow-hidden overscroll-none bg-background text-foreground">
       {/* Desktop sidebar (md+) */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-border bg-background md:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col overflow-y-auto overscroll-contain border-r border-border bg-background md:flex">
         <Link
           href="/today"
           aria-label="simplegym home"
-          className="flex h-14 items-center gap-1.5 border-b border-border px-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal"
+          className="flex h-14 shrink-0 items-center gap-1.5 border-b border-border px-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal"
         >
           <span className="font-mono text-sm font-semibold tracking-tight text-foreground">
             simplegym
@@ -58,16 +62,18 @@ export default async function AppLayout({
       </aside>
 
       {/* Content column */}
-      <div className="flex min-h-svh flex-col md:pl-60">
+      <div className="flex h-full flex-col md:pl-60">
         <Header
           displayName={profile.display_name}
           email={user?.email ?? null}
         />
-        {/* Pages own their own horizontal padding + max-width; the shell only
-            guarantees vertical rhythm and mobile bottom-nav clearance. The
-            bottom pad tracks the tab bar height *and* the home indicator so
-            nothing tucks under the blurred bar on phones. */}
-        <main className="flex-1 pb-nav-room pt-4 md:pb-2 md:pt-6">
+        {/* The one scrollable region. Pages own their own horizontal padding
+            + max-width; the shell only guarantees vertical rhythm and mobile
+            bottom-nav clearance. The bottom pad tracks the tab bar height
+            *and* the home indicator so nothing tucks under the blurred bar
+            on phones. overscroll-contain keeps a scroll-to-edge here from
+            bouncing the whole shell. */}
+        <main className="flex-1 overflow-y-auto overscroll-contain pb-nav-room pt-4 md:pb-2 md:pt-6">
           {children}
         </main>
       </div>

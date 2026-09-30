@@ -43,7 +43,7 @@ export default function RootLayout({
       className={`dark ${GeistSans.variable} ${GeistMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="min-h-screen bg-background font-sans text-foreground antialiased">
+      <body className="min-h-screen overscroll-none bg-background font-sans text-foreground antialiased">
         <Suspense fallback={null}>
           <RouteProgress />
         </Suspense>

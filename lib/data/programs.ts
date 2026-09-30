@@ -85,6 +85,97 @@ export async function createProgram(input: {
 }
 
 /**
+ * Duplicate a program's structure (days + exercise slots) into a new,
+ * inactive program the user can tweak or run later. Logged history (sessions,
+ * set logs) never copies — this is a fresh structural clone, not a branch of
+ * the original's training log. Named "<original> (copy)" so it's obvious at a
+ * glance; the user can rename it via renameProgram afterward.
+ */
+export async function duplicateProgram(programId: string): Promise<Program> {
+  const supabase = await createClient()
+  const userId = await requireUserId(supabase)
+
+  const { data: source, error: sErr } = await supabase
+    .from('programs')
+    .select('*')
+    .eq('id', programId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (sErr) throw sErr
+  if (!source) throw new Error('That program no longer exists.')
+  const sourceProgram = source as Program
+
+  const { data: days, error: dErr } = await supabase
+    .from('program_days')
+    .select('*')
+    .eq('program_id', programId)
+    .eq('user_id', userId)
+    .order('day_number', { ascending: true })
+  if (dErr) throw dErr
+  const sourceDays = (days as ProgramDay[]) ?? []
+
+  const dayIds = sourceDays.map((d) => d.id)
+  let sourceSlots: ExerciseSlot[] = []
+  if (dayIds.length > 0) {
+    const { data: slotRows, error: slErr } = await supabase
+      .from('exercise_slots')
+      .select('*')
+      .in('day_id', dayIds)
+      .eq('user_id', userId)
+      .order('order_index', { ascending: true })
+    if (slErr) throw slErr
+    sourceSlots = (slotRows as ExerciseSlot[]) ?? []
+  }
+
+  const { data: created, error: pErr } = await supabase
+    .from('programs')
+    .insert({
+      user_id: userId,
+      name: `${sourceProgram.name} (copy)`,
+      length_weeks: sourceProgram.length_weeks,
+      deload_week: sourceProgram.deload_week,
+      is_active: false,
+    })
+    .select('*')
+    .single()
+  if (pErr) throw pErr
+  const newProgram = created as Program
+
+  const slotsByDay = new Map<string, ExerciseSlot[]>()
+  for (const slot of sourceSlots) {
+    const list = slotsByDay.get(slot.day_id) ?? []
+    list.push(slot)
+    slotsByDay.set(slot.day_id, list)
+  }
+
+  await insertDaysAndSlots(
+    supabase,
+    userId,
+    newProgram.id,
+    sourceDays.map((day) => ({
+      dayNumber: day.day_number,
+      label: day.label,
+      slots: (slotsByDay.get(day.id) ?? []).map((slot) => ({
+        slotCode: slot.slot_code,
+        orderIndex: slot.order_index,
+        exerciseName: slot.exercise_name,
+        muscleArea: slot.muscle_area,
+        progressBias: slot.progress_bias,
+        repLow: slot.rep_low,
+        repHigh: slot.rep_high,
+        targetRir: slot.target_rir,
+        baseSets: slot.base_sets,
+        loadIncrement: slot.load_increment,
+        seedLoad: slot.seed_load,
+        isBodyweight: slot.is_bodyweight,
+      })),
+    })),
+  )
+
+  return newProgram
+}
+
+/**
  * Make `programId` the user's single active program (atomic via the DB
  * function: deactivate all, then activate the target). Validates ownership
  * first so a bad id can't leave the user with no active program.

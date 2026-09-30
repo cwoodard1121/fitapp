@@ -11,6 +11,7 @@ export {
   getProgramFull,
   getSlotsForDay,
   createProgram,
+  duplicateProgram,
   setActiveProgram,
   deleteProgram,
   setProgramStartDate,

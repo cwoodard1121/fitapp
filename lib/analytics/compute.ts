@@ -637,6 +637,7 @@ function computeBody(bodyMetrics: BodyMetric[], dietBlock: Block | null): BodyAn
   return {
     latestWeight,
     weightBasis: normalizedWeight.basis,
+    weightDate: normalizedWeight.date,
     weightChange,
     weeklyRate,
     latestBodyfat: latestInterpretedBodyfat,

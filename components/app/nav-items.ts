@@ -4,7 +4,6 @@ import {
   ClipboardList,
   History,
   TrendingUp,
-  CalendarRange,
   Scale,
   Boxes,
   Target,
@@ -21,12 +20,14 @@ export interface NavItem {
 }
 
 // Define each destination once so the mobile + desktop navs stay in sync.
+// Mesocycle used to be its own destination; it's now the "Schedule" tab on
+// Program (both are "what's my training plan doing right now") — one fewer
+// nav item, not a relabel.
 const today: NavItem = { href: "/today", label: "Today", icon: Dumbbell }
 const overview: NavItem = { href: "/overview", label: "Overview", icon: LayoutDashboard }
 const program: NavItem = { href: "/program", label: "Program", icon: ClipboardList }
 const history: NavItem = { href: "/history", label: "History", icon: History }
 const progress: NavItem = { href: "/progress", label: "Progress", icon: TrendingUp }
-const mesocycle: NavItem = { href: "/mesocycle", label: "Mesocycle", icon: CalendarRange }
 const body: NavItem = { href: "/body", label: "Body", icon: Scale }
 const blocks: NavItem = { href: "/blocks", label: "Blocks", icon: Boxes }
 const goals: NavItem = { href: "/goals", label: "Goals", icon: Target }
@@ -40,7 +41,6 @@ export const allNav: NavItem[] = [
   program,
   history,
   progress,
-  mesocycle,
   body,
   blocks,
   goals,
@@ -52,7 +52,7 @@ export const allNav: NavItem[] = [
 export const primaryNav: NavItem[] = [today, overview, progress, body]
 
 /** Mobile "More" sheet: everything not on the bottom bar. */
-export const moreNav: NavItem[] = [program, history, mesocycle, blocks, goals, nutrition, settings]
+export const moreNav: NavItem[] = [program, history, blocks, goals, nutrition, settings]
 
 /** True when `pathname` is `href` or a nested route beneath it. */
 export function isActiveRoute(pathname: string, href: string): boolean {

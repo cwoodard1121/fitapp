@@ -1,5 +1,7 @@
 'use client'
 
+import { format, parseISO } from 'date-fns'
+
 import { Stat } from '@/components/ui/stat'
 import {
   normalizedBodyweight,
@@ -47,14 +49,22 @@ export function BodyStats({ entries, unit, activeDietBlock }: BodyStatsProps) {
 
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
-      <Stat
-        label={normalized.basis === 'block_floor' ? 'Scale floor' : 'Current'}
-        value={normalized.value}
-        unit={unit}
-        size="lg"
-        tone="signal"
-        precision={1}
-      />
+      <div className="flex flex-col gap-0.5">
+        <Stat
+          label={normalized.basis === 'block_floor' ? 'Scale floor' : 'Current'}
+          value={normalized.value}
+          unit={unit}
+          size="lg"
+          tone="signal"
+          precision={1}
+        />
+        {normalized.basis === 'block_floor' && normalized.date ? (
+          <span className="text-[10px] text-muted">
+            since {format(parseISO(normalized.date), 'MMM d')} — a new block or
+            restart re-anchors this
+          </span>
+        ) : null}
+      </div>
       <Stat
         label="Body fat"
         value={latestBodyfat}

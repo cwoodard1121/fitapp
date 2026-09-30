@@ -38,7 +38,7 @@ export async function setStartDate(input: {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not save.' }
   }
 
-  revalidatePath('/mesocycle')
+  revalidatePath('/program')
   revalidatePath('/today')
   return { ok: true }
 }
@@ -52,6 +52,6 @@ export async function seedProgram(): Promise<ActionResult> {
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Could not seed program.' }
   }
-  revalidatePath('/mesocycle')
+  revalidatePath('/program')
   return { ok: true }
 }

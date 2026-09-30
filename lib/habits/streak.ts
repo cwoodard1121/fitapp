@@ -39,6 +39,15 @@ function dateOrdinal(value: string): number | null {
   return Math.floor(date.getTime() / MILLISECONDS_PER_DAY)
 }
 
+/** Inverse of `dateOrdinal` — a UTC day ordinal back to `yyyy-MM-dd`. */
+function ordinalToDate(ordinal: number): string {
+  const date = new Date(ordinal * MILLISECONDS_PER_DAY)
+  const year = String(date.getUTCFullYear()).padStart(4, '0')
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 /**
  * Calculate daily habit streaks from completed `yyyy-MM-dd` calendar dates.
  *
@@ -83,4 +92,54 @@ export function calculateHabitStreak(
     bestStreak,
     totalCompletions: completed.size,
   }
+}
+
+export interface RecentDay {
+  date: string
+  completed: boolean
+}
+
+/**
+ * The last `windowDays` calendar days ending today (inclusive), oldest
+ * first, each marked complete or not. Backs the per-habit backfill strip —
+ * tapping any of these days toggles that day's completion directly, not
+ * just today's.
+ */
+export function recentCompletionStrip(
+  completedDates: readonly string[],
+  today: string,
+  windowDays: number,
+): RecentDay[] {
+  const todayOrdinal = dateOrdinal(today)
+  if (todayOrdinal == null) {
+    throw new RangeError('today must be a valid yyyy-MM-dd date')
+  }
+
+  const completed = new Set<number>()
+  for (const value of completedDates) {
+    const ordinal = dateOrdinal(value)
+    if (ordinal != null && ordinal <= todayOrdinal) completed.add(ordinal)
+  }
+
+  const days: RecentDay[] = []
+  for (let i = windowDays - 1; i >= 0; i--) {
+    const ordinal = todayOrdinal - i
+    days.push({ date: ordinalToDate(ordinal), completed: completed.has(ordinal) })
+  }
+  return days
+}
+
+/**
+ * Count of completions within the last `windowDays` calendar days ending
+ * today (inclusive) — the numerator for an optional weekly goal like "3/5
+ * this week."
+ */
+export function countRecentCompletions(
+  completedDates: readonly string[],
+  today: string,
+  windowDays: number,
+): number {
+  return recentCompletionStrip(completedDates, today, windowDays).filter(
+    (d) => d.completed,
+  ).length
 }

@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Loader2, Plus, Star, Trash2 } from 'lucide-react'
+import { Copy, Loader2, Plus, Star, Trash2 } from 'lucide-react'
 
 import type { Program } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -27,13 +27,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { TAP_SCALE } from '@/lib/utils'
 import {
   createProgramAction,
+  duplicateProgramAction,
   setActiveProgramAction,
   deleteProgramAction,
 } from '@/app/(app)/program/actions'
 
-type Busy = null | 'activate' | 'delete' | 'create'
+type Busy = null | 'activate' | 'delete' | 'create' | 'duplicate'
 
 /**
  * Program manager for the editor header: switch WHICH program you're editing
@@ -88,6 +90,18 @@ export function ProgramSwitcher({
       setName('')
       setTemplate('blank')
       toast.success('Program created.')
+      router.push(`/program?p=${res.data.id}`)
+    } else {
+      toast.error(res.error)
+    }
+  }
+
+  async function duplicate() {
+    setBusy('duplicate')
+    const res = await duplicateProgramAction({ programId: currentId })
+    setBusy(null)
+    if (res.ok) {
+      toast.success(`${res.data.name} created.`)
       router.push(`/program?p=${res.data.id}`)
     } else {
       toast.error(res.error)
@@ -152,10 +166,27 @@ export function ProgramSwitcher({
           variant="secondary"
           size="sm"
           onClick={() => setNewOpen(true)}
-          className="gap-1.5"
+          className={cn('gap-1.5', TAP_SCALE)}
         >
           <Plus className="size-3.5" aria-hidden />
           New
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={duplicate}
+          disabled={busy !== null}
+          aria-label={`Duplicate ${programs.find((p) => p.id === currentId)?.name ?? 'this program'}`}
+          className={cn('gap-1.5', TAP_SCALE)}
+        >
+          {busy === 'duplicate' ? (
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          ) : (
+            <Copy className="size-3.5" aria-hidden />
+          )}
+          Duplicate
         </Button>
 
         <Button
@@ -165,7 +196,7 @@ export function ProgramSwitcher({
           onClick={() => setDelOpen(true)}
           disabled={busy !== null}
           aria-label="Delete this program"
-          className="text-muted hover:text-gate-red"
+          className={cn('text-muted hover:text-gate-red', TAP_SCALE)}
         >
           <Trash2 className="size-4" aria-hidden />
         </Button>
