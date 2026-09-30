@@ -7,8 +7,9 @@ import { format } from 'date-fns'
 
 import type { SessionStatus } from '@/lib/types'
 import { Button } from '@/components/ui/button'
-import { finishSession, reopenSession } from '@/app/(app)/today/actions'
+import { finishSession, getSessionRecap, reopenSession, type SessionRecapData } from '@/app/(app)/today/actions'
 import { flushTrainingSaves } from '@/lib/client/training-save-queue'
+import { SessionWrappedRecap } from '@/components/today/session-wrapped-recap'
 
 interface SessionBarProps {
   sessionId: string
@@ -37,6 +38,7 @@ export function SessionBar({
   totalSlots,
 }: SessionBarProps) {
   const [pending, startTransition] = React.useTransition()
+  const [recap, setRecap] = React.useState<SessionRecapData | null>(null)
   const done = status === 'done'
 
   function onFinish() {
@@ -54,8 +56,16 @@ export function SessionBar({
         return
       }
       const res = await finishSession({ sessionId })
-      if (res.ok) toast.success('Session finished — nice work.')
-      else toast.error(res.error)
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      const recapRes = await getSessionRecap({ sessionId })
+      if (recapRes.ok) {
+        setRecap(recapRes.data)
+      } else {
+        toast.success('Session finished — nice work.')
+      }
     })
   }
 
@@ -115,6 +125,16 @@ export function SessionBar({
           </Button>
         )}
       </div>
+
+      {recap ? (
+        <SessionWrappedRecap
+          open
+          onOpenChange={(open) => {
+            if (!open) setRecap(null)
+          }}
+          data={recap}
+        />
+      ) : null}
     </div>
   )
 }

@@ -14,10 +14,14 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
   getPendingSorenessCheckIns,
+  getProfile,
+  getSetLogsForSession,
   requireUserId,
   seedDefaultProgram,
 } from '@/lib/data'
 import { appCalendarDate } from '@/lib/data/soreness'
+import { epley1RM } from '@/lib/engine/engine'
+import type { ExerciseSlot, ProgramDay, Session, SetLog, Unit } from '@/lib/types'
 
 const ROUTE = '/today'
 
@@ -292,6 +296,164 @@ export async function finishSession(
     return { ok: true }
   } catch {
     return { ok: false, error: 'Could not finish the session. Try again.' }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Session Wrapped — a quick celebratory recap right after finishing    */
+/* ------------------------------------------------------------------ */
+
+export interface SessionRecapPR {
+  exerciseName: string
+  e1rm: number
+}
+
+export interface SessionRecapData {
+  dayLabel: string
+  totalTonnage: number
+  loggedCount: number
+  totalSets: number
+  totalReps: number
+  unit: Unit
+  prs: SessionRecapPR[]
+}
+
+type SessionRecapResult =
+  | { ok: true; data: SessionRecapData }
+  | { ok: false; error: string }
+
+/**
+ * A session-scale version of the block "Wrapped" recap — fires every finish,
+ * not just once a block completes. Tonnage/e1RM use the exact formulas the
+ * engine itself uses (lib/engine/engine.ts) so the numbers match what History
+ * shows for this same session. A PR only counts when there's prior history on
+ * that exercise to beat — a first-ever log isn't a "record" yet.
+ */
+export async function getSessionRecap(
+  input: z.infer<typeof sessionIdSchema>,
+): Promise<SessionRecapResult> {
+  const parsed = sessionIdSchema.safeParse(input)
+  if (!parsed.success) return { ok: false, error: 'Unknown session.' }
+
+  try {
+    const supabase = await createClient()
+    const userId = await requireUserId(supabase)
+
+    const { data: sessionRow, error: sErr } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('id', parsed.data.sessionId)
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (sErr) throw sErr
+    if (!sessionRow) return { ok: false, error: 'Session not found.' }
+    const session = sessionRow as Session
+
+    const [{ data: dayRow }, logsBySlot, profile] = await Promise.all([
+      supabase
+        .from('program_days')
+        .select('*')
+        .eq('id', session.day_id)
+        .eq('user_id', userId)
+        .maybeSingle(),
+      getSetLogsForSession(session.id),
+      getProfile(),
+    ])
+
+    const logs = Object.values(logsBySlot)
+
+    let totalTonnage = 0
+    let loggedCount = 0
+    let totalSets = 0
+    let totalReps = 0
+    const sessionE1rmBySlot = new Map<string, number>()
+
+    for (const log of logs) {
+      const hasData =
+        log.actual_load != null || log.best_reps != null || log.actual_sets != null
+      if (!hasData) continue
+      loggedCount += 1
+      if (log.actual_sets != null) totalSets += log.actual_sets
+      if (log.actual_sets != null && log.best_reps != null) {
+        totalReps += log.actual_sets * log.best_reps
+      }
+      if (log.actual_sets != null && log.best_reps != null && log.actual_load != null) {
+        totalTonnage += log.actual_sets * log.best_reps * log.actual_load
+      }
+      if (log.actual_load != null && log.best_reps != null) {
+        sessionE1rmBySlot.set(log.slot_id, epley1RM(log.actual_load, log.best_reps))
+      }
+    }
+
+    const prs: SessionRecapPR[] = []
+    if (sessionE1rmBySlot.size > 0) {
+      const dateIso = session.performed_at ?? session.created_at
+      const { data: priorRows, error: pErr } = await supabase
+        .from('set_logs')
+        .select('slot_id, actual_load, best_reps')
+        .in('slot_id', [...sessionE1rmBySlot.keys()])
+        .eq('user_id', userId)
+        .neq('session_id', session.id)
+        .lt('created_at', dateIso)
+      if (pErr) throw pErr
+
+      const priorBestBySlot = new Map<string, number>()
+      for (const row of (priorRows ?? []) as Pick<
+        SetLog,
+        'slot_id' | 'actual_load' | 'best_reps'
+      >[]) {
+        if (row.actual_load == null || row.best_reps == null) continue
+        const e1rm = epley1RM(row.actual_load, row.best_reps)
+        const prev = priorBestBySlot.get(row.slot_id) ?? 0
+        if (e1rm > prev) priorBestBySlot.set(row.slot_id, e1rm)
+      }
+
+      const prSlotIds = [...sessionE1rmBySlot.entries()]
+        .filter(([slotId, e1rm]) => {
+          const prior = priorBestBySlot.get(slotId)
+          return prior != null && e1rm > prior
+        })
+        .map(([slotId]) => slotId)
+
+      if (prSlotIds.length > 0) {
+        const { data: slotRows, error: slotErr } = await supabase
+          .from('exercise_slots')
+          .select('id, exercise_name')
+          .in('id', prSlotIds)
+          .eq('user_id', userId)
+        if (slotErr) throw slotErr
+        const nameById = new Map(
+          ((slotRows ?? []) as Pick<ExerciseSlot, 'id' | 'exercise_name'>[]).map((s) => [
+            s.id,
+            s.exercise_name,
+          ]),
+        )
+        for (const slotId of prSlotIds) {
+          const name = nameById.get(slotId)
+          const e1rm = sessionE1rmBySlot.get(slotId)
+          if (name && e1rm != null) {
+            prs.push({ exerciseName: name, e1rm: Math.round(e1rm * 10) / 10 })
+          }
+        }
+      }
+    }
+
+    const day = dayRow as ProgramDay | null
+
+    return {
+      ok: true,
+      data: {
+        dayLabel: day?.label ?? 'Workout',
+        totalTonnage: Math.round(totalTonnage),
+        loggedCount,
+        totalSets,
+        totalReps,
+        unit: profile?.unit ?? 'lb',
+        prs,
+      },
+    }
+  } catch {
+    return { ok: false, error: 'Could not load session recap.' }
   }
 }
 

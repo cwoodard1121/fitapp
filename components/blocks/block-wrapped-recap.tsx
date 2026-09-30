@@ -1,6 +1,5 @@
 "use client"
 
-import { format, parseISO } from "date-fns"
 import {
   Activity,
   ArrowRight,
@@ -27,36 +26,15 @@ import type { BlockStats } from "@/lib/blocks/stats"
 import { Button } from "@/components/ui/button"
 import { DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { formatRange } from "@/components/blocks/utils"
-
-const COLORS = {
-  signal: "#c7f24a",
-  muted: "#8a92a0",
-  border: "#2c313a",
-  surface: "#1e2228",
-  bodyfat: "#d4dbe6",
-}
-
-function grouped(value: number): string {
-  return Math.round(value).toLocaleString()
-}
-
-function value(value: number | null, precision = 1): string {
-  return value == null ? "—" : value.toFixed(precision)
-}
-
-function signed(value_: number | null, unit: string, precision = 1): string {
-  if (value_ == null) return "—"
-  const prefix = value_ > 0 ? "+" : ""
-  return `${prefix}${value_.toFixed(precision)} ${unit}`
-}
-
-function shortDate(iso: string): string {
-  try {
-    return format(parseISO(iso), "MMM d")
-  } catch {
-    return iso.slice(5, 10)
-  }
-}
+import {
+  WRAPPED_COLORS as COLORS,
+  WrappedDetailMetric as DetailMetric,
+  WrappedStoryMetric as StoryMetric,
+  wrappedGrouped as grouped,
+  wrappedShortDate as shortDate,
+  wrappedSigned as signed,
+  wrappedValue as value,
+} from "@/components/ui/wrapped-recap"
 
 function WrappedTooltip({
   active,
@@ -83,34 +61,6 @@ function WrappedTooltip({
           </span>
         </div>
       ))}
-    </div>
-  )
-}
-
-function StoryMetric({
-  label,
-  display,
-}: {
-  label: string
-  display: string
-}) {
-  return (
-    <div className="min-w-0">
-      <p className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground sm:text-3xl">
-        {display}
-      </p>
-      <p className="mt-0.5 text-xs text-muted">{label}</p>
-    </div>
-  )
-}
-
-function DetailMetric({ label, display }: { label: string; display: string }) {
-  return (
-    <div className="border-l border-border pl-3">
-      <p className="font-mono text-base font-semibold tabular-nums text-foreground">
-        {display}
-      </p>
-      <p className="mt-0.5 text-[11px] leading-tight text-muted">{label}</p>
     </div>
   )
 }
