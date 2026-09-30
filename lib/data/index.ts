@@ -3,7 +3,7 @@
  * lives in one place. All reads/writes use the server Supabase client and are
  * scoped to the authenticated user (RLS enforces this server-side too).
  */
-export { requireUserId } from '@/lib/data/auth'
+export { requireUserId, getCachedUser } from '@/lib/data/auth'
 export { getProfile, ensureProfile } from '@/lib/data/profile'
 export {
   getActiveProgram,

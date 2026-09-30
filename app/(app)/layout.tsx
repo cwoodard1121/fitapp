@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
 
-import { ensureProfile, seedDefaultProgram } from "@/lib/data"
+import { ensureProfile, seedDefaultProgram, getCachedUser } from "@/lib/data"
 import { isEmailAllowed } from "@/lib/ai/allowlist"
 import { createClient } from "@/lib/supabase/server"
 import { Header } from "@/components/app/header"
@@ -12,8 +12,9 @@ import { WearableAutoSync } from "@/components/wearables/wearable-auto-sync"
 
 /**
  * Authenticated app shell. As a Server Component it first makes sure the user
- * is fully set up — ensureProfile() then seedDefaultProgram(), both idempotent —
- * so a brand-new user lands on a working default program immediately. Then it
+ * is fully set up — ensureProfile() and seedDefaultProgram(), both idempotent
+ * and independent (neither reads the other's table, no FK between them) — so
+ * a brand-new user lands on a working default program immediately. Then it
  * renders the responsive instrument-panel shell: a fixed left sidebar on
  * desktop, a sticky bottom tab bar on mobile, a compact top header, and the
  * page content.
@@ -23,14 +24,14 @@ export default async function AppLayout({
 }: {
   children: ReactNode
 }) {
-  // Idempotent first-run setup. Order matters: profile, then default program.
-  const profile = await ensureProfile()
-  await seedDefaultProgram()
-
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Idempotent first-run setup, run concurrently — independent tables, and
+  // both internally reuse the same cached auth check as the `getCachedUser`
+  // call right below instead of each re-validating the session over the
+  // network (see lib/data/auth.ts).
+  const [profile] = await Promise.all([ensureProfile(), seedDefaultProgram()])
+
+  const user = await getCachedUser(supabase)
 
   return (
     // Pinned to the viewport (not a normal scrolling document) so the shell
