@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import { Activity } from 'lucide-react'
 
-import { getProfile, requireUserId } from '@/lib/data'
+import { getProfile, getPrograms, requireUserId } from '@/lib/data'
 import { createClient } from '@/lib/supabase/server'
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getAnalyticsAndAnalysis } from '@/lib/ai/analysis'
@@ -15,25 +15,30 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui'
+import { ActiveProgramSelect } from '@/components/program/active-program-select'
 import { AnalyticsOverview } from '@/components/progress/analytics-overview'
 import { AnalysisPanel } from '@/components/analysis/analysis-panel'
 import { RecoveryCharts } from '@/components/overview/recovery-charts'
+import { WrappedHighlights } from '@/components/overview/wrapped-highlights'
 
 export const metadata: Metadata = {
-  title: 'Overview',
+  title: 'Home',
 }
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Overview — a single dashboard that pulls everything together: wearable steps +
- * sleep (daily/weekly), the deterministic training/goal/body/nutrition analytics,
- * and the AI overview on top. Recovery is allowlisted (like the AI); the rest is
- * always available.
+ * Home (route stays /overview — only the label/copy changed) — a single
+ * dashboard that pulls everything together: the active-program switcher,
+ * wearable steps + sleep (daily/weekly), the deterministic training/goal/
+ * body/nutrition analytics, a quick "Wrapped" highlight tile, and the AI
+ * overview on top. Recovery is allowlisted (like the AI); the rest is always
+ * available.
  */
 export default async function OverviewPage() {
-  const profile = await getProfile()
+  const [profile, programs] = await Promise.all([getProfile(), getPrograms()])
   const unit: Unit = profile?.unit ?? 'lb'
+  const activeProgram = programs.find((p) => p.is_active) ?? null
 
   const { allowed } = await getAnalysisAccess()
   const { analytics, analysis } = await getAnalyticsAndAnalysis()
@@ -50,6 +55,12 @@ export default async function OverviewPage() {
   return (
     <PageShell>
       <div className="space-y-6">
+        {activeProgram ? (
+          <ActiveProgramSelect programs={programs} activeId={activeProgram.id} />
+        ) : null}
+
+        <WrappedHighlights analytics={analytics} unit={unit} />
+
         {recovery.length > 0 ? (
           <Card>
             <CardHeader className="pb-3">
@@ -82,9 +93,9 @@ function PageShell({ children }: { children: ReactNode }) {
         <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
           simplegym
         </span>
-        <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Home</h1>
         <p className="text-sm text-muted">
-          Your training, body, nutrition, and recovery — at a glance.
+          Your program, training, body, nutrition, and recovery — at a glance.
         </p>
       </header>
       {children}

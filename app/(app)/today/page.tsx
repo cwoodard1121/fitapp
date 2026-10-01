@@ -33,7 +33,6 @@ import {
 } from '@/lib/data/training-history'
 import { Badge } from '@/components/ui/badge'
 import { ExerciseAdvice } from '@/components/today/exercise-advice'
-import { ActiveProgramSelect } from '@/components/program/active-program-select'
 import { WeekSelector } from '@/components/today/week-selector'
 import { DaySelector } from '@/components/today/day-selector'
 import { SessionReadiness } from '@/components/today/session-readiness'
@@ -267,10 +266,6 @@ export default async function TodayPage({
           {isDeload ? <Badge variant="warning">Deload</Badge> : null}
         </div>
       </Header>
-
-      <div className="mt-4">
-        <ActiveProgramSelect programs={programs} activeId={program.id} />
-      </div>
 
       <div className="mt-4">
         <WeekSelector

@@ -1,6 +1,6 @@
 import {
   Dumbbell,
-  LayoutDashboard,
+  Home,
   ClipboardList,
   ClipboardCheck,
   History,
@@ -26,7 +26,7 @@ export interface NavItem {
 // nav item, not a relabel.
 const today: NavItem = { href: "/today", label: "Today", icon: Dumbbell }
 const checkin: NavItem = { href: "/checkin", label: "Check-in", icon: ClipboardCheck }
-const overview: NavItem = { href: "/overview", label: "Overview", icon: LayoutDashboard }
+const overview: NavItem = { href: "/overview", label: "Home", icon: Home }
 const program: NavItem = { href: "/program", label: "Program", icon: ClipboardList }
 const history: NavItem = { href: "/history", label: "History", icon: History }
 const progress: NavItem = { href: "/progress", label: "Progress", icon: TrendingUp }

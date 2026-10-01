@@ -32,6 +32,13 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Without this, mobile browsers keep the layout viewport full-height when
+  // the on-screen keyboard opens — any `position: fixed`/`sticky` bottom
+  // surface (the mobile tab bar, the Today session bar) ends up floating
+  // mid-screen above the keyboard instead of docking against it. This tells
+  // supporting browsers to shrink the layout viewport with the keyboard so
+  // those surfaces recalculate against the real visible area.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({
