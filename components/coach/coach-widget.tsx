@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { Sparkles, X, Send, Plus, Square } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -34,6 +34,7 @@ const SUGGESTIONS = [
  */
 export function CoachWidget() {
   const router = useRouter()
+  const pathname = usePathname()
   const [open, setOpen] = React.useState(false)
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
   const [input, setInput] = React.useState('')
@@ -171,6 +172,10 @@ export function CoachWidget() {
       void send(input)
     }
   }
+
+  // Today already owns the bottom-right zone with its sticky "Finish session"
+  // bar — the floating bubble would sit right on top of it on mobile.
+  if (pathname === '/today' || pathname?.startsWith('/today/')) return null
 
   return (
     <>

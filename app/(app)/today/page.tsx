@@ -7,8 +7,6 @@ import {
   getProgramFull,
   getSessionForDay,
   getSetLogsForSession,
-  getPendingSorenessCheckIns,
-  getDailyHabitSummaries,
   ensureWeekSessions,
   buildTodayView,
   weekForDate,
@@ -16,15 +14,12 @@ import {
   resolveTrainingWeek,
   requireUserId,
 } from '@/lib/data'
-import { appCalendarDate } from '@/lib/data/soreness'
 import type {
-  BodyMetric,
   ExerciseSlot,
   RecoveryMetric,
   Session,
   SessionStatus,
 } from '@/lib/types'
-import { navyBodyFatSummaryInISOWeek } from '@/lib/body/body-fat'
 import { getAnalysisAccess } from '@/lib/ai/allowlist'
 import { getLatestAnalysis } from '@/lib/ai/analysis'
 import { createClient } from '@/lib/supabase/server'
@@ -37,8 +32,6 @@ import {
   mergeSessionExerciseSlots,
 } from '@/lib/data/training-history'
 import { Badge } from '@/components/ui/badge'
-import { RecoveryStrip } from '@/components/today/recovery-strip'
-import { AnalysisFocus } from '@/components/analysis/analysis-focus'
 import { ExerciseAdvice } from '@/components/today/exercise-advice'
 import { ActiveProgramSelect } from '@/components/program/active-program-select'
 import { WeekSelector } from '@/components/today/week-selector'
@@ -47,9 +40,6 @@ import { SessionReadiness } from '@/components/today/session-readiness'
 import { SlotRow } from '@/components/today/slot-row'
 import { SessionBar } from '@/components/today/session-bar'
 import { EmptyState } from '@/components/today/empty-state'
-import { WeeklyNavyPrompt } from '@/components/today/weekly-navy-prompt'
-import { SorenessCheckIn } from '@/components/today/soreness-check-in'
-import { DailyHabitsCard } from '@/components/today/daily-habits-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,37 +61,14 @@ export default async function TodayPage({
   const program = programs.find((p) => p.is_active) ?? null
 
   const unit = profile?.unit ?? 'lb'
-  const today = appCalendarDate(new Date())
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
-  const [bodyResult, sorenessPrompts, habitSummaries] = await Promise.all([
-    supabase
-      .from('body_metrics')
-      .select('*')
-      .eq('user_id', userId)
-      .order('measured_on', { ascending: false })
-      .limit(30),
-    getPendingSorenessCheckIns(),
-    getDailyHabitSummaries(supabase, userId, today),
-  ])
-  const { data: bodyRows, error: bodyError } = bodyResult
-  if (bodyError) throw bodyError
-  const bodyEntries = (bodyRows ?? []) as BodyMetric[]
-  const trackNavy = profile?.track_navy_bodyfat !== false
-  const weeklyNavyDue =
-    trackNavy &&
-    (navyBodyFatSummaryInISOWeek(bodyEntries, today)?.acceptedSampleCount ?? 0) === 0
 
   // No program -> friendly empty state with the next action.
   if (!program) {
     return (
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <Header unit={unit} />
-        {weeklyNavyDue ? (
-          <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
-        ) : null}
-        <DailyHabitsCard summaries={habitSummaries} />
-        <SorenessCheckIn prompts={sorenessPrompts} />
         <EmptyState />
       </div>
     )
@@ -112,11 +79,6 @@ export default async function TodayPage({
     return (
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
         <Header unit={unit} />
-        {weeklyNavyDue ? (
-          <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
-        ) : null}
-        <DailyHabitsCard summaries={habitSummaries} />
-        <SorenessCheckIn prompts={sorenessPrompts} />
         <EmptyState />
       </div>
     )
@@ -239,11 +201,10 @@ export default async function TodayPage({
   // entirely when the account is not allowed; renders nothing when empty.
   const { allowed } = await getAnalysisAccess()
   const payload = allowed ? (await getLatestAnalysis())?.payload ?? null : null
-  const focus = payload?.focus ?? []
 
-  // Most recent wearable readout + a baseline-relative recovery score. Its
-  // baseline starts with the current training block, so each phase establishes
-  // its own normal.
+  // Wearable-derived recovery score — not displayed on Today (that card lives
+  // on Check-in now), but still computed here because it feeds the readiness
+  // auto-suggestion below.
   let latestRecovery: RecoveryMetric | null = null
   let recoveryScore: RecoveryScore | null = null
   if (allowed) {
@@ -307,13 +268,9 @@ export default async function TodayPage({
         </div>
       </Header>
 
-      {weeklyNavyDue ? (
-        <WeeklyNavyPrompt heightCm={profile?.height_cm ?? null} today={today} />
-      ) : null}
-
-      <DailyHabitsCard summaries={habitSummaries} />
-
-      <ActiveProgramSelect programs={programs} activeId={program.id} />
+      <div className="mt-4">
+        <ActiveProgramSelect programs={programs} activeId={program.id} />
+      </div>
 
       <div className="mt-4">
         <WeekSelector
@@ -322,20 +279,6 @@ export default async function TodayPage({
           currentWeek={currentWeek}
         />
       </div>
-
-      <SorenessCheckIn prompts={sorenessPrompts} />
-
-      {latestRecovery ? (
-        <div className="mt-4">
-          <RecoveryStrip metric={latestRecovery} score={recoveryScore} />
-        </div>
-      ) : null}
-
-      {focus.length > 0 ? (
-        <div className="mt-4">
-          <AnalysisFocus focus={focus} />
-        </div>
-      ) : null}
 
       <div className="mt-4">
         <DaySelector

@@ -2,6 +2,7 @@ import {
   Dumbbell,
   LayoutDashboard,
   ClipboardList,
+  ClipboardCheck,
   History,
   TrendingUp,
   Scale,
@@ -24,6 +25,7 @@ export interface NavItem {
 // Program (both are "what's my training plan doing right now") — one fewer
 // nav item, not a relabel.
 const today: NavItem = { href: "/today", label: "Today", icon: Dumbbell }
+const checkin: NavItem = { href: "/checkin", label: "Check-in", icon: ClipboardCheck }
 const overview: NavItem = { href: "/overview", label: "Overview", icon: LayoutDashboard }
 const program: NavItem = { href: "/program", label: "Program", icon: ClipboardList }
 const history: NavItem = { href: "/history", label: "History", icon: History }
@@ -37,6 +39,7 @@ const settings: NavItem = { href: "/settings", label: "Settings", icon: Settings
 /** Desktop sidebar: every destination, in logical training order. */
 export const allNav: NavItem[] = [
   today,
+  checkin,
   overview,
   program,
   history,
@@ -48,11 +51,22 @@ export const allNav: NavItem[] = [
   settings,
 ]
 
-/** Mobile bottom bar: the four primary destinations (plus a "More" button). */
-export const primaryNav: NavItem[] = [today, overview, progress, body]
+/** Mobile bottom bar: the four primary destinations (plus a "More" button).
+ * Check-in replaces Progress here — it's a daily action, Progress is more
+ * occasional/retrospective, and the bar stays at four so it doesn't get more
+ * crowded. */
+export const primaryNav: NavItem[] = [today, checkin, overview, body]
 
 /** Mobile "More" sheet: everything not on the bottom bar. */
-export const moreNav: NavItem[] = [program, history, blocks, goals, nutrition, settings]
+export const moreNav: NavItem[] = [
+  program,
+  history,
+  progress,
+  blocks,
+  goals,
+  nutrition,
+  settings,
+]
 
 /** True when `pathname` is `href` or a nested route beneath it. */
 export function isActiveRoute(pathname: string, href: string): boolean {
