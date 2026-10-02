@@ -252,7 +252,7 @@ export default async function TodayPage({
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-4 pt-4">
+    <div className="mx-auto w-full max-w-2xl px-4 pb-session-room pt-4 md:pb-24">
       <Header unit={unit}>
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="font-mono">

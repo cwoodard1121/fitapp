@@ -22,6 +22,13 @@ const config: Config = {
         nav: "calc(4rem + env(safe-area-inset-bottom))",
         // Tab bar footprint + 0.5rem breathing room (page content / floating bars).
         "nav-room": "calc(4.5rem + env(safe-area-inset-bottom))",
+        // Today's `SessionBar` is `fixed`, not `sticky` (sticky engages too
+        // early on short pages and floats mid-screen instead of docking —
+        // see components/today/session-bar.tsx). Being fixed, it takes no
+        // space in the flow, so the page content needs bottom padding equal
+        // to the bar's own footprint (~4.5rem) stacked on top of the tab
+        // bar's footprint it already clears (`nav`).
+        "session-room": "calc(4rem + env(safe-area-inset-bottom) + 4.5rem)",
       },
       colors: {
         background: "var(--bg)",

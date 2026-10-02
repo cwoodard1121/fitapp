@@ -78,7 +78,7 @@ export function SessionBar({
   }
 
   return (
-    <div className="sticky bottom-nav z-30 -mx-4 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:bottom-0">
+    <div className="fixed inset-x-0 bottom-nav z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:bottom-0 md:left-60">
       <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">
