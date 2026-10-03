@@ -188,7 +188,7 @@ export default async function SessionDetailPage({
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-5">
+    <div className="mx-auto w-full max-w-3xl px-4 py-5">
       <div className="mb-4">
         <Button asChild variant="ghost" size="sm" className="-ml-2 text-muted">
           <Link href="/history">

@@ -81,7 +81,7 @@ export function SessionBar({
 
   return (
     <div className="fixed inset-x-0 bottom-nav z-30 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-surface/85 md:bottom-0 md:left-60">
-      <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
+      <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-[0.9375rem] font-bold lowercase leading-tight text-foreground">
             day {dayNumber} · {dayName(dayLabel)}

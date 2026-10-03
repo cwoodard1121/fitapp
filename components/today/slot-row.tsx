@@ -10,6 +10,7 @@ import { Stat } from '@/components/ui/stat'
 import { DecisionBadge } from '@/components/ui/decision-badge'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { announceSlotProgress } from '@/lib/client/slot-progress'
 import { saveSetEntries } from '@/app/(app)/today/actions'
 import { ReadinessSheet } from '@/components/today/readiness-sheet'
 import {
@@ -262,12 +263,20 @@ export function SlotRow({ view, sessionId, week, unit }: SlotRowProps) {
 
   const performedSets = rows.filter((r) => num(r.reps) != null).length
   const hasData = performedSets > 0
+
+  // Tell the session rail as soon as reps land, ahead of the save round-trip.
+  const announcedSets = React.useRef(performedSets)
+  React.useEffect(() => {
+    if (announcedSets.current === performedSets) return
+    announcedSets.current = performedSets
+    announceSlotProgress({ slotId: slot.id, performedSets })
+  }, [performedSets, slot.id])
   const toFailure = slot.is_bodyweight && slot.target_rir === 0
   const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) =>
     e.currentTarget.select()
 
   const inputCls =
-    'h-12 w-full min-w-0 rounded-md border border-border bg-surface px-1 text-center font-mono text-lg font-bold text-foreground placeholder:font-medium placeholder:text-muted/60 transition-colors focus-visible:border-signal focus-visible:bg-signal/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/25'
+    'h-12 w-full min-w-0 rounded-md border border-border bg-surface px-1 text-center font-mono text-lg font-bold text-foreground placeholder:font-medium placeholder:text-muted transition-colors focus-visible:border-signal focus-visible:bg-signal/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/25'
   const gridCls = 'grid grid-cols-[2.25rem_1fr_1fr_1fr_2.75rem] items-center gap-2'
 
   const loadTarget = slot.is_bodyweight
@@ -279,29 +288,15 @@ export function SlotRow({ view, sessionId, week, unit }: SlotRowProps) {
   return (
     <article
       id={`slot-${slot.id}`}
-      className="scroll-mt-4 overflow-hidden rounded-lg border border-border bg-surface transition-[border-color,box-shadow] duration-200 focus-within:border-signal/50 focus-within:shadow-[0_0_0_4px_rgb(var(--signal-rgb)/0.10)]"
+      className="scroll-mt-[4.5rem] overflow-hidden rounded-lg border border-border bg-surface transition-[border-color,box-shadow] duration-200 focus-within:border-signal/50 focus-within:shadow-[0_0_0_4px_rgb(var(--signal-rgb)/0.10)]"
     >
-      <header className="flex items-start justify-between gap-3 p-4 pb-2">
-        <div className="min-w-0 space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-sm bg-foreground px-1.5 py-1 font-mono text-xs font-bold leading-none text-background">
-              {slot.slot_code}
-            </span>
-            {slot.muscle_area ? (
-              <span className="truncate text-xs font-semibold lowercase text-muted">
-                {slot.muscle_area}
-              </span>
-            ) : null}
-            {slot.is_bodyweight ? (
-              <Badge variant="muted" title="Bodyweight: progresses by reps and sets">
-                bw
-              </Badge>
-            ) : null}
-          </div>
-          <h3 className="text-lg font-bold leading-snug tracking-[-0.01em]">
-            {slot.exercise_name}
-          </h3>
-        </div>
+      <header className="flex items-start justify-between gap-3 p-4 pb-1.5">
+        <h3 className="flex min-w-0 items-baseline gap-2 pt-1.5 text-lg font-bold leading-snug tracking-[-0.01em]">
+          <span className="relative -top-px shrink-0 rounded-sm bg-foreground px-1.5 py-1 font-mono text-xs font-bold leading-none text-background">
+            {slot.slot_code}
+          </span>
+          <span className="min-w-0">{slot.exercise_name}</span>
+        </h3>
         <ReadinessSheet
           sessionId={sessionId}
           slotId={slot.id}
@@ -338,6 +333,16 @@ export function SlotRow({ view, sessionId, week, unit }: SlotRowProps) {
             <span className="ml-0.5 text-xs font-semibold text-muted">rir</span>
           )}
         </span>
+        {slot.muscle_area ? (
+          <>
+            <span className="text-muted" aria-hidden>
+              ·
+            </span>
+            <span className="font-sans text-xs font-semibold lowercase text-muted">
+              {slot.muscle_area}
+            </span>
+          </>
+        ) : null}
       </p>
 
       <div className="px-4 pb-4">

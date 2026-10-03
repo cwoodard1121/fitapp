@@ -6,6 +6,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useDragDismissRef } from "@/components/ui/drag-dismiss"
 
 const Sheet = SheetPrimitive.Root
 
@@ -56,11 +57,16 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "bottom", className, children, ...props }, ref) => (
+>(({ side = "bottom", className, children, ...props }, ref) => {
+  const closeRef = React.useRef<HTMLButtonElement>(null)
+  const contentRef = useDragDismissRef(ref, closeRef, {
+    enabled: side === "bottom",
+  })
+  return (
   <SheetPortal>
     <SheetOverlay />
     <SheetPrimitive.Content
-      ref={ref}
+      ref={contentRef}
       className={cn(
         sheetVariants({ side }),
         "p-6",
@@ -80,13 +86,17 @@ const SheetContent = React.forwardRef<
         />
       ) : null}
       {children}
-      <SheetPrimitive.Close className="absolute right-3 top-3 inline-flex size-10 items-center justify-center rounded-full bg-surface-2 text-muted ring-offset-background transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 disabled:pointer-events-none">
+      <SheetPrimitive.Close
+        ref={closeRef}
+        className="absolute right-3 top-3 inline-flex size-10 items-center justify-center rounded-full bg-surface-2 text-muted ring-offset-background transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 disabled:pointer-events-none"
+      >
         <X className="size-[1.125rem]" />
         <span className="sr-only">Close</span>
       </SheetPrimitive.Close>
     </SheetPrimitive.Content>
   </SheetPortal>
-))
+  )
+})
 SheetContent.displayName = SheetPrimitive.Content.displayName
 
 const SheetHeader = ({

@@ -25,7 +25,7 @@ export function DaySelector({
   return (
     <nav
       aria-label="Training day"
-      className="no-scrollbar -mx-4 flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 py-1"
+      className="no-scrollbar -mx-4 flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 py-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
     >
       {days.map((day) => {
         const active = day.id === selectedDayId

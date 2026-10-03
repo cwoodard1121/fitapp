@@ -39,7 +39,7 @@ import { SessionReadiness } from '@/components/today/session-readiness'
 import { SlotRow } from '@/components/today/slot-row'
 import { SessionBar } from '@/components/today/session-bar'
 import { EmptyState } from '@/components/today/empty-state'
-import { SessionBand, type BandSegment } from '@/components/today/session-band'
+import { SessionRail, type RailSegment } from '@/components/today/session-rail'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,7 +66,7 @@ export default async function TodayPage({
   // No program -> friendly empty state with the next action.
   if (!program) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
+      <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-4">
         <EmptyState />
       </div>
     )
@@ -80,7 +80,7 @@ export default async function TodayPage({
   const full = await getProgramFull(program.id)
   if (!full || full.days.length === 0) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
+      <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-4">
         <EmptyState />
       </div>
     )
@@ -217,7 +217,7 @@ export default async function TodayPage({
     if (a) dayAdvice.push(a)
   }
 
-  const segments: BandSegment[] = slotViews.map((v) => ({
+  const segments: RailSegment[] = slotViews.map((v) => ({
     slotId: v.slot.id,
     code: v.slot.slot_code,
     name: v.slot.exercise_name,
@@ -227,7 +227,7 @@ export default async function TodayPage({
   }))
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-session-room pt-3 md:pb-28">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-session-room pt-3 md:pb-28">
       <WeekSelector
         lengthWeeks={program.length_weeks}
         selectedWeek={week}
@@ -265,11 +265,11 @@ export default async function TodayPage({
         </div>
       </header>
 
-      {segments.length > 0 ? (
-        <div className="mt-4">
-          <SessionBand segments={segments} done={session.status === 'done'} />
-        </div>
-      ) : null}
+      <SessionRail
+        key={session.id}
+        segments={segments}
+        done={session.status === 'done'}
+      />
 
       {daySlots.length > 0 ? (
         <div className="mt-4">

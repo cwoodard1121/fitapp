@@ -287,7 +287,7 @@ export default async function HistoryPage() {
   })
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4 sm:pt-6">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-4 sm:pt-6">
       <header className="mb-4 flex items-center justify-end gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="sr-only">History</h1>

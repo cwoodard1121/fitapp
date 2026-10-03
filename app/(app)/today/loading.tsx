@@ -3,7 +3,7 @@ import { SkeletonBlock, SkeletonChips, SkeletonPage } from '@/components/ui'
 
 export default function TodayLoading() {
   return (
-    <SkeletonPage maxWidth="2xl" className="pt-3 sm:pt-3">
+    <SkeletonPage maxWidth="3xl" className="pt-3 sm:pt-3">
       <div className="flex gap-1.5">
         {Array.from({ length: 6 }, (_, i) => (
           <Skeleton key={i} className="size-11 rounded-md bg-surface" />

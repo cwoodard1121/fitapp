@@ -52,7 +52,8 @@ export function VenueBand({
         VENUE_BG[venue],
       )}
     >
-      <div className="flex h-14 w-full items-center justify-between gap-3 px-4 md:px-8">
+      {/* Same max-w-3xl column as the pages below, so title and content share a left edge. */}
+      <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-3 px-4">
         <div className="flex min-w-0 items-center gap-2.5">
           {Icon ? <Icon className="size-[1.6rem] shrink-0" /> : null}
           <span className="truncate text-[1.375rem] font-extrabold leading-none tracking-[-0.02em] font-wide">

@@ -40,7 +40,7 @@ export default async function BodyPage() {
     (blockRows?.[0] as Pick<Block, 'phase' | 'start_date'> | undefined) ?? null
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4 sm:pt-6">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-4 sm:pt-6">
       <BodyClient
         entries={(data ?? []) as BodyMetric[]}
         unit={profile.unit}

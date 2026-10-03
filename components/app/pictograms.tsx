@@ -1,8 +1,10 @@
 import type { SVGProps } from "react"
 
 /**
- * Venue pictograms, drawn on a 24-unit grid in the Munich 1972 manner:
- * strokes run at 0, 45 or 90 degrees, round caps, a solid round head.
+ * Venue pictograms in the Munich 1972 manner, on a 24-unit grid: solid bars of
+ * uniform thickness with square-cut ends, joints only at 45 or 90 degrees, a
+ * round head floating clear of the shoulders. Everything is filled, so the
+ * venue marks read as signage next to the outline utility icons.
  */
 type PictogramProps = SVGProps<SVGSVGElement>
 
@@ -10,11 +12,7 @@ function Frame({ children, ...props }: PictogramProps) {
   return (
     <svg
       viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.25}
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      fill="currentColor"
       aria-hidden
       focusable="false"
       {...props}
@@ -24,63 +22,76 @@ function Frame({ children, ...props }: PictogramProps) {
   )
 }
 
+/** A limb or torso: a straight-cut bar following the path. */
+function Bar({ d, w }: { d: string; w: number }) {
+  return (
+    <path
+      d={d}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={w}
+      strokeLinecap="butt"
+      strokeLinejoin="miter"
+    />
+  )
+}
+
 /** Weightlifter, bar locked out overhead. */
 export function LifterPictogram(props: PictogramProps) {
   return (
     <Frame {...props}>
-      <path d="M3.5 4.5H20.5" />
-      <rect x="3.6" y="2.1" width="2.6" height="4.8" rx="0.9" fill="currentColor" stroke="none" />
-      <rect x="17.8" y="2.1" width="2.6" height="4.8" rx="0.9" fill="currentColor" stroke="none" />
-      <path d="M9 4.5V10.5H15V4.5" />
-      <circle cx="12" cy="7.5" r="1.75" fill="currentColor" stroke="none" />
-      <path d="M12 10.5V15" />
-      <path d="M8 21.5V19L12 15L16 19V21.5" />
+      <Bar d="M2.4 2.8H21.6" w={1.6} />
+      <rect x="2" y="0.6" width="2.8" height="4.4" rx="0.5" />
+      <rect x="19.2" y="0.6" width="2.8" height="4.4" rx="0.5" />
+      <Bar d="M7.5 2.8V10H16.5V2.8" w={2.6} />
+      <circle cx="12" cy="6.2" r="2" />
+      <Bar d="M12 10V15" w={4.6} />
+      <Bar d="M7.4 22.5V18.6L12 14L16.6 18.6V22.5" w={2.8} />
     </Frame>
   )
 }
 
-/** Clipboard with a 45-degree tick. */
+/** Clipboard with a 45-degree tick cut through it. */
 export function CheckinPictogram(props: PictogramProps) {
   return (
     <Frame {...props}>
-      <path d="M8 4.5H5.5V21H18.5V4.5H16" />
-      <rect x="8.75" y="2.5" width="6.5" height="3.75" rx="1" fill="currentColor" stroke="none" />
-      <path d="M8.5 13.5L11 16L15.5 11.5" />
+      <path
+        fillRule="evenodd"
+        d="M6 4.5H8.5V2.5A1 1 0 0 1 9.5 1.5H14.5A1 1 0 0 1 15.5 2.5V4.5H18A1.5 1.5 0 0 1 19.5 6V20.5A1.5 1.5 0 0 1 18 22H6A1.5 1.5 0 0 1 4.5 20.5V6A1.5 1.5 0 0 1 6 4.5Z M8.92 12.08L11 14.16L15.58 9.58L17.42 11.42L11 17.84L7.08 13.92Z"
+      />
     </Frame>
   )
 }
 
-/** House with a door. */
+/** House under a 45-degree roof, door cut out. */
 export function HomePictogram(props: PictogramProps) {
   return (
     <Frame {...props}>
-      <path d="M4 11.5L12 3.5L20 11.5" />
-      <path d="M6.5 9.5V20.5H17.5V9.5" />
-      <path d="M10.5 20.5V15.5H13.5V20.5" />
+      <path d="M12 2.5L21.5 12H19V21.5H14V15H10V21.5H5V12H2.5Z" />
     </Frame>
   )
 }
 
-/** Standing figure, arms out at 45 degrees. */
+/** Standing figure, arms down and out at 45 degrees. */
 export function BodyPictogram(props: PictogramProps) {
   return (
     <Frame {...props}>
-      <circle cx="12" cy="4.5" r="2" fill="currentColor" stroke="none" />
-      <path d="M12 8.25V14.5" />
-      <path d="M7.75 12.5L12 8.25L16.25 12.5" />
-      <path d="M8.5 21.5V18L12 14.5L15.5 18V21.5" />
+      <circle cx="12" cy="3.8" r="2.3" />
+      <Bar d="M5.6 13.4L10.4 8.6H13.6L18.4 13.4" w={2.8} />
+      <Bar d="M12 8.6V14.6" w={4.4} />
+      <Bar d="M9.4 22.5V18L12 15.4L14.6 18V22.5" w={2.6} />
     </Frame>
   )
 }
 
-/** The grid itself: four cells. */
+/** The grid itself: four solid cells. */
 export function MorePictogram(props: PictogramProps) {
   return (
     <Frame {...props}>
-      <rect x="4.25" y="4.25" width="6" height="6" rx="1.25" />
-      <rect x="13.75" y="4.25" width="6" height="6" rx="1.25" />
-      <rect x="4.25" y="13.75" width="6" height="6" rx="1.25" />
-      <rect x="13.75" y="13.75" width="6" height="6" rx="1.25" />
+      <rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1" />
+      <rect x="13" y="3.5" width="7.5" height="7.5" rx="1" />
+      <rect x="3.5" y="13" width="7.5" height="7.5" rx="1" />
+      <rect x="13" y="13" width="7.5" height="7.5" rx="1" />
     </Frame>
   )
 }

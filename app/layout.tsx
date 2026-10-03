@@ -38,7 +38,7 @@ export const viewport: Viewport = {
   // retints these per route so Android's status bar matches the band.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#5DB0E8" },
-    { media: "(prefers-color-scheme: dark)", color: "#4A9FD8" },
+    { media: "(prefers-color-scheme: dark)", color: "#3888C4" },
   ],
   colorScheme: "light dark",
   width: "device-width",

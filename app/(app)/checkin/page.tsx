@@ -100,7 +100,7 @@ export default async function CheckinPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4 sm:pt-6">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-4 sm:pt-6">
       <header className="mb-1">
         <h1 className="text-[1.75rem] font-extrabold lowercase leading-[1.1] tracking-[-0.025em] font-wide">
           {format(parseISO(today), 'EEEE, MMM d')}

@@ -18,7 +18,7 @@ const maxWidths = {
 } as const
 
 export function SkeletonPage({
-  maxWidth = '2xl',
+  maxWidth = '3xl',
   className,
   children,
 }: {

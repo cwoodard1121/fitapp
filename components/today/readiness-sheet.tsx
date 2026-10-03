@@ -43,15 +43,15 @@ interface ReadinessSheetProps {
 
 const PERF_OPTIONS: { value: Performance; label: string; Icon: typeof ArrowUp }[] =
   [
-    { value: 'Up', label: 'Up', Icon: ArrowUp },
-    { value: 'Same', label: 'Same', Icon: ArrowRight },
-    { value: 'Down', label: 'Down', Icon: ArrowDown },
+    { value: 'Up', label: 'up', Icon: ArrowUp },
+    { value: 'Same', label: 'same', Icon: ArrowRight },
+    { value: 'Down', label: 'down', Icon: ArrowDown },
   ]
 
 const RIR_OPTIONS: { value: RirOverride; label: string }[] = [
-  { value: 'Y', label: 'Hit RIR' },
-  { value: 'N', label: 'Missed' },
-  { value: 'Skip', label: 'Skip' },
+  { value: 'Y', label: 'hit rir' },
+  { value: 'N', label: 'missed' },
+  { value: 'Skip', label: 'skip' },
 ]
 
 function RatingSlider({
@@ -78,7 +78,7 @@ function RatingSlider({
           {label}
         </Label>
         {value == null ? (
-          <span className="text-xs font-medium text-muted">Not rated</span>
+          <span className="text-xs font-medium text-muted">not rated</span>
         ) : (
           <span className="font-mono text-base font-semibold tabular-nums text-signal">
             {value}
@@ -102,7 +102,7 @@ function RatingSlider({
           }}
           aria-label={label}
           aria-valuetext={
-            value == null ? 'Not rated; move slider to rate' : `${value} of 10`
+            value == null ? 'not rated; move slider to rate' : `${value} of 10`
           }
           className={cn('flex-1', value == null && 'opacity-50')}
         />
@@ -113,7 +113,7 @@ function RatingSlider({
             size="sm"
             onClick={() => onChange(null)}
           >
-            Clear
+            clear
           </Button>
         ) : null}
       </div>
@@ -198,7 +198,7 @@ export function ReadinessSheet({
           )}
         >
           <HeartPulse className="size-4" aria-hidden />
-          Feedback
+          feedback
           {hasReadiness ? (
             <span
               className="size-1.5 rounded-full bg-signal"
@@ -227,14 +227,14 @@ export function ReadinessSheet({
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             <RatingSlider
               id={`pump-${slotId}`}
-              label="Pump"
+              label="pump"
               hint="How full / worked this muscle felt on this exercise."
               value={pump}
               onChange={setPump}
             />
             <RatingSlider
               id={`pain-${slotId}`}
-              label="Pain"
+              label="pain"
               hint="0 = no pain. Stop the exercise for sharp or worsening pain, or pain that changes your movement."
               min={0}
               value={pain}
@@ -242,7 +242,7 @@ export function ReadinessSheet({
             />
             <RatingSlider
               id={`enjoyment-${slotId}`}
-              label="Enjoyment"
+              label="enjoyment"
               hint="Did you want to keep going?"
               value={enjoyment}
               onChange={setEnjoyment}
@@ -251,7 +251,7 @@ export function ReadinessSheet({
 
           {/* Performance — systemic, 3-way */}
           <div className="space-y-2">
-            <Label className="text-sm">Performance vs last time</Label>
+            <Label className="text-sm">performance vs last time</Label>
             <div className="grid grid-cols-3 gap-2">
               {PERF_OPTIONS.map(({ value, label, Icon }) => {
                 const active = performance === value
@@ -278,7 +278,7 @@ export function ReadinessSheet({
 
           {/* Hit RIR override — Y / N / Skip */}
           <div className="space-y-2">
-            <Label className="text-sm">Hit your target RIR?</Label>
+            <Label className="text-sm">hit your target rir?</Label>
             <div className="grid grid-cols-3 gap-2">
               {RIR_OPTIONS.map(({ value, label }) => {
                 const active = rirOverride === value
@@ -308,7 +308,7 @@ export function ReadinessSheet({
           {/* Notes */}
           <div className="space-y-2">
             <Label htmlFor={`notes-${slotId}`} className="text-sm">
-              Notes
+              notes
             </Label>
             <Textarea
               id={`notes-${slotId}`}
@@ -328,10 +328,10 @@ export function ReadinessSheet({
             {pending ? (
               <>
                 <Loader2 className="size-4 animate-spin" aria-hidden />
-                Saving
+                saving
               </>
             ) : (
-              'Save feedback'
+              'save feedback'
             )}
           </Button>
         </div>

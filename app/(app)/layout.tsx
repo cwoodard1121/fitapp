@@ -46,7 +46,7 @@ export default async function AppLayout({
           displayName={profile.display_name}
           email={user?.email ?? null}
         />
-        <PullToRefresh className="flex-1 overflow-y-auto overscroll-contain pb-nav-room pt-1 md:pb-8 md:pt-4">
+        <PullToRefresh className="flex-1 overflow-y-auto overscroll-contain pb-nav-room pt-1 md:pb-8 md:pt-4 md:[scrollbar-gutter:stable_both-edges]">
           {children}
         </PullToRefresh>
       </div>

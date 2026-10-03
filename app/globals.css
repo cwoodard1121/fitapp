@@ -44,7 +44,7 @@
     --border-rgb: 36 63 78;
     --text-rgb: 230 238 242;
     --muted-rgb: 147 170 184;
-    --signal-rgb: 98 178 240;
+    --signal-rgb: 168 214 255;
     --signal-ink-rgb: 4 18 27;
     --gate-green-rgb: 76 201 124;
     --gate-yellow-rgb: 242 163 65;
@@ -52,7 +52,7 @@
     --chart-2-rgb: 242 163 65;
     --chart-3-rgb: 111 138 153;
 
-    --hue-today-rgb: 74 159 216;
+    --hue-today-rgb: 56 136 196;
     --hue-checkin-rgb: 63 168 94;
     --hue-home-rgb: 232 137 44;
     --hue-body-rgb: 152 193 75;

@@ -2,11 +2,10 @@
 
 import * as React from 'react'
 import { toast } from 'sonner'
-import { BatteryCharging, Loader2, Pencil } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 
-import { Card, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { saveSessionReadiness } from '@/app/(app)/today/actions'
 
@@ -19,179 +18,101 @@ interface SessionReadinessProps {
   suggested?: number | null
 }
 
-function Rating({
-  id,
-  label,
-  hint,
-  value,
-  suggested,
-  onChange,
-}: {
-  id: string
-  label: string
-  hint: string
-  value: number | null
-  suggested?: number | null
-  onChange: (v: number) => void
-}) {
-  const visualValue = value ?? suggested ?? 7
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between">
-        <Label htmlFor={id} className="text-sm">
-          {label}
-        </Label>
-        {value == null ? (
-          <span className="text-xs font-medium text-muted">Not rated</span>
-        ) : (
-          <span className="font-mono text-base font-semibold tabular-nums text-signal">
-            {value}
-            <span className="ml-0.5 text-xs font-normal text-muted">/10</span>
-          </span>
-        )}
-      </div>
-      <Slider
-        id={id}
-        min={1}
-        max={10}
-        step={1}
-        value={[visualValue]}
-        onPointerDown={() => {
-          if (value == null) onChange(visualValue)
-        }}
-        onValueChange={(v) => onChange(v[0] ?? visualValue)}
-        aria-label={label}
-        aria-valuetext={
-          value == null ? 'Not rated; move slider to rate' : `${value} of 10`
-        }
-        className={value == null ? 'opacity-50' : undefined}
-      />
-      <p className="text-[11px] leading-tight text-muted">{hint}</p>
-    </div>
-  )
-}
-
+/**
+ * One gut-check for the whole session, kept to a single row so the first set
+ * stays in the first viewport. The rating saves the moment the thumb lifts;
+ * there is no separate save step. Sore muscles are rated per exercise.
+ */
 export function SessionReadiness({
   sessionId,
   week,
   recovery: initRecovery,
   suggested,
 }: SessionReadinessProps) {
-  const rated = initRecovery != null
-  const [expanded, setExpanded] = React.useState(!rated)
   const [recovery, setRecovery] = React.useState<number | null>(initRecovery)
+  const [saved, setSaved] = React.useState<number | null>(initRecovery)
   const [pending, startTransition] = React.useTransition()
+  const shown = recovery ?? suggested ?? 7
 
-  function onSave() {
-    if (recovery == null) {
-      toast.error('Rate your readiness before saving.')
-      return
-    }
+  function save(value: number) {
+    setRecovery(value)
+    if (value === saved) return
     startTransition(async () => {
-      const res = await saveSessionReadiness({
-        sessionId,
-        week,
-        recovery,
-      })
+      const res = await saveSessionReadiness({ sessionId, week, recovery: value })
       if (res.ok) {
-        toast.success('Readiness saved.')
-        setExpanded(false)
+        setSaved(value)
       } else {
         toast.error(res.error)
+        setRecovery(saved)
       }
     })
   }
 
-  // Collapsed summary once rated.
-  if (rated && !expanded) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-between gap-3 p-3.5">
-          <div className="flex items-center gap-3">
-            <BatteryCharging className="size-4 text-signal" aria-hidden />
-            <div className="font-mono text-sm tabular-nums">
-              <span className="text-muted">Readiness </span>
-              <span className="font-semibold text-foreground">
-                {initRecovery ?? '—'}
-                <span className="ml-0.5 text-xs font-normal text-muted">/10</span>
-              </span>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 text-muted"
-            onClick={() => setExpanded(true)}
-          >
-            <Pencil className="size-3.5" aria-hidden />
-            Adjust
-          </Button>
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
-    <Card>
-      <CardContent className="space-y-4 p-4">
-        <div className="flex items-start gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-signal">
-            <BatteryCharging className="size-4" aria-hidden />
-          </div>
-          <div className="space-y-0.5">
-            <h2 className="text-sm font-semibold">Overall readiness</h2>
-            <p className="text-xs text-muted">
-              One quick gut-check for the whole session — going in today, how ready
-              and strong do you feel overall? (Sore muscles get logged per exercise.)
-            </p>
-          </div>
-        </div>
-
-        <Rating
+    <section
+      aria-label="Session readiness"
+      className="rounded-lg border border-border bg-surface px-4 py-3"
+    >
+      <div className="flex items-center gap-3">
+        <label
+          htmlFor="session-recovery"
+          className="shrink-0 text-sm font-bold"
+        >
+          readiness
+        </label>
+        <Slider
           id="session-recovery"
-          label="How ready do you feel?"
-          hint="10 = fresh &amp; strong, ready to push · 1 = drained, weak, beat-up."
-          value={recovery}
-          suggested={suggested}
-          onChange={setRecovery}
+          min={1}
+          max={10}
+          step={1}
+          value={[shown]}
+          onPointerDown={() => {
+            if (recovery == null) setRecovery(shown)
+          }}
+          onValueChange={(v) => setRecovery(v[0] ?? shown)}
+          onValueCommit={(v) => save(v[0] ?? shown)}
+          aria-label="How ready do you feel for this session, 1 to 10"
+          aria-valuetext={
+            recovery == null ? 'not rated; move to rate' : `${recovery} of 10`
+          }
+          className={cn('flex-1', recovery == null && 'opacity-50')}
         />
-
-        {!rated && suggested != null ? (
-          <div className="flex items-center justify-between gap-3">
-            <p className="flex items-start gap-1.5 text-[11px] leading-tight text-muted">
-              <BatteryCharging className="mt-px size-3.5 shrink-0 text-signal" aria-hidden />
-              Wearable suggestion: {suggested}/10. Confirm it or rate how you
-              actually feel.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setRecovery(suggested)}
-            >
-              Use {suggested}
-            </Button>
-          </div>
-        ) : null}
-
-        <Button
-          type="button"
-          onClick={onSave}
-          disabled={pending || recovery == null}
-          className="w-full"
+        <span
+          className={cn(
+            'flex w-14 shrink-0 items-center justify-end gap-1 font-mono text-base font-bold',
+            recovery == null ? 'text-muted' : 'text-foreground',
+          )}
         >
           {pending ? (
-            <>
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-              Saving
-            </>
-          ) : (
-            'Save readiness'
-          )}
-        </Button>
-      </CardContent>
-    </Card>
+            <Loader2 className="size-3.5 animate-spin text-muted" aria-label="saving" />
+          ) : saved != null && saved === recovery ? (
+            <Check className="size-3.5 text-gate-green" strokeWidth={3} aria-label="saved" />
+          ) : null}
+          {recovery ?? '–'}
+          <span className="text-xs font-semibold text-muted">/10</span>
+        </span>
+      </div>
+
+      {saved == null ? (
+        <div className="mt-2 flex min-h-10 items-center justify-between gap-3">
+          <p className="text-xs text-muted">
+            {suggested != null
+              ? `your wearable suggests ${suggested}.`
+              : '1 drained · 10 fresh and strong'}
+          </p>
+          {suggested != null ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={pending}
+              onClick={() => save(suggested)}
+            >
+              use {suggested}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   )
 }

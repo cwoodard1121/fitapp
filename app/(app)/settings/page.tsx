@@ -47,7 +47,7 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4 sm:pt-6">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-4 sm:pt-6">
       <header className="mb-6 flex flex-col gap-1">
         <h1 className="text-[1.75rem] font-extrabold leading-[1.1] tracking-[-0.025em] font-wide">Your setup</h1>
         <p className="text-sm text-muted">
