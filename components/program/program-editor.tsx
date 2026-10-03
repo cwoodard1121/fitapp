@@ -257,10 +257,7 @@ export function ProgramEditor({
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-28 sm:pb-12">
       <header className="mb-5">
-        <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
-          Program editor
-        </span>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+        <h1 className="mt-1 text-[1.75rem] font-extrabold leading-[1.1] tracking-[-0.025em] font-wide">
           Build your program
         </h1>
         <p className="mt-1 text-sm text-muted">

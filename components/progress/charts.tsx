@@ -14,21 +14,18 @@ import {
 } from "recharts"
 
 import type { VolumeWeekRow } from "./types"
+import { CHART, CHART_FONT } from "@/lib/theme"
 
-/* ------------------------------------------------------------------ */
-/* Dark "instrument panel" chart palette (recharts wants literal hex). */
-/* ------------------------------------------------------------------ */
-
-const SIGNAL = "#c7f24a"
-const MUTED = "#8a92a0"
-const GRID = "#2c313a"
-const SURFACE = "#1e2228"
-const TEXT = "#edeff2"
+const SIGNAL = CHART.signal
+const MUTED = CHART.muted
+const GRID = CHART.grid
+const SURFACE = CHART.surface
+const TEXT = CHART.text
 
 /** Quiet greys for the non-focused muscle areas in the volume chart. */
-const MUTED_RAMP = ["#8a92a0", "#6b7280", "#525a66", "#3c424c", "#737b88"]
+const MUTED_RAMP = [0.9, 0.7, 0.5, 0.35, 0.6].map((a) => `rgb(var(--muted-rgb) / ${a})`)
 
-const axisTick = { fill: MUTED, fontSize: 11, fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }
+const axisTick = { fill: MUTED, fontSize: 11, fontFamily: CHART_FONT }
 const reduceMotion =
   typeof window !== "undefined" &&
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
@@ -173,4 +170,3 @@ export function VolumeChart({
   )
 }
 
-export const chartColors = { SIGNAL, MUTED, GRID, SURFACE, TEXT }

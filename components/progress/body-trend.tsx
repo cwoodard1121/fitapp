@@ -34,16 +34,16 @@ import type { WeightBasis } from "@/lib/body/metrics"
 import type { Unit } from "@/lib/types"
 
 import type { BodyTrendPoint, ProgressBlockOverlay } from "./types"
+import { CHART } from "@/lib/theme"
 
-// Design tokens (charts take literal colors, not tailwind classes).
 const COLORS = {
-  signal: "#c7f24a",
-  muted: "#8a92a0",
-  border: "#2c313a",
-  surface: "#1e2228",
-  yellow: "#e8c45a",
-  blue: "#67d4ff",
-  text: "#edeff2",
+  signal: CHART.signal,
+  muted: CHART.muted,
+  border: CHART.border,
+  surface: CHART.surface,
+  yellow: CHART.second,
+  blue: CHART.third,
+  text: CHART.text,
 }
 
 interface ChartRow {

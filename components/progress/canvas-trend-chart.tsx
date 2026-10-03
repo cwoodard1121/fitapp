@@ -3,9 +3,8 @@
 import * as React from "react"
 
 import type { ExercisePoint } from "./types"
-import { chartColors, fmtDate, fmtNum, PanelTooltip } from "./charts"
-
-const { SIGNAL, MUTED, GRID, SURFACE } = chartColors
+import { fmtDate, fmtNum, PanelTooltip } from "./charts"
+import { CHART, canvasColor } from "@/lib/theme"
 
 interface Pt {
   date: string
@@ -16,14 +15,6 @@ interface Pt {
 
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3)
-}
-
-/** "#rrggbb" + alpha -> "rgba(r, g, b, a)" — canvas has no CSS color-mix. */
-function hexAlpha(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`
 }
 
 const HEIGHT = 200
@@ -132,8 +123,8 @@ export function CanvasTrendChart({
 
       // Soft fill under the line.
       const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + sc.innerH)
-      grad.addColorStop(0, hexAlpha(SIGNAL, 0.22 * alpha))
-      grad.addColorStop(1, hexAlpha(SIGNAL, 0))
+      grad.addColorStop(0, canvasColor('signal', 0.22 * alpha))
+      grad.addColorStop(1, canvasColor('signal', 0))
       ctx.fillStyle = grad
       ctx.beginPath()
       series.forEach((p, i) => {
@@ -148,7 +139,7 @@ export function CanvasTrendChart({
       ctx.fill()
 
       // Line.
-      ctx.strokeStyle = hexAlpha(SIGNAL, alpha)
+      ctx.strokeStyle = canvasColor('signal', alpha)
       ctx.lineWidth = 2
       ctx.lineJoin = "round"
       ctx.lineCap = "round"
@@ -167,7 +158,7 @@ export function CanvasTrendChart({
         const y = sc.yFor(p.value)
         ctx.beginPath()
         ctx.arc(x, y, 2.5, 0, Math.PI * 2)
-        ctx.fillStyle = hexAlpha(SIGNAL, alpha)
+        ctx.fillStyle = canvasColor('signal', alpha)
         ctx.fill()
       })
       ctx.restore()
@@ -196,7 +187,7 @@ export function CanvasTrendChart({
       ctx.clearRect(0, 0, widthCss, HEIGHT)
 
       // Horizontal gridlines.
-      ctx.strokeStyle = GRID
+      ctx.strokeStyle = canvasColor('border')
       ctx.lineWidth = 1
       ctx.setLineDash([3, 3])
       const bands = 3
@@ -227,7 +218,7 @@ export function CanvasTrendChart({
       if (hi != null && data[hi] && t >= 1) {
         const x = sc.xFor(hi)
         const y = sc.yFor(data[hi].value)
-        ctx.strokeStyle = MUTED
+        ctx.strokeStyle = canvasColor('muted')
         ctx.lineWidth = 1
         ctx.setLineDash([2, 3])
         ctx.beginPath()
@@ -238,10 +229,10 @@ export function CanvasTrendChart({
 
         ctx.beginPath()
         ctx.arc(x, y, 4.5, 0, Math.PI * 2)
-        ctx.fillStyle = SIGNAL
+        ctx.fillStyle = canvasColor('signal')
         ctx.fill()
         ctx.lineWidth = 1.5
-        ctx.strokeStyle = SURFACE
+        ctx.strokeStyle = canvasColor('surface')
         ctx.stroke()
       }
     },
@@ -387,7 +378,7 @@ export function CanvasTrendChart({
         >
           <PanelTooltip
             title={`${hoverPoint.label} · week ${hoverPoint.week}`}
-            rows={[{ label, value: hoverPoint.value, unit, color: SIGNAL }]}
+            rows={[{ label, value: hoverPoint.value, unit, color: CHART.signal }]}
           />
         </div>
       ) : null}

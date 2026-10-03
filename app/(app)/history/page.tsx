@@ -287,16 +287,10 @@ export default async function HistoryPage() {
   })
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-5">
-      <header className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4 sm:pt-6">
+      <header className="mb-4 flex items-center justify-end gap-3">
         <div className="flex flex-col gap-1">
-          <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
-            simplegym
-          </span>
-          <h1 className="text-2xl font-semibold tracking-tight">History</h1>
-          <p className="text-sm text-muted">
-            Past sessions, what you lifted, and what the engine decided.
-          </p>
+          <h1 className="sr-only">History</h1>
         </div>
         <CopyRecentData text={exportText} />
       </header>

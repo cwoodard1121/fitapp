@@ -57,10 +57,7 @@ export function GoalsBoard({
       {/* Header */}
       <div className="flex items-end justify-between gap-3">
         <div className="space-y-1">
-          <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
-            Goals
-          </span>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-[1.75rem] font-extrabold leading-[1.1] tracking-[-0.025em] font-wide">
             What you&apos;re chasing
           </h1>
         </div>

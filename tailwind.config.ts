@@ -1,8 +1,10 @@
 import type { Config } from "tailwindcss";
 import animate from "tailwindcss-animate";
 
+const rgb = (name: string) => `rgb(var(--${name}-rgb) / <alpha-value>)`;
+
 const config: Config = {
-  darkMode: "class",
+  darkMode: "media",
   content: [
     "./app/**/*.{ts,tsx,mdx}",
     "./components/**/*.{ts,tsx,mdx}",
@@ -11,57 +13,68 @@ const config: Config = {
   theme: {
     extend: {
       // Safe-area + chrome-clearance tokens. Centralizing the env() math here
-      // keeps every fixed/sticky surface honest about the iOS notch, the home
-      // indicator, the top header, and the mobile tab bar.
+      // keeps every fixed surface honest about the notch, the home indicator,
+      // the venue band and the mobile tab bar.
       spacing: {
         "safe-t": "env(safe-area-inset-top)",
         "safe-b": "env(safe-area-inset-bottom)",
-        // Sticky top header: 3.5rem row + whatever the notch steals.
         header: "calc(3.5rem + env(safe-area-inset-top))",
-        // Mobile bottom tab bar footprint: 4rem row + home indicator.
-        nav: "calc(4rem + env(safe-area-inset-bottom))",
-        // Tab bar footprint + 0.5rem breathing room (page content / floating bars).
-        "nav-room": "calc(4.5rem + env(safe-area-inset-bottom))",
-        // Today's `SessionBar` is `fixed`, not `sticky` (sticky engages too
-        // early on short pages and floats mid-screen instead of docking —
-        // see components/today/session-bar.tsx). Being fixed, it takes no
-        // space in the flow, so the page content needs bottom padding equal
-        // to the bar's own footprint (~4.5rem) stacked on top of the tab
-        // bar's footprint it already clears (`nav`).
-        "session-room": "calc(4rem + env(safe-area-inset-bottom) + 4.5rem)",
+        nav: "calc(4.25rem + env(safe-area-inset-bottom))",
+        "nav-room": "calc(5rem + env(safe-area-inset-bottom))",
+        // Today's SessionBar is `fixed` (sticky floats mid-screen on short
+        // pages), so content pads for the tab bar plus the bar's ~5rem.
+        "session-room": "calc(4.25rem + env(safe-area-inset-bottom) + 5.75rem)",
       },
       colors: {
-        background: "var(--bg)",
-        surface: "var(--surface)",
-        border: "var(--border)",
-        input: "var(--border)",
-        ring: "var(--signal)",
-        foreground: "var(--text)",
-        muted: "var(--muted)",
+        background: rgb("bg"),
+        surface: rgb("surface"),
+        "surface-2": rgb("surface-2"),
+        border: rgb("border"),
+        input: rgb("border"),
+        ring: rgb("signal"),
+        foreground: rgb("text"),
+        muted: rgb("muted"),
         signal: {
-          DEFAULT: "var(--signal)",
-          foreground: "var(--signal-ink)",
+          DEFAULT: rgb("signal"),
+          foreground: rgb("signal-ink"),
         },
         gate: {
-          green: "var(--gate-green)",
-          yellow: "var(--gate-yellow)",
-          red: "var(--gate-red)",
+          green: rgb("gate-green"),
+          yellow: rgb("gate-yellow"),
+          red: rgb("gate-red"),
+        },
+        hue: {
+          DEFAULT: rgb("hue"),
+          today: rgb("hue-today"),
+          checkin: rgb("hue-checkin"),
+          home: rgb("hue-home"),
+          body: rgb("hue-body"),
+          more: rgb("hue-more"),
+        },
+        "on-hue": rgb("on-hue"),
+        chart: {
+          2: rgb("chart-2"),
+          3: rgb("chart-3"),
         },
       },
       borderColor: {
-        DEFAULT: "var(--border)",
+        DEFAULT: rgb("border"),
       },
       ringColor: {
-        DEFAULT: "var(--signal)",
+        DEFAULT: rgb("signal"),
       },
       borderRadius: {
-        lg: "0.75rem",
-        md: "0.5rem",
+        xl: "1.125rem",
+        lg: "0.875rem",
+        md: "0.625rem",
         sm: "0.375rem",
       },
       fontFamily: {
-        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
-        mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
+        sans: ["var(--font-archivo)", "system-ui", "sans-serif"],
+        mono: ["var(--font-archivo)", "system-ui", "sans-serif"],
+      },
+      fontSize: {
+        "2xs": ["0.6875rem", { lineHeight: "1rem" }],
       },
       keyframes: {
         "accordion-down": {
@@ -76,6 +89,7 @@ const config: Config = {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "set-mark": "set-mark-fill 180ms cubic-bezier(0.2, 0, 0, 1)",
       },
     },
   },

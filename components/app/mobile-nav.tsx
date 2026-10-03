@@ -3,9 +3,8 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu } from "lucide-react"
 
-import { cn, TAP_SCALE } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import {
   Sheet,
   SheetClose,
@@ -13,24 +12,46 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { moreNav, primaryNav, isActiveRoute } from "./nav-items"
+import {
+  VENUE_BG,
+  isActiveRoute,
+  moreItem,
+  moreNav,
+  primaryNav,
+  type Venue,
+} from "./nav-items"
+
+/** Hue bar riding the top edge of the active tab; it glides between tabs. */
+function ActiveMarker({ venue }: { venue: Venue }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "absolute inset-x-3 top-0 h-[3px] rounded-b-full [view-transition-name:tab-marker]",
+        VENUE_BG[venue],
+      )}
+    />
+  )
+}
+
+const cellClass =
+  "relative flex h-[4.25rem] w-full select-none flex-col items-center justify-center gap-1 text-xs font-semibold transition-[color,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100"
 
 /**
- * Mobile navigation — a sticky bottom tab bar with the four primary
- * destinations plus a "More" button that opens a bottom sheet listing the rest.
- * Hidden at md+ (the sidebar takes over there).
+ * Mobile tab bar: the four daily venues and "more", each a pictogram with a
+ * lowercase label. Hidden at md+ where the sidebar takes over.
  */
 export function MobileNav() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-
   const moreActive = moreNav.some((item) => isActiveRoute(pathname, item.href))
+  const MoreIcon = moreItem.icon
 
   return (
     <>
       <nav
         aria-label="Primary"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur supports-[backdrop-filter]:bg-surface/80 md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-safe-b md:hidden"
       >
         <ul className="grid grid-cols-5">
           {primaryNav.map((item) => {
@@ -41,23 +62,10 @@ export function MobileNav() {
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal active:bg-border/40 motion-reduce:transition-none",
-                    TAP_SCALE,
-                    active ? "text-signal" : "text-muted hover:text-foreground",
-                  )}
+                  className={cn(cellClass, active ? "text-foreground" : "text-muted")}
                 >
-                  <span className="relative flex size-8 items-center justify-center">
-                    {active && (
-                      // Named so it morphs to the next tab's position across a
-                      // navigation instead of popping (see route-progress.tsx).
-                      <span
-                        aria-hidden
-                        className="absolute inset-0 rounded-full bg-signal/15 [view-transition-name:nav-pill-mobile]"
-                      />
-                    )}
-                    <Icon className="relative size-5 shrink-0" aria-hidden />
-                  </span>
+                  {active ? <ActiveMarker venue={item.venue} /> : null}
+                  <Icon className="size-[1.625rem] shrink-0" />
                   <span>{item.label}</span>
                 </Link>
               </li>
@@ -71,36 +79,22 @@ export function MobileNav() {
               aria-haspopup="dialog"
               aria-expanded={open}
               aria-current={moreActive ? "page" : undefined}
-              className={cn(
-                "flex h-16 w-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal active:bg-border/40 motion-reduce:transition-none",
-                TAP_SCALE,
-                moreActive ? "text-signal" : "text-muted hover:text-foreground",
-              )}
+              className={cn(cellClass, moreActive ? "text-foreground" : "text-muted")}
             >
-              <span className="relative flex size-8 items-center justify-center">
-                {moreActive && (
-                  <span
-                    aria-hidden
-                    className="absolute inset-0 rounded-full bg-signal/15 [view-transition-name:nav-pill-mobile]"
-                  />
-                )}
-                <Menu className="relative size-5 shrink-0" aria-hidden />
-              </span>
-              <span>More</span>
+              {moreActive ? <ActiveMarker venue="more" /> : null}
+              <MoreIcon className="size-[1.625rem] shrink-0" />
+              <span>{moreItem.label}</span>
             </button>
           </li>
         </ul>
       </nav>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent
-          side="bottom"
-          className="pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
-        >
-          <SheetHeader className="mb-3 text-left">
-            <SheetTitle>More</SheetTitle>
+        <SheetContent side="bottom" className="px-4">
+          <SheetHeader className="mb-4 text-left">
+            <SheetTitle className="font-wide text-2xl font-extrabold">more</SheetTitle>
           </SheetHeader>
-          <ul className="grid grid-cols-3 gap-2">
+          <ul className="grid grid-cols-3 gap-2.5">
             {moreNav.map((item) => {
               const active = isActiveRoute(pathname, item.href)
               const Icon = item.icon
@@ -111,20 +105,13 @@ export function MobileNav() {
                       href={item.href}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "flex h-20 flex-col items-center justify-center gap-2 rounded-md border text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface motion-reduce:transition-none",
-                        TAP_SCALE,
+                        "flex h-24 select-none flex-col items-center justify-center gap-2.5 rounded-lg text-sm font-semibold transition-[background-color,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal active:scale-[0.96] motion-reduce:transition-none",
                         active
-                          ? "border-signal/40 bg-background text-foreground"
-                          : "border-border bg-background text-muted hover:text-foreground",
+                          ? "bg-hue-more text-on-hue"
+                          : "bg-surface-2 text-foreground hover:bg-border/70",
                       )}
                     >
-                      <Icon
-                        className={cn(
-                          "size-5 shrink-0",
-                          active ? "text-signal" : "text-muted",
-                        )}
-                        aria-hidden
-                      />
+                      <Icon className="size-6 shrink-0" strokeWidth={2.25} aria-hidden />
                       <span>{item.label}</span>
                     </Link>
                   </SheetClose>

@@ -1,4 +1,4 @@
-import { ClipboardCheck } from 'lucide-react'
+import { format, parseISO } from 'date-fns'
 
 import {
   getProfile,
@@ -100,15 +100,14 @@ export default async function CheckinPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
-      <header className="flex items-start justify-between gap-3">
-        <div className="space-y-0.5">
-          <span className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-[0.2em] text-muted">
-            <ClipboardCheck className="size-3.5" aria-hidden />
-            Daily
-          </span>
-          <h1 className="text-2xl font-semibold tracking-tight">Check-in</h1>
-        </div>
+    <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4 sm:pt-6">
+      <header className="mb-1">
+        <h1 className="text-[1.75rem] font-extrabold lowercase leading-[1.1] tracking-[-0.025em] font-wide">
+          {format(parseISO(today), 'EEEE, MMM d')}
+        </h1>
+        <p className="mt-1 text-sm font-medium text-muted">
+          Habits, soreness and recovery for today.
+        </p>
       </header>
 
       {weeklyNavyDue ? (

@@ -88,16 +88,8 @@ export default async function OverviewPage() {
 
 function PageShell({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 pb-24 sm:py-8">
-      <header className="mb-5 space-y-1">
-        <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
-          simplegym
-        </span>
-        <h1 className="text-2xl font-semibold tracking-tight">Home</h1>
-        <p className="text-sm text-muted">
-          Your program, training, body, nutrition, and recovery — at a glance.
-        </p>
-      </header>
+    <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-4 sm:pt-6">
+      <h1 className="sr-only">Home</h1>
       {children}
     </div>
   )

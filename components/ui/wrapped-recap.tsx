@@ -1,4 +1,5 @@
 import { format, parseISO } from "date-fns"
+import { CHART } from "@/lib/theme"
 
 /**
  * Shared visual language for "Wrapped"-style celebratory recaps — the block
@@ -8,11 +9,11 @@ import { format, parseISO } from "date-fns"
  * system: same accent color, same big mono numerals, same metric shapes.
  */
 export const WRAPPED_COLORS = {
-  signal: "#c7f24a",
-  muted: "#8a92a0",
-  border: "#2c313a",
-  surface: "#1e2228",
-  bodyfat: "#d4dbe6",
+  signal: CHART.signal,
+  muted: CHART.muted,
+  border: CHART.border,
+  surface: CHART.surface,
+  bodyfat: CHART.second,
 } as const
 
 export function wrappedGrouped(value: number): string {

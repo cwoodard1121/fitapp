@@ -29,7 +29,7 @@ export function SkeletonPage({
   return (
     <div
       className={cn(
-        'mx-auto w-full px-4 pb-10 pt-4',
+        'mx-auto w-full px-4 pb-10 pt-4 sm:pt-6',
         maxWidths[maxWidth],
         className,
       )}
@@ -44,12 +44,9 @@ export function SkeletonPage({
 /** Title + subtitle, matching every page's header shape. */
 export function SkeletonHeaderBar({ withAction = false }: { withAction?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="space-y-2">
-        <Skeleton className="h-3 w-24" />
-        <Skeleton className="h-7 w-44" />
-      </div>
-      {withAction ? <Skeleton className="h-9 w-24 rounded-md" /> : null}
+    <div className="flex items-center justify-between gap-3">
+      <Skeleton className="h-8 w-48" />
+      {withAction ? <Skeleton className="h-10 w-28 rounded-md" /> : null}
     </div>
   )
 }
@@ -58,7 +55,7 @@ export function SkeletonHeaderBar({ withAction = false }: { withAction?: boolean
 export function SkeletonBlock({ className }: { className?: string }) {
   return (
     <Skeleton
-      className={cn('rounded-lg border border-border', className)}
+      className={cn('rounded-lg border border-border bg-surface', className)}
     />
   )
 }
@@ -66,9 +63,9 @@ export function SkeletonBlock({ className }: { className?: string }) {
 /** A horizontally-scrolling chip row, e.g. the week/day strips. */
 export function SkeletonChips({ count = 6 }: { count?: number }) {
   return (
-    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
       {Array.from({ length: count }, (_, i) => (
-        <Skeleton key={i} className="h-11 w-16 shrink-0 rounded-md" />
+        <Skeleton key={i} className="h-14 w-24 shrink-0 rounded-md bg-surface" />
       ))}
     </div>
   )
@@ -77,6 +74,6 @@ export function SkeletonChips({ count = 6 }: { count?: number }) {
 /** A single list/table row (history, entries, recent-days lists). */
 export function SkeletonRow({ className }: { className?: string }) {
   return (
-    <Skeleton className={cn('h-14 w-full rounded-md', className)} />
+    <Skeleton className={cn('h-16 w-full rounded-md bg-surface', className)} />
   )
 }

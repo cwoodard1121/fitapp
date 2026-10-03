@@ -23,9 +23,10 @@ interface SessionBarProps {
 }
 
 /**
- * Sticky bottom action bar: shows the day + week context and the primary
- * "Finish session" CTA. On a completed session it flips to a quiet confirmation
- * with a reopen affordance.
+ * Bottom action bar, fixed above the tab bar: day + progress and the primary
+ * "finish session" action. A finished session flips to a quiet confirmation
+ * with a reopen affordance. Fixed, not sticky (sticky floats mid-screen on
+ * short pages); Today pads for it with `pb-session-room`.
  */
 export function SessionBar({
   sessionId,
@@ -78,25 +79,24 @@ export function SessionBar({
   }
 
   return (
-    <div className="fixed inset-x-0 bottom-nav z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:bottom-0 md:left-60">
+    <div className="fixed inset-x-0 bottom-nav z-30 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-surface/85 md:bottom-0 md:left-60">
       <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">
-            Day {dayNumber} · {dayLabel}
+          <p className="truncate text-[0.9375rem] font-bold lowercase leading-tight text-foreground">
+            day {dayNumber} · {dayLabel}
           </p>
-          <p className="font-mono text-xs tabular-nums text-muted">
-            Week {week} ·{' '}
+          <p className="mt-0.5 font-mono text-xs font-semibold text-muted">
             {done && performedAt
               ? `done ${format(new Date(performedAt), 'MMM d, p')}`
-              : `${loggedCount}/${totalSlots} logged`}
+              : `${loggedCount} of ${totalSlots} logged · w${week}`}
           </p>
         </div>
 
         {done ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gate-green">
-              <CheckCircle2 className="size-4" aria-hidden />
-              Complete
+          <div className="flex shrink-0 items-center gap-1">
+            <span className="inline-flex items-center gap-1.5 px-2 text-sm font-bold text-gate-green">
+              <CheckCircle2 className="size-[1.125rem]" aria-hidden />
+              done
             </span>
             <Button
               type="button"
@@ -105,8 +105,8 @@ export function SessionBar({
               onClick={onReopen}
               disabled={pending}
             >
-              <RotateCcw className="size-4" aria-hidden />
-              Reopen
+              <RotateCcw aria-hidden />
+              reopen
             </Button>
           </div>
         ) : (
@@ -114,14 +114,14 @@ export function SessionBar({
             type="button"
             onClick={onFinish}
             disabled={pending}
-            className="shrink-0"
+            className="shrink-0 px-6"
           >
             {pending ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
+              <Loader2 className="animate-spin" aria-hidden />
             ) : (
-              <Flag className="size-4" aria-hidden />
+              <Flag aria-hidden />
             )}
-            Finish session
+            finish session
           </Button>
         )}
       </div>

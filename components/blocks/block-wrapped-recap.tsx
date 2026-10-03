@@ -44,7 +44,7 @@ function WrappedTooltip({
 }: TooltipProps<number, string> & { unit: Unit }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-md border border-border bg-[#181b20] px-3 py-2 text-xs shadow-xl">
+    <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs shadow-xl">
       <p className="mb-1 font-medium text-foreground">
         {typeof label === "string" ? shortDate(label) : label}
       </p>
@@ -96,7 +96,7 @@ export function BlockWrappedRecap({
   ] as const
 
   return (
-    <div className="overflow-hidden rounded-[inherit] bg-[#111318]">
+    <div className="overflow-hidden rounded-[inherit] bg-surface-2">
       <div className="relative overflow-hidden border-b border-border px-5 pb-6 pt-7 sm:px-8 sm:pb-8">
         <div
           aria-hidden

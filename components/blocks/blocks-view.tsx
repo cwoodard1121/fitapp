@@ -82,14 +82,11 @@ export function BlocksView({
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-24 pt-5 sm:pb-10">
+    <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4 sm:pt-6">
       {/* Header */}
       <div className="mb-5 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Blocks</h1>
-          <p className="text-sm text-muted">
-            Plan training and diet phases on a timeline.
-          </p>
+          <h1 className="sr-only">Blocks</h1>
         </div>
         <div className="hidden items-center gap-2 sm:flex">
           <RestartBlockDialog />

@@ -34,14 +34,14 @@ import {
 } from '@/lib/body/weight-trend'
 import { interpretBodyMetrics } from '@/lib/body/body-fat'
 import type { BodyMetric, Unit } from '@/lib/types'
+import { CHART } from '@/lib/theme'
 
-// Design tokens (charts take literal colors, not tailwind classes).
 const COLORS = {
-  signal: '#c7f24a',
-  muted: '#8a92a0',
-  border: '#2c313a',
-  surface: '#1e2228',
-  yellow: '#e8c45a',
+  signal: CHART.signal,
+  muted: CHART.muted,
+  border: CHART.border,
+  surface: CHART.surface,
+  yellow: CHART.second,
 }
 
 type RangePreset = '14d' | '30d' | '90d' | '180d' | '365d' | 'all' | 'custom'

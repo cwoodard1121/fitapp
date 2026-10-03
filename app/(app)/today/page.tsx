@@ -1,6 +1,3 @@
-import type { ReactNode } from 'react'
-import { CalendarDays } from 'lucide-react'
-
 import {
   getProfile,
   getActiveProgram,
@@ -41,6 +38,7 @@ import { SessionReadiness } from '@/components/today/session-readiness'
 import { SlotRow } from '@/components/today/slot-row'
 import { SessionBar } from '@/components/today/session-bar'
 import { EmptyState } from '@/components/today/empty-state'
+import { SessionBand, type BandSegment } from '@/components/today/session-band'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,7 +66,6 @@ export default async function TodayPage({
   if (!program) {
     return (
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
-        <Header unit={unit} />
         <EmptyState />
       </div>
     )
@@ -83,7 +80,6 @@ export default async function TodayPage({
   if (!full || full.days.length === 0) {
     return (
       <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4">
-        <Header unit={unit} />
         <EmptyState />
       </div>
     )
@@ -220,31 +216,24 @@ export default async function TodayPage({
     if (a) dayAdvice.push(a)
   }
 
+  const segments: BandSegment[] = slotViews.map((v) => ({
+    slotId: v.slot.id,
+    code: v.slot.slot_code,
+    name: v.slot.exercise_name,
+    logged:
+      v.entries.some((e) => e.reps != null) ||
+      (v.log != null && (v.log.best_reps != null || v.log.actual_sets != null)),
+  }))
+
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-session-room pt-4 md:pb-24">
-      <Header unit={unit}>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="font-mono">
-            Week {week}/{program.length_weeks}
-          </Badge>
-          {meso > 0 ? (
-            <Badge variant="muted" className="font-mono">
-              Meso {meso + 1}
-            </Badge>
-          ) : null}
-          {isDeload ? <Badge variant="warning">Deload</Badge> : null}
-        </div>
-      </Header>
+    <div className="mx-auto w-full max-w-2xl px-4 pb-session-room pt-3 md:pb-28">
+      <WeekSelector
+        lengthWeeks={program.length_weeks}
+        selectedWeek={week}
+        currentWeek={currentWeek}
+      />
 
-      <div className="mt-4">
-        <WeekSelector
-          lengthWeeks={program.length_weeks}
-          selectedWeek={week}
-          currentWeek={currentWeek}
-        />
-      </div>
-
-      <div className="mt-4">
+      <div className="mt-2">
         <DaySelector
           days={full.days}
           selectedDayId={selectedDay.id}
@@ -252,6 +241,32 @@ export default async function TodayPage({
           weekOverride={week === currentWeek ? undefined : week}
         />
       </div>
+
+      <header className="mt-5">
+        <h1 className="text-[2.125rem] font-extrabold lowercase leading-[1.05] tracking-[-0.03em] font-wide">
+          {selectedDay.label}
+        </h1>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm font-semibold text-muted">
+          <span className="font-mono">
+            week {week} of {program.length_weeks}
+          </span>
+          {meso > 0 ? (
+            <>
+              <span aria-hidden>·</span>
+              <span className="font-mono">meso {meso + 1}</span>
+            </>
+          ) : null}
+          <span aria-hidden>·</span>
+          <span>{unit}</span>
+          {isDeload ? <Badge variant="warning">deload week</Badge> : null}
+        </div>
+      </header>
+
+      {segments.length > 0 ? (
+        <div className="mt-4">
+          <SessionBand segments={segments} done={session.status === 'done'} />
+        </div>
+      ) : null}
 
       {daySlots.length > 0 ? (
         <div className="mt-4">
@@ -277,13 +292,13 @@ export default async function TodayPage({
 
       {daySlots.length === 0 ? (
         <div className="mt-6 rounded-lg border border-dashed border-border bg-surface p-6 text-center">
-          <p className="text-sm font-medium">No exercises on this day yet.</p>
+          <p className="text-base font-bold">Nothing on this day yet.</p>
           <p className="mt-1 text-sm text-muted">
-            Add slots to {selectedDay.label} from the program editor.
+            Add exercises to {selectedDay.label} in the program editor.
           </p>
         </div>
       ) : (
-        <ol className="mt-4 space-y-3">
+        <ol className="mt-4 space-y-4">
           {slotViews.map((view) => (
             <li key={`${session.id}:${view.slot.id}`}>
               <SlotRow
@@ -358,25 +373,4 @@ async function loadCoachingInputs(
     : null
 
   return { payload: analysis?.payload ?? null, recoveryScore }
-}
-
-function Header({
-  unit,
-  children,
-}: {
-  unit: string
-  children?: ReactNode
-}) {
-  return (
-    <header className="flex items-start justify-between gap-3">
-      <div className="space-y-0.5">
-        <span className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-[0.2em] text-muted">
-          <CalendarDays className="size-3.5" aria-hidden />
-          Today · {unit}
-        </span>
-        <h1 className="text-2xl font-semibold tracking-tight">Log session</h1>
-      </div>
-      {children}
-    </header>
-  )
 }

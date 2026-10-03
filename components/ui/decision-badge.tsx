@@ -61,18 +61,18 @@ function decisionMeta(decision: Decision): DecisionMeta {
 }
 
 const toneClasses: Record<DecisionTone, string> = {
-  signal: "border-signal/40 bg-signal/10 text-signal",
-  red: "border-gate-red/40 bg-gate-red/10 text-gate-red",
-  yellow: "border-gate-yellow/40 bg-gate-yellow/10 text-gate-yellow",
-  muted: "border-border bg-surface text-muted",
+  signal: "border-transparent bg-gate-green/10 text-gate-green",
+  red: "border-transparent bg-gate-red/10 text-gate-red",
+  yellow: "border-transparent bg-gate-yellow/15 text-gate-yellow",
+  muted: "border-transparent bg-surface-2 text-muted",
 }
 
 type DecisionBadgeSize = "sm" | "default" | "lg"
 
 const sizeClasses: Record<DecisionBadgeSize, string> = {
-  sm: "gap-1 px-2 py-0.5 text-xs [&_svg]:size-3",
-  default: "gap-1.5 px-2.5 py-1 text-sm [&_svg]:size-4",
-  lg: "gap-2 px-3 py-1.5 text-base [&_svg]:size-5",
+  sm: "gap-1 px-2 py-1 text-xs [&_svg]:size-3",
+  default: "gap-1.5 px-2.5 py-1.5 text-sm [&_svg]:size-4",
+  lg: "gap-2 px-3 py-2 text-base [&_svg]:size-5",
 }
 
 export interface DecisionBadgeProps
@@ -106,7 +106,7 @@ const DecisionBadge = React.forwardRef<HTMLSpanElement, DecisionBadgeProps>(
     const pill = (
       <span
         className={cn(
-          "inline-flex items-center whitespace-nowrap rounded-md border font-medium leading-none",
+          "inline-flex items-center whitespace-nowrap rounded-sm border font-semibold leading-none",
           toneClasses[tone],
           sizeClasses[size]
         )}

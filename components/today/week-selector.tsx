@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 
-import { cn, TAP_SCALE } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { setLastSelectedWeek } from '@/app/(app)/today/actions'
 
 interface WeekSelectorProps {
@@ -17,10 +17,10 @@ function rememberWeek(week: number | null) {
 }
 
 /**
- * Switches the session logger between weeks in the current mesocycle. Changing
- * weeks deliberately clears the selected day so the destination week can open
- * its first unfinished workout. The pick also sticks across visits (see
- * rememberWeek) until "Back to current" clears it.
+ * Switches the logger between weeks of the mesocycle, timetable-style: one
+ * cell per week, the current week marked with a dot. Changing weeks clears
+ * the day so the destination opens its first unfinished workout; the pick
+ * sticks across visits until "back to current" clears it.
  */
 export function WeekSelector({
   lengthWeeks,
@@ -32,31 +32,10 @@ export function WeekSelector({
     (_, index) => index + 1,
   )
   return (
-    <section aria-labelledby="training-week-label">
-      <div className="mb-2 flex min-h-5 items-center justify-between gap-3">
-        <p
-          id="training-week-label"
-          className="font-mono text-xs uppercase tracking-[0.18em] text-muted"
-        >
-          Training week
-        </p>
-        {selectedWeek !== currentWeek ? (
-          <Link
-            href="/today"
-            scroll={false}
-            onClick={() => rememberWeek(null)}
-            className="text-xs font-medium text-signal hover:underline"
-          >
-            Back to current
-          </Link>
-        ) : (
-          <span className="text-xs text-muted">Current week</span>
-        )}
-      </div>
-
+    <div className="flex items-center gap-3">
       <nav
         aria-label="Training week"
-        className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="no-scrollbar -my-1 flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-1"
       >
         {weeks.map((week) => {
           const active = week === selectedWeek
@@ -71,24 +50,39 @@ export function WeekSelector({
               aria-current={active ? 'page' : undefined}
               aria-label={`Week ${week}${current ? ', current week' : ''}`}
               className={cn(
-                'flex h-11 min-w-16 shrink-0 items-center justify-center gap-1.5 rounded-md border px-3 font-mono text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                TAP_SCALE,
+                'relative flex h-11 min-w-11 shrink-0 select-none flex-col items-center justify-center rounded-md font-mono text-[0.9375rem] font-bold transition-[background-color,color,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95',
                 active
-                  ? 'border-signal bg-signal/10 text-signal'
-                  : 'border-border bg-surface text-foreground hover:bg-border/50',
+                  ? 'bg-foreground text-background'
+                  : 'bg-surface text-foreground hover:bg-surface-2',
               )}
             >
-              W{week}
+              <span className="leading-none">
+                <span className="text-[0.6875rem] font-semibold opacity-60">w</span>
+                {week}
+              </span>
               {current ? (
                 <span
-                  className="size-1.5 rounded-full bg-signal"
                   aria-hidden
+                  className={cn(
+                    'absolute bottom-1.5 size-1 rounded-full',
+                    active ? 'bg-background' : 'bg-signal',
+                  )}
                 />
               ) : null}
             </Link>
           )
         })}
       </nav>
-    </section>
+      {selectedWeek !== currentWeek ? (
+        <Link
+          href="/today"
+          scroll={false}
+          onClick={() => rememberWeek(null)}
+          className="inline-flex h-11 shrink-0 items-center rounded-md px-2 text-sm font-semibold text-signal hover:underline"
+        >
+          back to w{currentWeek}
+        </Link>
+      ) : null}
+    </div>
   )
 }

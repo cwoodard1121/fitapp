@@ -28,14 +28,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { CHART } from '@/lib/theme'
 
-// Charts take literal colors, not tailwind classes.
 const COLORS = {
-  signal: '#c7f24a',
-  blue: '#6aa3e8',
-  muted: '#8a92a0',
-  border: '#2c313a',
-  surface: '#1e2228',
+  signal: CHART.signal,
+  blue: CHART.second,
+  muted: CHART.muted,
+  border: CHART.border,
+  surface: CHART.surface,
 }
 
 type View = 'daily' | 'weekly'

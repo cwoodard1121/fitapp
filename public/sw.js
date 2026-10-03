@@ -1,5 +1,5 @@
 /* simplegym service worker — minimal, network-first for a fresh-but-installable PWA. */
-const CACHE = "simplegym-v1";
+const CACHE = "simplegym-v2";
 const SHELL = ["/today", "/manifest.webmanifest", "/icon.svg", "/icon-192.png"];
 
 self.addEventListener("install", (event) => {

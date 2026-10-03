@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Check } from 'lucide-react'
 
 import type { ProgramDay, SessionStatus } from '@/lib/types'
-import { cn, TAP_SCALE } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 
 interface DaySelectorProps {
   days: ProgramDay[]
@@ -12,9 +12,9 @@ interface DaySelectorProps {
 }
 
 /**
- * Horizontal day picker across the program's training days. Each chip links to
- * the same route; a manually selected week stays pinned while calendar-current
- * mode intentionally omits it so the URL can roll forward with time.
+ * Horizontal day picker across the program's training days. The selected day
+ * takes the venue's field colour. A manually selected week stays pinned while
+ * calendar-current mode omits it so the URL can roll forward with time.
  */
 export function DaySelector({
   days,
@@ -25,7 +25,7 @@ export function DaySelector({
   return (
     <nav
       aria-label="Training day"
-      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="no-scrollbar -mx-4 flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 py-1"
     >
       {days.map((day) => {
         const active = day.id === selectedDayId
@@ -40,37 +40,30 @@ export function DaySelector({
             scroll={false}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'flex min-h-11 shrink-0 flex-col justify-center rounded-md border px-3 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-              TAP_SCALE,
+              'flex min-h-14 min-w-[5.5rem] shrink-0 snap-start select-none flex-col justify-center gap-1 rounded-md px-3.5 py-2 transition-[background-color,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.97]',
               active
-                ? 'border-signal bg-signal/10'
-                : 'border-border bg-surface hover:bg-border/50',
+                ? 'bg-hue-today text-on-hue'
+                : 'bg-surface text-foreground hover:bg-surface-2',
             )}
           >
-            <span className="flex items-center gap-1.5">
-              <span
-                className={cn(
-                  'font-mono text-xs',
-                  active ? 'text-signal' : 'text-muted',
-                )}
-              >
-                Day {day.day_number}
+            <span className="flex items-center gap-1.5 text-xs font-semibold leading-none">
+              <span className={active ? 'opacity-75' : 'text-muted'}>
+                day {day.day_number}
               </span>
               {done ? (
-                <Check className="size-3 text-gate-green" aria-label="done" />
+                <Check
+                  className={cn('size-3.5', active ? 'text-on-hue' : 'text-gate-green')}
+                  strokeWidth={3}
+                  aria-label="done"
+                />
               ) : started ? (
                 <span
-                  className="size-1.5 rounded-full bg-gate-yellow"
+                  className={cn('size-1.5 rounded-full', active ? 'bg-on-hue' : 'bg-signal')}
                   aria-label="in progress"
                 />
               ) : null}
             </span>
-            <span
-              className={cn(
-                'whitespace-nowrap text-sm font-medium',
-                active ? 'text-foreground' : 'text-foreground/80',
-              )}
-            >
+            <span className="whitespace-nowrap text-[0.9375rem] font-bold lowercase leading-none">
               {day.label}
             </span>
           </Link>

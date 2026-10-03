@@ -117,12 +117,9 @@ export default async function NutritionPage() {
     : null
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-5 sm:pb-10">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-4 sm:pt-6">
       <header className="mb-5 flex flex-col gap-1">
-        <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
-          nutrition
-        </span>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+        <h1 className="text-[1.75rem] font-extrabold leading-[1.1] tracking-[-0.025em] font-wide text-foreground">
           Daily intake
         </h1>
         <p className="text-sm text-muted">

@@ -65,12 +65,17 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-svh items-center justify-center bg-background px-5 py-10 text-foreground">
       <div className="w-full max-w-sm">
-        {/* Brand / instrument header */}
-        <div className="mb-8 flex flex-col items-start gap-1">
-          <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
+        <div className="mb-8 flex flex-col items-start gap-2">
+          <div className="mb-4 flex w-full gap-1" aria-hidden>
+            <span className="h-2.5 flex-1 rounded-[3px] bg-hue-today" />
+            <span className="h-2.5 flex-1 rounded-[3px] bg-hue-checkin" />
+            <span className="h-2.5 flex-1 rounded-[3px] bg-hue-home" />
+            <span className="h-2.5 flex-1 rounded-[3px] bg-hue-body" />
+          </div>
+          <p className="text-3xl font-extrabold tracking-[-0.03em] font-wide">
             simplegym
-          </span>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          </p>
+          <h1 className="text-lg font-bold">
             Sign in to train
           </h1>
           <p className="text-sm text-muted">
@@ -78,7 +83,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface p-5 shadow-sm">
+        <div className="rounded-lg border border-border bg-surface p-5">
           {sent ? (
             <div className="flex flex-col gap-4">
               <div className="flex items-start gap-3">

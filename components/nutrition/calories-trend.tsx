@@ -24,16 +24,16 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui'
+import { CHART } from '@/lib/theme'
 
-// Design tokens (charts need concrete values, not tailwind classes).
 const COLORS = {
-  signal: '#c7f24a',
-  grid: '#2c313a',
-  muted: '#8a92a0',
-  maintenance: '#e8c45a',
-  surface: '#1e2228',
-  border: '#2c313a',
-  text: '#edeff2',
+  signal: CHART.signal,
+  grid: CHART.grid,
+  muted: CHART.muted,
+  maintenance: CHART.second,
+  surface: CHART.surface,
+  border: CHART.border,
+  text: CHART.text,
 }
 
 interface CaloriesTrendProps {

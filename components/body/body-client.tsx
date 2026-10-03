@@ -105,10 +105,7 @@ export function BodyClient({
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Body metrics</h1>
-          <p className="text-sm text-muted">
-            Track bodyweight and body fat over time.
-          </p>
+          <h1 className="sr-only">Body metrics</h1>
         </div>
         {entries.length > 0 ? (
           <Button

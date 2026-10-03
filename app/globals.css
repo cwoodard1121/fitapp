@@ -3,23 +3,83 @@
 @tailwind utilities;
 
 /* ============================================================
-   Design tokens — dark "instrument panel" theme (dark only).
-   These hex values are the single source of truth; tailwind.config.ts
-   maps semantic color names to these CSS variables.
+   simplegym tokens. Light is the committed world (a bright gym floor);
+   dark is its night variant. Colors are stored as RGB channels so Tailwind
+   opacity modifiers (bg-signal/10) work; `--x` is the ready-to-use color.
    ============================================================ */
 :root {
-  --bg: #14161a; /* app background */
-  --surface: #1e2228; /* cards */
-  --border: #2c313a; /* hairlines */
-  --text: #edeff2; /* primary text */
-  --muted: #8a92a0; /* secondary text */
-  --signal: #c7f24a; /* electric chartreuse — the ONE accent */
-  --signal-ink: #14161a; /* text on signal */
-  --gate-green: #5bd68a;
-  --gate-yellow: #e8c45a;
-  --gate-red: #f2685a;
+  color-scheme: light dark;
 
-  --radius: 0.75rem;
+  --bg-rgb: 238 241 242;
+  --surface-rgb: 255 255 255;
+  --surface-2-rgb: 226 232 235;
+  --border-rgb: 208 216 220;
+  --text-rgb: 13 36 51;
+  --muted-rgb: 83 104 119;
+  --signal-rgb: 23 105 184;
+  --signal-ink-rgb: 255 255 255;
+  --gate-green-rgb: 27 127 69;
+  --gate-yellow-rgb: 179 90 0;
+  --gate-red-rgb: 198 56 30;
+  --chart-2-rgb: 224 123 18;
+  --chart-3-rgb: 111 133 146;
+
+  /* Venue hues: each primary destination owns one field color. */
+  --hue-today-rgb: 93 176 232;
+  --hue-checkin-rgb: 77 184 106;
+  --hue-home-rgb: 245 154 59;
+  --hue-body-rgb: 169 209 90;
+  --hue-more-rgb: 196 203 207;
+  --on-hue-rgb: 13 36 51;
+  --scrim: rgb(13 36 51 / 0.45);
+
+  --radius: 0.875rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-rgb: 9 24 33;
+    --surface-rgb: 16 36 47;
+    --surface-2-rgb: 22 48 63;
+    --border-rgb: 36 63 78;
+    --text-rgb: 230 238 242;
+    --muted-rgb: 147 170 184;
+    --signal-rgb: 98 178 240;
+    --signal-ink-rgb: 4 18 27;
+    --gate-green-rgb: 76 201 124;
+    --gate-yellow-rgb: 242 163 65;
+    --gate-red-rgb: 255 111 82;
+    --chart-2-rgb: 242 163 65;
+    --chart-3-rgb: 111 138 153;
+
+    --hue-today-rgb: 74 159 216;
+    --hue-checkin-rgb: 63 168 94;
+    --hue-home-rgb: 232 137 44;
+    --hue-body-rgb: 152 193 75;
+    --hue-more-rgb: 140 154 162;
+    --on-hue-rgb: 7 24 34;
+    --scrim: rgb(0 8 14 / 0.6);
+  }
+}
+
+:root {
+  --bg: rgb(var(--bg-rgb));
+  --surface: rgb(var(--surface-rgb));
+  --surface-2: rgb(var(--surface-2-rgb));
+  --border: rgb(var(--border-rgb));
+  --text: rgb(var(--text-rgb));
+  --muted: rgb(var(--muted-rgb));
+  --signal: rgb(var(--signal-rgb));
+  --signal-ink: rgb(var(--signal-ink-rgb));
+  --gate-green: rgb(var(--gate-green-rgb));
+  --gate-yellow: rgb(var(--gate-yellow-rgb));
+  --gate-red: rgb(var(--gate-red-rgb));
+  --chart-2: rgb(var(--chart-2-rgb));
+  --chart-3: rgb(var(--chart-3-rgb));
+  --on-hue: rgb(var(--on-hue-rgb));
+  /* The current venue's hue; the app shell sets --hue-rgb per route. */
+  --hue-rgb: var(--hue-today-rgb);
+  --hue: rgb(var(--hue-rgb));
 }
 
 @layer base {
@@ -29,22 +89,26 @@
 
   html {
     -webkit-text-size-adjust: 100%;
-    /* Stop iOS from auto-resizing text on orientation change and keep the
-       app feeling native: no rubber-band overscroll, no double-tap zoom. */
     overscroll-behavior-y: none;
     touch-action: manipulation;
+    scrollbar-color: var(--border) transparent;
   }
 
   body {
     background: var(--bg);
     color: var(--text);
     @apply min-h-screen font-sans antialiased;
-    /* No grey tap flash on touch; let the app's own active/focus states show. */
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior-y: none;
+    caret-color: var(--signal);
+    font-feature-settings: "ss01" 0;
   }
 
-  /* Visible focus ring — chartreuse halo with a background gap. */
+  ::selection {
+    background: rgb(var(--signal-rgb) / 0.22);
+    color: inherit;
+  }
+
   :focus-visible {
     outline: none;
     box-shadow:
@@ -52,10 +116,8 @@
       0 0 0 4px var(--signal);
   }
 
-  /* Interactive chrome should feel like native controls on touch: no iOS
-     long-press callout menu and no text-selection magnifier when tapping or
-     holding a button/link/tab. Content surfaces (inputs, notes, stat readouts)
-     stay fully selectable — only the controls opt out. */
+  /* Controls behave like native ones on touch: no callout, no selection
+     magnifier. Inputs and content stay selectable. */
   button,
   a,
   label,
@@ -68,8 +130,6 @@
     user-select: none;
   }
 
-  /* Form controls and their values must always stay selectable/editable even
-     though some are nested under the rule above. */
   input,
   textarea,
   select,
@@ -77,36 +137,58 @@
     -webkit-user-select: auto;
     user-select: auto;
   }
+
+  /* Number steppers are desktop-website chrome; the keypad does this job. */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  a {
+    text-underline-offset: 0.2em;
+  }
 }
 
 @layer utilities {
-  /* Instrument readouts: mono, tabular figures that align column-wise. */
-  .nums {
-    font-family: var(--font-geist-mono), ui-monospace, monospace;
+  /* Measurements: the same family, semi-condensed, with tabular figures. */
+  .nums,
+  .font-mono {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
+    font-variation-settings: "wdth" 88;
   }
 
-  /* Tabular numerals without forcing the mono family. */
   .tabular-figures {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
   }
-}
 
-/* Keep toasts clear of the mobile bottom tab bar. Sonner's built-in
-   mobileOffset only covers <=600px, but our tab bar (md:hidden) stays up to
-   767px — so we own the bottom offset across the whole tab-bar range, keyed to
-   the same breakpoint as the nav. !important overrides Sonner's runtime-injected
-   styles regardless of source order. Above md the sidebar replaces the tab bar,
-   so Sonner's default offset is correct and this rule does not apply. */
-@media (max-width: 767.98px) {
-  [data-sonner-toaster][data-y-position="bottom"] {
-    bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
+  /* Signage width for venue titles and big readouts. */
+  .font-wide {
+    font-variation-settings: "wdth" 112;
+  }
+  .font-narrow {
+    font-variation-settings: "wdth" 80;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }
 
-/* Honor users who ask for less motion. */
+/* Toasts drop from the top like system banners, clear of the notch, so they
+   never collide with the tab bar or Today's session bar. */
+[data-sonner-toaster][data-y-position="top"] {
+  top: calc(0.75rem + env(safe-area-inset-top)) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -117,8 +199,6 @@
     scroll-behavior: auto !important;
   }
 
-  /* View Transition pseudo-elements live outside the regular tree, so the
-     universal rule above never reaches them — cut separately. */
   ::view-transition-group(*),
   ::view-transition-old(*),
   ::view-transition-new(*) {
@@ -126,32 +206,30 @@
   }
 }
 
-/* Page navigations (components/app/route-progress.tsx wraps them in
-   document.startViewTransition): a quick, snappy cross-fade rather than the
-   browser's slower 250ms default — this is what turns a route change from a
-   hard cut into one continuous surface. */
+/* Route changes (components/app/route-progress.tsx) cross-fade the page while
+   the venue band and the tab marker glide to their next state. */
 @media not (prefers-reduced-motion: reduce) {
   ::view-transition-old(root),
   ::view-transition-new(root) {
-    animation-duration: 150ms;
-    animation-timing-function: cubic-bezier(0.2, 0, 0.2, 1);
+    animation-duration: 140ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
   }
 
-  /* Named elements (the nav pill, and any other element carrying a
-     view-transition-name — e.g. a History row morphing into its session
-     detail header) get a touch more time so the slide/resize reads as a
-     deliberate glide, not a flicker. Specific idents below win over this
-     wildcard, so root keeps its own faster crossfade. */
   ::view-transition-group(*),
   ::view-transition-old(*),
   ::view-transition-new(*) {
     animation-duration: 220ms;
-    animation-timing-function: cubic-bezier(0.2, 0, 0.2, 1);
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
   }
+}
 
-  ::view-transition-group(nav-pill-desktop),
-  ::view-transition-group(nav-pill-mobile) {
-    animation-duration: 220ms;
-    animation-timing-function: cubic-bezier(0.2, 0, 0.2, 1);
+@keyframes set-mark-fill {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
   }
 }

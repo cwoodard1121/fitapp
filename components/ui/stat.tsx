@@ -23,7 +23,7 @@ const toneClasses: Record<StatTone, string> = {
 }
 
 const sizeClasses: Record<StatSize, string> = {
-  sm: "text-base",
+  sm: "text-lg",
   default: "text-xl",
   lg: "text-3xl",
   xl: "text-5xl",
@@ -102,7 +102,7 @@ const Stat = React.forwardRef<HTMLDivElement, StatProps>(
         {label ? (
           <span
             className={cn(
-              "font-sans text-[11px] font-medium uppercase tracking-wider text-muted",
+              "font-sans text-xs font-medium lowercase text-muted",
               labelClassName
             )}
           >
@@ -111,7 +111,7 @@ const Stat = React.forwardRef<HTMLDivElement, StatProps>(
         ) : null}
         <span
           className={cn(
-            "font-mono font-semibold leading-none tracking-tight tabular-nums",
+            "font-mono font-bold leading-none tracking-[-0.01em] tabular-nums",
             sizeClasses[size],
             isPlaceholder ? "text-muted" : toneClasses[tone],
             valueClassName

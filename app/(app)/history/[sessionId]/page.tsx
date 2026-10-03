@@ -204,7 +204,7 @@ export default async function SessionDetailPage({
           style={{ viewTransitionName: `session-title-${session.id}` }}
         >
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
+            <h1 className="text-[1.75rem] font-extrabold leading-[1.1] tracking-[-0.025em] font-wide">
               {day?.label ?? "Workout"}
             </h1>
             {statusBadge(session.status)}

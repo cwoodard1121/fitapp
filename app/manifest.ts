@@ -15,8 +15,8 @@ export default function manifest(): MetadataRoute.Manifest {
     // "standalone" fully (e.g. some sub-flavors on newer Android WebViews) —
     // "standalone" itself stays the baseline behavior everywhere else.
     display_override: ["standalone"],
-    background_color: "#14161A",
-    theme_color: "#14161A",
+    background_color: "#EEF1F2",
+    theme_color: "#5DB0E8",
     orientation: "portrait",
     categories: ["health", "fitness", "sports"],
     icons: [

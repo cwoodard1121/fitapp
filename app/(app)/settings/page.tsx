@@ -47,12 +47,9 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-28 pt-6 sm:pb-12">
+    <div className="mx-auto w-full max-w-2xl px-4 pb-10 pt-4 sm:pt-6">
       <header className="mb-6 flex flex-col gap-1">
-        <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted">
-          settings
-        </span>
-        <h1 className="text-2xl font-semibold tracking-tight">Your setup</h1>
+        <h1 className="text-[1.75rem] font-extrabold leading-[1.1] tracking-[-0.025em] font-wide">Your setup</h1>
         <p className="text-sm text-muted">
           Tune how the app addresses you, how the mesocycle runs, and how the
           engine weighs your readiness.
