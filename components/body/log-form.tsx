@@ -170,7 +170,7 @@ export function LogForm({
         <div className="space-y-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Label>Navy tape</Label>
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
+            <span className="text-xs font-semibold lowercase text-muted">
               one per day
             </span>
           </div>

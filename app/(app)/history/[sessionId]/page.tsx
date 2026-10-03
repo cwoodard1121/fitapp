@@ -231,7 +231,7 @@ export default async function SessionDetailPage({
         </div>
       </header>
 
-      <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-muted">
+      <p className="mb-3 text-xs font-semibold lowercase text-muted">
         Every slot, and the engine&apos;s call
       </p>
 

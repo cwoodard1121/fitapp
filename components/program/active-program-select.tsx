@@ -51,7 +51,7 @@ export function ActiveProgramSelect({
   return (
     <div className="mt-1 flex items-center gap-2">
       <Select value={activeId} onValueChange={onChange} disabled={pending}>
-        <SelectTrigger className="h-8 w-auto max-w-[16rem] gap-1.5 text-sm">
+        <SelectTrigger className="w-auto max-w-[16rem] gap-1.5">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

@@ -186,7 +186,7 @@ function RecentRecovery({ rows }: { rows: RecoveryMetric[] }) {
     <div className="overflow-hidden rounded-md border border-border">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border bg-background text-[11px] uppercase tracking-wider text-muted">
+          <tr className="border-b border-border bg-background text-xs font-semibold lowercase text-muted">
             <th className="px-3 py-2 text-left font-medium">Day</th>
             <th className="px-3 py-2 text-right font-medium">Steps</th>
             <th className="px-3 py-2 text-right font-medium">Sleep</th>

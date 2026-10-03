@@ -97,20 +97,13 @@ export function BlockWrappedRecap({
 
   return (
     <div className="overflow-hidden rounded-[inherit] bg-surface-2">
-      <div className="relative overflow-hidden border-b border-border px-5 pb-6 pt-7 sm:px-8 sm:pb-8">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-60 [background:radial-gradient(circle_at_75%_10%,rgba(199,242,74,0.12),transparent_34%),linear-gradient(135deg,transparent_58%,rgba(199,242,74,0.04)_58%,rgba(199,242,74,0.04)_61%,transparent_61%)]"
-        />
-        <div className="relative max-w-3xl">
-          <p className="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-signal">
-            Block complete
-          </p>
-          <DialogTitle className="mt-2 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
+      <div className="border-b border-border px-5 pb-6 pt-7 sm:px-8 sm:pb-8">
+        <div className="max-w-3xl">
+          <DialogTitle className="pr-12 text-3xl font-extrabold lowercase leading-tight tracking-[-0.03em] font-wide sm:text-4xl">
             {block.name}
           </DialogTitle>
-          <DialogDescription className="mt-1 font-mono text-xs tabular-nums sm:text-sm">
-            {formatRange(block)}
+          <DialogDescription className="mt-1.5 font-mono text-xs font-semibold tabular-nums sm:text-sm">
+            complete · {formatRange(block)}
           </DialogDescription>
 
           <h2 className="mt-8 max-w-3xl text-4xl font-semibold leading-[0.98] tracking-[-0.045em] text-foreground sm:mt-10 sm:text-6xl">
@@ -123,7 +116,7 @@ export function BlockWrappedRecap({
             <div className="mt-8 grid gap-5 sm:grid-cols-2 sm:gap-0">
               {hasWeightChange ? (
                 <div className="sm:border-r sm:border-border sm:pr-6">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
+                  <p className="text-xs font-semibold lowercase text-muted">
                     Weight
                   </p>
                   <div className="mt-2 flex items-center gap-2 font-mono text-3xl font-semibold tabular-nums tracking-tight text-foreground sm:text-4xl">
@@ -141,7 +134,7 @@ export function BlockWrappedRecap({
               ) : null}
               {hasBodyfatChange ? (
                 <div className="sm:pl-6">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
+                  <p className="text-xs font-semibold lowercase text-muted">
                     Interpreted body fat
                   </p>
                   <div className="mt-2 flex items-center gap-2 font-mono text-3xl font-semibold tabular-nums tracking-tight text-foreground sm:text-4xl">
@@ -175,7 +168,7 @@ export function BlockWrappedRecap({
                     Weight and interpreted body fat inside this block’s dates.
                   </p>
                 </div>
-                <span className="hidden font-mono text-[10px] uppercase tracking-wider text-signal sm:inline">
+                <span className="hidden text-xs font-semibold lowercase text-signal sm:inline">
                   Block duration
                 </span>
               </div>
@@ -280,7 +273,7 @@ export function BlockWrappedRecap({
             <div aria-hidden className="absolute inset-y-0 left-0 w-1 bg-signal" />
             <div className="flex items-center gap-2 text-signal">
               <Dumbbell className="size-4" aria-hidden />
-              <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.16em]">
+              <h3 className="text-xs font-semibold lowercase">
                 Training
               </h3>
             </div>
@@ -294,7 +287,7 @@ export function BlockWrappedRecap({
             <div aria-hidden className="absolute inset-y-0 left-0 w-1 bg-muted" />
             <div className="flex items-center gap-2 text-signal">
               <Salad className="size-4" aria-hidden />
-              <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.16em]">
+              <h3 className="text-xs font-semibold lowercase">
                 Nutrition
               </h3>
             </div>
@@ -314,7 +307,7 @@ export function BlockWrappedRecap({
             <div aria-hidden className="absolute inset-y-0 left-0 w-1 bg-signal" />
             <div className="flex items-center gap-2 text-signal">
               <Footprints className="size-4" aria-hidden />
-              <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.16em]">
+              <h3 className="text-xs font-semibold lowercase">
                 Activity
               </h3>
             </div>

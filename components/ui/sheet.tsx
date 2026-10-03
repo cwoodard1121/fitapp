@@ -38,7 +38,7 @@ const sheetVariants = cva(
       side: {
         top: "inset-x-0 top-0 border-b border-border data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom:
-          "inset-x-0 bottom-0 max-h-[92svh] overflow-y-auto overscroll-contain rounded-t-xl border-t border-border data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+          "inset-x-0 bottom-0 max-h-[92svh] [html[data-keyboard=open]_&]:max-h-[calc(100svh-var(--keyboard-inset,0px)-1rem)] overflow-y-auto overscroll-contain rounded-t-xl border-t border-border data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
         left: "inset-y-0 left-0 h-full w-3/4 border-r border-border data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
         right:
           "inset-y-0 right-0 h-full w-3/4 border-l border-border data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
@@ -88,7 +88,7 @@ const SheetContent = React.forwardRef<
       {children}
       <SheetPrimitive.Close
         ref={closeRef}
-        className="absolute right-3 top-3 inline-flex size-10 items-center justify-center rounded-full bg-surface-2 text-muted ring-offset-background transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 disabled:pointer-events-none"
+        className="absolute right-3 top-3 inline-flex size-11 items-center justify-center rounded-full bg-surface-2 text-muted ring-offset-background transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 disabled:pointer-events-none"
       >
         <X className="size-[1.125rem]" />
         <span className="sr-only">Close</span>

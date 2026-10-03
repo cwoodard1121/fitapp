@@ -218,7 +218,7 @@ export function BodyTrend({
           <div className="mt-3 w-full sm:max-w-sm">
             <label
               htmlFor="body-block-overlay"
-              className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.16em] text-muted"
+              className="mb-1.5 block text-xs font-semibold lowercase text-muted"
             >
               Block overlay
             </label>
@@ -247,12 +247,12 @@ export function BodyTrend({
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
               <span className="font-medium text-foreground">{selectedOverlay.name}</span>
               <span aria-hidden>·</span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-signal">
+              <span className="text-xs font-semibold lowercase text-signal">
                 Start
               </span>
               <span>{safeLabel(selectedOverlay.startDate)}</span>
               <span aria-hidden>→</span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-signal">
+              <span className="text-xs font-semibold lowercase text-signal">
                 {overlayIsActive ? "Planned end" : "End"}
               </span>
               <span>{safeLabel(selectedOverlay.endDate)}</span>

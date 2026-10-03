@@ -165,7 +165,7 @@ function AnalysisBody({ analysis }: { analysis: AiAnalysis }) {
         <div className="space-y-2 border-t border-border pt-3">
           {reads.map((r) => (
             <div key={r.label} className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
-              <span className="shrink-0 text-[11px] font-medium uppercase tracking-wider text-muted sm:w-20 sm:pt-0.5">
+              <span className="shrink-0 text-xs font-semibold lowercase text-muted sm:w-20 sm:pt-0.5">
                 {r.label}
               </span>
               <p className="text-sm leading-snug text-foreground">{r.text}</p>
@@ -239,7 +239,7 @@ function SectionLabel({
   icon?: React.ReactNode
 }) {
   return (
-    <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted">
+    <p className="flex items-center gap-1.5 text-xs font-semibold lowercase text-muted">
       {icon}
       {children}
     </p>
@@ -268,7 +268,7 @@ function TagRow({
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {label ? (
-        <span className="text-[10px] uppercase tracking-wider text-muted">
+        <span className="text-xs font-semibold lowercase text-muted">
           {label}
         </span>
       ) : null}

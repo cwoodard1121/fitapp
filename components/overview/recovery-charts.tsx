@@ -150,7 +150,7 @@ export function RecoveryCharts({ rows }: { rows: RecoveryMetric[] }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select value={range} onValueChange={(value) => setRange(value as Range)}>
-            <SelectTrigger className="h-9 w-[9.75rem]" aria-label="Recovery chart range">
+            <SelectTrigger className="h-11 w-[9.75rem]" aria-label="Recovery chart range">
               <SelectValue />
             </SelectTrigger>
             <SelectContent align="end">
@@ -191,7 +191,7 @@ export function RecoveryCharts({ rows }: { rows: RecoveryMetric[] }) {
 function Summary({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col">
-      <span className="text-[11px] uppercase tracking-wider text-muted">{label}</span>
+      <span className="text-xs font-semibold lowercase text-muted">{label}</span>
       <span className="font-mono text-lg font-semibold tabular-nums text-foreground">{value}</span>
     </div>
   )

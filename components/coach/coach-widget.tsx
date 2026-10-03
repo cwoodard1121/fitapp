@@ -186,7 +186,8 @@ export function CoachWidget() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Open AI coach"
-          className="fixed right-4 bottom-nav-room z-50 flex size-14 items-center justify-center rounded-full border border-signal/40 bg-signal text-signal-foreground shadow-lg shadow-black/20 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background md:right-6 md:bottom-6"
+          data-keyboard-hide
+          className="fixed right-4 bottom-nav-room z-50 flex size-14 items-center justify-center rounded-full border border-signal/40 bg-signal text-signal-foreground shadow-lg transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background md:right-6 md:bottom-6"
         >
           <Sparkles className="size-6" aria-hidden />
         </button>
@@ -195,7 +196,7 @@ export function CoachWidget() {
       {/* Mobile backdrop (desktop keeps the page visible behind a floating card). */}
       {open ? (
         <div
-          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          className="fixed inset-0 z-40 bg-[color:var(--scrim)] md:hidden"
           onClick={() => setOpen(false)}
           aria-hidden
         />
@@ -207,9 +208,11 @@ export function CoachWidget() {
           aria-modal="false"
           aria-label="AI coach chat"
           className={cn(
-            'fixed z-50 flex flex-col overflow-hidden border border-border bg-surface shadow-2xl shadow-black/30',
-            // Mobile: a bottom sheet that clears the home indicator.
-            'inset-x-0 bottom-0 max-h-[88svh] rounded-t-2xl pb-[env(safe-area-inset-bottom)]',
+            'fixed z-50 flex flex-col overflow-hidden border border-border bg-surface shadow-2xl',
+            // Mobile: a bottom sheet that clears the home indicator. While the
+            // keyboard is up the browser pans the page up by its height, so cap
+            // the sheet to what stays visible or its header leaves the screen.
+            'inset-x-0 bottom-0 max-h-[88svh] rounded-t-xl pb-[env(safe-area-inset-bottom)] [html[data-keyboard=open]_&]:max-h-[calc(100svh-var(--keyboard-inset,0px)-1rem)]',
             // Desktop: a floating card anchored bottom-right.
             'md:inset-x-auto md:right-6 md:bottom-6 md:h-[600px] md:max-h-[80vh] md:w-[400px] md:rounded-2xl md:pb-0',
           )}
@@ -218,8 +221,8 @@ export function CoachWidget() {
           <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 text-signal" aria-hidden />
-              <span className="text-sm font-semibold">Coach</span>
-              <span className="text-[11px] text-muted">
+              <span className="text-base font-bold">coach</span>
+              <span className="text-xs text-muted">
                 stats + program edits
               </span>
             </div>
@@ -229,17 +232,17 @@ export function CoachWidget() {
                 size="sm"
                 onClick={newChat}
                 disabled={messages.length === 0 && !streaming}
-                className="h-8 gap-1.5 px-2 text-muted hover:text-foreground"
+                className="h-11 gap-1.5 px-3 text-muted hover:text-foreground"
               >
                 <Plus className="size-3.5" aria-hidden />
-                New
+                new
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setOpen(false)}
                 aria-label="Close coach"
-                className="size-8 text-muted hover:text-foreground"
+                className="size-11 text-muted hover:text-foreground"
               >
                 <X className="size-4" aria-hidden />
               </Button>
@@ -297,7 +300,7 @@ export function CoachWidget() {
                 rows={1}
                 aria-label="Message the coach"
                 placeholder="Ask about your training, goals, body…"
-                className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+                className="max-h-32 min-h-11 flex-1 resize-none rounded-md border border-border bg-background px-3 py-2.5 text-base text-foreground sm:text-sm placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
               />
               {streaming ? (
                 <Button
@@ -306,7 +309,7 @@ export function CoachWidget() {
                   variant="outline"
                   onClick={stop}
                   aria-label="Stop"
-                  className="size-10 shrink-0"
+                  className="size-11 shrink-0"
                 >
                   <Square className="size-4" aria-hidden />
                 </Button>
@@ -317,13 +320,13 @@ export function CoachWidget() {
                   onClick={() => void send(input)}
                   disabled={!input.trim()}
                   aria-label="Send"
-                  className="size-10 shrink-0"
+                  className="size-11 shrink-0"
                 >
                   <Send className="size-4" aria-hidden />
                 </Button>
               )}
             </div>
-            <p className="mt-1.5 px-1 text-[10px] text-muted">
+            <p className="mt-1.5 px-1 text-xs text-muted">
               Chats aren’t saved.
             </p>
           </div>

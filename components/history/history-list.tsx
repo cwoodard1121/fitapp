@@ -132,7 +132,7 @@ export function HistoryList({ sessions, exerciseNames, unit }: HistoryListData) 
         <div className="space-y-6">
           {groups.map((group) => (
             <section key={group.key} className="space-y-2">
-              <h2 className="px-1 text-[11px] font-medium uppercase tracking-wider text-muted">
+              <h2 className="px-1 text-xs font-semibold lowercase text-muted">
                 {group.label}
               </h2>
               <ul className="space-y-2">

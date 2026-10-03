@@ -374,7 +374,7 @@ Today's day strip scrolls horizontally with snap points on phones and wraps from
 
 **The One Column Rule.** Every page builds into the same 768px column with a 16px gutter, aligned under the venue band. Don't center narrower islands or invent new widths. The program editor's 1024px is the only exception.
 
-**The Pinned Bar Rule.** Bars are pinned to the frame (band at the top, tab bar and session bar at the bottom) and never float mid-screen. The one sticky element is the docked session rail, anchored to the top of the scroll region.
+**The Pinned Bar Rule.** Bars are pinned to the frame (band at the top, tab bar and session bar at the bottom) and never float mid-screen. The one sticky element is the docked session rail, anchored to the top of the scroll region. Bottom bars are fixed to the layout viewport, which the on-screen keyboard does not shrink: the browser pans the visual viewport up to the focused field instead, which would carry the bars into mid-screen. So every fixed bottom surface carries `data-keyboard-hide` and steps aside while `<html data-keyboard="open">` is set (by `components/app/keyboard-watch.tsx`), `main` pads by `--keyboard-inset` so fields scroll above the keyboard, and bottom sheets cap their height to the visible area. Any new fixed bottom surface must opt in the same way. Every text field is at least 16px on phones, because iOS zooms the page on focusing smaller text and stays zoomed, which also displaces fixed bars.
 
 **The Thumb Rule.** Anything tappable is at least 44px tall. Default controls are 48px (buttons, inputs, set fields, tab lists). Primary thumb actions and day chips are 56px, and tab bar cells are 68px.
 
@@ -393,7 +393,7 @@ The system is flat. Panels rest on the paper ground and get their edge from a 1p
 ### Named Rules
 **The Flat Panel Rule.** Cards, slot panels, chips and bars carry no shadow at rest. If a surface needs separation, give it a hairline or a tone step. A shadow means the surface is floating above the page.
 
-**The Ink-Tinted Shadow Rule.** Shadows are built from `rgb(var(--text-rgb) / a)` so they stay navy in light mode and track the ink in dark mode. Don't use Tailwind's default black shadow presets.
+**The Ink-Tinted Shadow Rule.** Shadows are built from `rgb(var(--text-rgb) / a)` so they stay navy in light mode and track the ink in dark mode. Tailwind's `shadow-sm` to `shadow-2xl` scale is redefined in `tailwind.config.ts` with these navy-tinted values, so the presets are safe. Never add `shadow-black`, `bg-black` scrims or raw `rgb(0 0 0)`.
 
 ## Shapes
 
@@ -430,7 +430,7 @@ Buttons should feel firm and quiet: a solid block of colour that compresses unde
   - Ink is a navy fill with a paper label.
   - Destructive is Back-off Red with a white label.
   - Link is Signal text with a 4px underline offset.
-- **Sizes:** default 48px, large 56px, touch 56px full-width, icon 48px square. The compact `sm` size (40px) is below the Thumb Rule's 44px floor, as are the 40px round close and account buttons. Don't use them for anything tapped mid-set.
+- **Sizes:** default 48px, large 56px, touch 56px full-width, icon 48px square, and a compact `sm` at the 44px floor for secondary actions.
 
 ### Chips (Badges)
 - **Style:** A small 6px-radius tag, 4px by 8px padding, label type at 600. The default badge is a Signal fill, and the secondary and muted badges use Recess. Status badges are a 10% tint of their gate colour (15% for amber) with full-strength text: green, amber, red, and a signal tint.
@@ -452,7 +452,7 @@ Buttons should feel firm and quiet: a solid block of colour that compresses unde
 - **Error / Disabled:** Disabled fields drop to 50% opacity. Save failures go to a toast, not inline field states.
 
 ### Navigation
-- **Venue band:** A full-bleed field in the current venue's hue that runs under the status bar. It holds the venue pictogram (about 26px) and the lowercase venue name in signage type, plus a 40px round account button tinted 10% with field ink. On every route change it retints the browser `theme-color` so Android's status bar matches the field.
+- **Venue band:** A full-bleed field in the current venue's hue that runs under the status bar. It holds the venue pictogram (about 26px) and the lowercase venue name in signage type, plus a 44px round account button tinted 10% with field ink. On every route change it retints the browser `theme-color` so Android's status bar matches the field.
 - **Mobile tab bar:** Five equal 68px cells on Panel White under a hairline top edge: today, check-in, home, body, more. Each cell is a 26px filled pictogram over a 12px semibold lowercase label. Inactive cells are Slate. The active cell turns navy and carries a 3px hue marker on its top edge. The marker and band share view-transition names, so both glide to their next state when you change venue. Pressing a cell scales it to 0.94.
 - **More sheet:** A bottom sheet titled "more" in signage type, holding a three-column grid of 96px tiles. Tiles use lucide icons at stroke 2.25. The active tile is filled with Aluminium Silver.
 - **Desktop sidebar:** A 240px Panel White column with the wordmark at band height. Rows are 44px, with 20px icons and 15px semibold labels. The active row becomes its venue's field with field ink. Inactive primary venues carry an 8px hue chip on the right. A hairline divider separates the four venues from the rest.
@@ -479,7 +479,7 @@ A bar pinned above the tab bar on Today: Panel White at 95% with backdrop blur a
 Bottom sheets carry most interaction. Each has:
 - Panel White and an 18px top radius.
 - A hairline top edge and the Sheet shadow over the Navy Scrim.
-- A 40px by 6px grabber and a 40px round close button in Recess.
+- A 40px by 6px grabber and a 44px round close button in Recess.
 - A maximum height of 92% of the small viewport.
 - Bottom padding that clears the home indicator.
 
@@ -513,7 +513,7 @@ Each set row starts with a 32px circle. Before a set is logged, it is a 2px hair
 - **Don't** use near-black panels with a single neon accent or stacks of stat cards. That is the category default this identity was built to refuse.
 - **Don't** use pure black (#000) for ink, scrims or shadows. Tint from `--text-rgb`.
 - **Don't** use a venue hue as a button fill, a status colour or decoration, and don't use Signal Blue as a venue field.
-- **Don't** put a shadow on a resting card, chip or bar, and don't reach for Tailwind's `shadow-md`/`shadow-lg`/`shadow-xl` presets.
+- **Don't** put a shadow on a resting card, chip or bar. Shadows (the navy-tinted `shadow-*` scale) are only for surfaces that float.
 - **Don't** set signage, labels or eyebrows in uppercase with wide letter-spacing, and never put an eyebrow line above a heading.
 - **Don't** draw a venue pictogram as an outline icon, or use a filled pictogram for a utility action.
 - **Don't** add a second typeface or a real monospace font. Width and tabular figures do that job.

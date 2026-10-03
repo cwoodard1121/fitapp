@@ -102,7 +102,7 @@ function ExerciseLibraryPicker({
           <div className="space-y-4">
             {groups.map((group) => (
               <div key={group.muscleArea} className="space-y-1.5">
-                <h3 className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
+                <h3 className="text-xs font-semibold lowercase text-muted">
                   {group.muscleArea}
                 </h3>
                 <ul className="space-y-1">

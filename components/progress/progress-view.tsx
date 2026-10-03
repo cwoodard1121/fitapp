@@ -61,7 +61,7 @@ export function ProgressView({ data }: { data: ProgressData }) {
       <div className="space-y-1.5">
         <label
           htmlFor="exercise-picker"
-          className="text-[11px] font-medium uppercase tracking-wider text-muted"
+          className="text-xs font-semibold lowercase text-muted"
         >
           Focus exercise
         </label>
@@ -90,7 +90,7 @@ export function ProgressView({ data }: { data: ProgressData }) {
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <CardTitle className="text-base">{current.name}</CardTitle>
             {current.muscleArea ? (
-              <Badge variant="outline" className="font-mono text-[11px] uppercase tracking-wide">
+              <Badge variant="outline" className="text-xs font-semibold lowercase">
                 {current.muscleArea}
               </Badge>
             ) : null}

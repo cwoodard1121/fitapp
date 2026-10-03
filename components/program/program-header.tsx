@@ -62,7 +62,7 @@ export function ProgramHeader({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="font-mono text-xs uppercase tracking-[0.16em] text-muted">
+        <CardTitle className="text-xs font-semibold lowercase text-muted">
           Program
         </CardTitle>
       </CardHeader>

@@ -8,6 +8,7 @@ import { VenueBand } from "@/components/app/venue-band"
 import { Nav } from "@/components/app/nav"
 import { MobileNav } from "@/components/app/mobile-nav"
 import { PullToRefresh } from "@/components/app/pull-to-refresh"
+import { KeyboardWatch } from "@/components/app/keyboard-watch"
 import { CoachWidget } from "@/components/coach/coach-widget"
 import { WearableAutoSync } from "@/components/wearables/wearable-auto-sync"
 
@@ -52,6 +53,7 @@ export default async function AppLayout({
       </div>
 
       <MobileNav />
+      <KeyboardWatch />
 
       {isEmailAllowed(user?.email) ? <CoachWidget /> : null}
 

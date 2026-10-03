@@ -38,7 +38,7 @@ function RatingChip({
           : "text-foreground"
   return (
     <div className="flex flex-col gap-0.5 rounded-md border border-border bg-background px-2.5 py-1.5">
-      <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+      <span className="text-xs font-semibold lowercase text-muted">
         {label}
       </span>
       <span
@@ -109,7 +109,7 @@ export function SlotReadout({
       <div className="flex items-start justify-between gap-3 p-4">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-[11px] uppercase tracking-wider text-muted">
+            <span className="font-mono text-xs font-semibold text-muted">
               {slot.slot_code}
             </span>
             <span
@@ -133,7 +133,7 @@ export function SlotReadout({
           ) : null}
         </div>
         <div className="max-w-[55%] text-right">
-          <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted">
+          <p className="mb-1 text-xs font-semibold lowercase text-muted">
             Next session
           </p>
           <DecisionBadge
@@ -150,7 +150,7 @@ export function SlotReadout({
       {/* The sets the user actually did */}
       {entries.length > 0 ? (
         <div className="p-4">
-          <div className="grid grid-cols-[1.75rem_1fr_1fr_1fr] gap-1.5 px-0.5 pb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted">
+          <div className="grid grid-cols-[1.75rem_1fr_1fr_1fr] gap-1.5 px-0.5 pb-1.5 text-xs font-semibold lowercase text-muted">
             <span className="text-center">#</span>
             <span className="text-center">Load</span>
             <span className="text-center">Reps</span>
@@ -223,7 +223,7 @@ export function SlotReadout({
       {/* Readiness ratings */}
       {showFeedback ? (
         <div className="border-t border-border p-4">
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted">
+          <p className="mb-2 text-xs font-semibold lowercase text-muted">
             Workout feedback
           </p>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">

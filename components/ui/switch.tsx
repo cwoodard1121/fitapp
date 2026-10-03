@@ -11,7 +11,8 @@ const Switch = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SwitchPrimitives.Root
     className={cn(
-      "peer inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-signal data-[state=unchecked]:bg-border motion-reduce:transition-none",
+      // The visible track is 28px; the ::before pad grows the hit area to 44.
+      "peer relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 before:absolute before:-inset-2 before:content-[''] border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-signal data-[state=unchecked]:bg-border motion-reduce:transition-none",
       className
     )}
     {...props}
@@ -19,7 +20,7 @@ const Switch = React.forwardRef<
   >
     <SwitchPrimitives.Thumb
       className={cn(
-        "pointer-events-none block size-6 rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/0.25)] ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0 motion-reduce:transition-none"
+        "pointer-events-none block size-6 rounded-full bg-white shadow-[0_1px_3px_rgb(var(--text-rgb)/0.25)] ring-0 data-[state=checked]:bg-signal-foreground transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0 motion-reduce:transition-none"
       )}
     />
   </SwitchPrimitives.Root>

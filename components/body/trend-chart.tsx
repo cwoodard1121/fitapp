@@ -144,7 +144,7 @@ function SummaryMetric({
 }) {
   return (
     <div className="min-w-0 rounded-md border border-border bg-background/50 px-3 py-2.5">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-muted">{label}</p>
+      <p className="text-xs font-semibold lowercase text-muted">{label}</p>
       <p className="mt-1 truncate font-mono text-sm font-medium tabular-nums text-foreground">
         {value}
       </p>

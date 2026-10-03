@@ -7,7 +7,7 @@ import type { SessionRecapData } from "@/app/(app)/today/actions"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { AnimatedNumber } from "@/components/ui/animated-number"
-import { TAP_SCALE } from "@/lib/utils"
+import { TAP_SCALE, dayName } from "@/lib/utils"
 import {
   WRAPPED_COLORS as COLORS,
   WrappedStoryMetric as StoryMetric,
@@ -16,10 +16,10 @@ import {
 
 /**
  * Session-scale sibling of the block "Wrapped" recap (components/blocks/
- * block-wrapped-recap.tsx) — same gradient-header, signal-green, big-mono-
- * numeral visual language via components/ui/wrapped-recap.tsx, but a single
- * quick screen instead of a multi-section report: this fires every session,
- * the block one maybe once a month.
+ * block-wrapped-recap.tsx), sharing its big tabular numerals via
+ * components/ui/wrapped-recap.tsx, but a single quick screen headed by the
+ * today venue field instead of a multi-section report: this fires every
+ * session, the block one maybe once a month.
  */
 export function SessionWrappedRecap({
   open,
@@ -49,23 +49,17 @@ export function SessionWrappedRecap({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg overflow-hidden p-0">
-        <div className="relative overflow-hidden border-b border-border px-5 pb-6 pt-7 sm:px-7">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-60 [background:radial-gradient(circle_at_75%_10%,rgba(199,242,74,0.12),transparent_34%),linear-gradient(135deg,transparent_58%,rgba(199,242,74,0.04)_58%,rgba(199,242,74,0.04)_61%,transparent_61%)]"
-          />
-          <div className="relative">
-            <p className="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-signal">
-              Session complete
-            </p>
-            <DialogTitle className="mt-2 text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">
-              {data.dayLabel}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              A recap of the workout you just finished.
-            </DialogDescription>
-
-            <div className="mt-6 flex items-baseline gap-2 font-mono font-semibold tabular-nums tracking-tight text-foreground">
+        <div className="bg-hue-today px-5 pb-5 pt-8 text-on-hue sm:px-7">
+          <DialogTitle className="pr-12 text-[1.75rem] font-extrabold lowercase leading-[1.05] tracking-[-0.03em] font-wide">
+            {dayName(data.dayLabel)}, done
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            A recap of the workout you just finished.
+          </DialogDescription>
+        </div>
+        <div className="border-b border-border px-5 pb-6 pt-5 sm:px-7">
+          <div>
+            <div className="flex items-baseline gap-2 font-mono font-semibold tabular-nums tracking-tight text-foreground">
               <span className="text-5xl sm:text-6xl">
                 <AnimatedNumber value={revealed ? data.totalTonnage : 0} durationMs={900} />
               </span>
@@ -84,7 +78,7 @@ export function SessionWrappedRecap({
           <div className="space-y-2.5 px-5 py-5 sm:px-7">
             <div className="flex items-center gap-2 text-signal">
               <Trophy className="size-4" aria-hidden />
-              <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.16em]">
+              <h3 className="text-xs font-semibold lowercase">
                 New {data.prs.length === 1 ? "PR" : "PRs"}
               </h3>
             </div>
@@ -113,7 +107,7 @@ export function SessionWrappedRecap({
             className={`w-full ${TAP_SCALE}`}
             onClick={() => onOpenChange(false)}
           >
-            Nice
+            nice
           </Button>
         </div>
       </DialogContent>

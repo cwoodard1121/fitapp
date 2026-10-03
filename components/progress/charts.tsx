@@ -65,7 +65,7 @@ export function PanelTooltip({
       className="rounded-md border border-border bg-surface px-3 py-2 shadow-md"
       style={{ background: SURFACE }}
     >
-      <p className="mb-1 text-[11px] uppercase tracking-wider text-muted">{title}</p>
+      <p className="mb-1 text-xs font-semibold lowercase text-muted">{title}</p>
       <ul className="space-y-0.5">
         {rows.map((r) => (
           <li key={r.label} className="flex items-center gap-2 text-xs">

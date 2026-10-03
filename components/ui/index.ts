@@ -96,7 +96,6 @@ export {
   TooltipContent,
   TooltipProvider,
 } from "./tooltip"
-export { Toaster } from "./sonner"
 export { Stat, type StatProps } from "./stat"
 export {
   DecisionBadge,

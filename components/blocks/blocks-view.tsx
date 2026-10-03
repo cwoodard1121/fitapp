@@ -215,7 +215,7 @@ function KindSection({
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="font-mono text-xs uppercase tracking-wider text-muted">
+          <h3 className="text-xs font-semibold lowercase text-muted">
             Timeline
           </h3>
           <span className="font-mono text-xs tabular-nums text-muted">

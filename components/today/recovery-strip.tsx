@@ -67,7 +67,7 @@ export function RecoveryStrip({
   return (
     <section aria-label="Recovery" className="rounded-lg border border-border bg-surface p-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
+        <span className="text-xs font-semibold lowercase text-muted">
           Recovery
         </span>
         <span className="text-[11px] text-muted">{dayLabel(metric.metric_date)}</span>

@@ -89,7 +89,7 @@ export function DayCard({
       <CardHeader className="gap-3 pb-3">
         <div className="flex items-end gap-2">
           <div className="w-14 shrink-0 space-y-1.5">
-            <span className="font-mono text-[11px] uppercase tracking-wider text-muted">
+            <span className="text-xs font-semibold lowercase text-muted">
               Day
             </span>
             <Input
@@ -106,7 +106,7 @@ export function DayCard({
             />
           </div>
           <div className="flex-1 space-y-1.5">
-            <span className="font-mono text-[11px] uppercase tracking-wider text-muted">
+            <span className="text-xs font-semibold lowercase text-muted">
               Label
             </span>
             <Input

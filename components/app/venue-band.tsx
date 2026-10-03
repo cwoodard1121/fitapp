@@ -66,7 +66,7 @@ export function VenueBand({
             <button
               type="button"
               aria-label="Account menu"
-              className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-on-hue/10 text-on-hue transition-colors hover:bg-on-hue/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-hue active:scale-95"
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-on-hue/10 text-on-hue transition-colors hover:bg-on-hue/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-hue active:scale-95"
             >
               <UserRound className="size-5" aria-hidden />
             </button>

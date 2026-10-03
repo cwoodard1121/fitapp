@@ -44,7 +44,6 @@ const config: Config = {
           red: rgb("gate-red"),
         },
         hue: {
-          DEFAULT: rgb("hue"),
           today: rgb("hue-today"),
           checkin: rgb("hue-checkin"),
           home: rgb("hue-home"),
@@ -56,6 +55,17 @@ const config: Config = {
           2: rgb("chart-2"),
           3: rgb("chart-3"),
         },
+      },
+      // Elevation is reserved for things that float (popovers, sheets, the
+      // coach button), and every shadow is tinted from the navy ink, never
+      // black, so the whole default scale is redefined here.
+      boxShadow: {
+        sm: "0 1px 2px rgb(var(--text-rgb) / 0.06)",
+        DEFAULT: "0 1px 3px rgb(var(--text-rgb) / 0.08), 0 1px 2px rgb(var(--text-rgb) / 0.05)",
+        md: "0 4px 12px rgb(var(--text-rgb) / 0.10)",
+        lg: "0 8px 24px rgb(var(--text-rgb) / 0.12)",
+        xl: "0 16px 40px rgb(var(--text-rgb) / 0.14)",
+        "2xl": "0 24px 56px rgb(var(--text-rgb) / 0.18)",
       },
       borderColor: {
         DEFAULT: rgb("border"),

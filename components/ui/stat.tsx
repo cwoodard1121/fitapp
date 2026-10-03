@@ -33,7 +33,7 @@ export interface StatProps
   extends Omit<React.HTMLAttributes<HTMLDivElement>, "children"> {
   /** The figure to render. Numbers get tabular-nums + optional precision. */
   value: number | string | null | undefined
-  /** Small caption above the figure (sans, uppercase). */
+  /** Small caption above the figure (sans, lowercase). */
   label?: string
   /** Trailing unit, e.g. "lb", "reps", "%". Rendered quiet/muted. */
   unit?: string

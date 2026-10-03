@@ -125,7 +125,7 @@ export function ProgramSwitcher({
     <Card className="mb-4">
       <CardContent className="flex flex-wrap items-center gap-2 p-3">
         <Select value={currentId} onValueChange={switchEdit}>
-          <SelectTrigger className="h-9 w-full min-w-0 flex-1 sm:max-w-xs">
+          <SelectTrigger className="w-full min-w-0 flex-1 sm:max-w-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

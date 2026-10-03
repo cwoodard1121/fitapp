@@ -66,7 +66,7 @@ function WeekCard({ row }: { row: WeekRow }) {
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 rounded-lg border bg-surface p-4 shadow-sm transition-colors',
+        'flex flex-col gap-3 rounded-lg border bg-surface p-4 transition-colors',
         row.isCurrent
           ? 'border-signal/50 ring-1 ring-signal/30'
           : 'border-border',
@@ -74,7 +74,7 @@ function WeekCard({ row }: { row: WeekRow }) {
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-1">
-          <span className="font-mono text-xs uppercase tracking-[0.18em] text-muted">
+          <span className="text-xs font-semibold lowercase text-muted">
             Week
           </span>
           <span className="font-mono text-2xl font-semibold leading-none tabular-nums text-foreground">

@@ -319,7 +319,7 @@ function RateStat({
   const Icon = losing ? ArrowDown : (value ?? 0) < 0 ? ArrowUp : Scale
   return (
     <div className="rounded-md border border-border bg-background p-3">
-      <p className="text-[11px] uppercase tracking-wider text-muted">Scale rate</p>
+      <p className="text-xs font-semibold lowercase text-muted">Scale rate</p>
       <div className="mt-1 flex items-center gap-1">
         <Icon className="size-4 text-signal" aria-hidden />
         <span className="font-mono text-xl font-semibold tabular-nums text-foreground">

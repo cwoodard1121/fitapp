@@ -77,9 +77,6 @@
   --chart-2: rgb(var(--chart-2-rgb));
   --chart-3: rgb(var(--chart-3-rgb));
   --on-hue: rgb(var(--on-hue-rgb));
-  /* The current venue's hue; the app shell sets --hue-rgb per route. */
-  --hue-rgb: var(--hue-today-rgb);
-  --hue: rgb(var(--hue-rgb));
 }
 
 @layer base {
@@ -171,9 +168,6 @@
   .font-wide {
     font-variation-settings: "wdth" 112;
   }
-  .font-narrow {
-    font-variation-settings: "wdth" 80;
-  }
 
   .no-scrollbar {
     scrollbar-width: none;
@@ -187,6 +181,19 @@
    never collide with the tab bar or Today's session bar. */
 [data-sonner-toaster][data-y-position="top"] {
   top: calc(0.75rem + env(safe-area-inset-top)) !important;
+}
+
+/* While the on-screen keyboard is up, the bottom chrome steps aside the way a
+   native tab bar does. Fixed bars are pinned to the layout viewport, which the
+   keyboard does not shrink; the browser instead pans the visual viewport up to
+   the focused field, so without this they ride up into the middle of the
+   screen. components/app/keyboard-watch.tsx sets the attribute. */
+html[data-keyboard="open"] [data-keyboard-hide] {
+  visibility: hidden;
+  pointer-events: none;
+}
+html[data-keyboard="open"] main {
+  padding-bottom: calc(var(--keyboard-inset, 0px) + 1.5rem);
 }
 
 @media (prefers-reduced-motion: reduce) {

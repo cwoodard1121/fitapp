@@ -94,7 +94,7 @@ export function ActiveBlockCard({
       <Card className="flex flex-col items-start gap-3 border-dashed p-5">
         <div className="flex items-center gap-2 text-muted">
           <Icon className="size-4" aria-hidden />
-          <span className="font-mono text-xs uppercase tracking-wider">
+          <span className="text-xs font-semibold lowercase">
             Active {kindName} block
           </span>
         </div>
@@ -130,7 +130,7 @@ export function ActiveBlockCard({
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2 text-muted">
             <Icon className="size-4 text-signal" aria-hidden />
-            <span className="font-mono text-xs uppercase tracking-wider">
+            <span className="text-xs font-semibold lowercase">
               Active {kindName} block
             </span>
           </div>
@@ -188,7 +188,7 @@ export function ActiveBlockCard({
       {p.percent != null ? (
         <div className="mt-4 space-y-2">
           <div className="flex items-end justify-between">
-            <span className="font-mono text-xs uppercase tracking-wider text-muted">
+            <span className="text-xs font-semibold lowercase text-muted">
               {weekLabel ?? "Progress"}
             </span>
             <span className="font-mono text-xs tabular-nums text-signal">

@@ -16,7 +16,7 @@ export function AnalysisFocus({ focus }: { focus: string[] }) {
         </span>
         <div className="leading-tight">
           <p className="text-sm font-semibold text-foreground">Coach</p>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-signal">
+          <p className="text-xs font-semibold lowercase text-signal">
             Focus today
           </p>
         </div>

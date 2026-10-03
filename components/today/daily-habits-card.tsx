@@ -688,7 +688,7 @@ function RecentDayStrip({
             }`}
             title={format(parseISO(day.date), 'EEE, MMM d')}
             className={cn(
-              'flex size-7 flex-col items-center justify-center gap-0.5 rounded-md border text-[9px] font-medium uppercase text-muted',
+              'flex size-7 flex-col items-center justify-center gap-0.5 rounded-md border text-[10px] font-semibold lowercase text-muted',
               TAP_SCALE,
               day.completed
                 ? 'border-signal/40 bg-signal/15 text-signal'

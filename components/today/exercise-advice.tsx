@@ -37,7 +37,7 @@ export function ExerciseAdvice({ items }: { items: LiftAdvice[] }) {
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
-      <p className="mb-2.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted">
+      <p className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold lowercase text-muted">
         <MessageSquareText className="size-3.5" aria-hidden />
         Coach notes for today
       </p>

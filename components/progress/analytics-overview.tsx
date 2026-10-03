@@ -351,7 +351,7 @@ function NutritionCard({
 function Meta({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <span className="flex flex-col gap-0.5">
-      <span className="text-[10px] uppercase tracking-wider text-muted">
+      <span className="text-xs font-semibold lowercase text-muted">
         {label}
       </span>
       <span className="font-mono tabular-nums text-foreground">{children}</span>
