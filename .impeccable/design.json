@@ -1,0 +1,1016 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-03T01:21:15.609Z",
+  "title": "Design System: simplegym",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "Cool Paper",
+        "canonical": "rgb(238 241 242)",
+        "cssVar": "--bg-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#232526",
+          "#404243",
+          "#5F6262",
+          "#808384",
+          "#A3A5A6",
+          "#C7CACB",
+          "#ECEFF0"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Panel White",
+        "canonical": "rgb(255 255 255)",
+        "cssVar": "--surface-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Recess",
+        "canonical": "rgb(226 232 235)",
+        "cssVar": "--surface-2-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#080C0E",
+          "#212628",
+          "#3E4345",
+          "#5D6265",
+          "#7E8386",
+          "#A0A6A9",
+          "#C4CACD",
+          "#E9F0F3"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "rgb(208 216 220)",
+        "cssVar": "--border-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#070C0F",
+          "#202629",
+          "#3D4346",
+          "#5B6266",
+          "#7C8487",
+          "#9FA6AA",
+          "#C3CBCE",
+          "#E8F0F4"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Deep Navy Ink",
+        "canonical": "rgb(13 36 51)",
+        "cssVar": "--text-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#000D17",
+          "#112837",
+          "#2E4556",
+          "#4C6576",
+          "#6D8699",
+          "#8FA9BC",
+          "#B2CDE1",
+          "#DFF1FF"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Slate",
+        "canonical": "rgb(83 104 119)",
+        "cssVar": "--muted-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#000D17",
+          "#142734",
+          "#314553",
+          "#4F6473",
+          "#708695",
+          "#92A9B9",
+          "#B5CDDE",
+          "#DFF1FF"
+        ]
+      },
+      "signal": {
+        "role": "secondary",
+        "displayName": "Signal Blue",
+        "canonical": "rgb(23 105 184)",
+        "cssVar": "--signal-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#000B1D",
+          "#01254A",
+          "#00427C",
+          "#0A62B0",
+          "#3885D6",
+          "#5DA9FD",
+          "#A3CDFE",
+          "#E4F0FE"
+        ]
+      },
+      "signal-ink": {
+        "role": "secondary",
+        "displayName": "Signal Ink",
+        "canonical": "rgb(255 255 255)",
+        "cssVar": "--signal-ink-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "gate-green": {
+        "role": "tertiary",
+        "displayName": "Progress Green",
+        "canonical": "rgb(27 127 69)",
+        "cssVar": "--gate-green-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#001004",
+          "#002E14",
+          "#005026",
+          "#06753B",
+          "#3A985C",
+          "#60BC7E",
+          "#85E1A1",
+          "#C6FFD5"
+        ]
+      },
+      "gate-yellow": {
+        "role": "tertiary",
+        "displayName": "Hold Amber",
+        "canonical": "rgb(179 90 0)",
+        "cssVar": "--gate-yellow-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#170600",
+          "#3C1A01",
+          "#673102",
+          "#954A00",
+          "#C1671B",
+          "#E88A46",
+          "#FEB788",
+          "#FFEADD"
+        ]
+      },
+      "gate-red": {
+        "role": "tertiary",
+        "displayName": "Back-off Red",
+        "canonical": "rgb(198 56 30)",
+        "cssVar": "--gate-red-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#1D0200",
+          "#490801",
+          "#7C1300",
+          "#B12101",
+          "#DA4B31",
+          "#FE755B",
+          "#FFB4A4",
+          "#FFE9E4"
+        ]
+      },
+      "chart-2": {
+        "role": "tertiary",
+        "displayName": "Second Series Orange",
+        "canonical": "rgb(224 123 18)",
+        "cssVar": "--chart-2-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#160700",
+          "#3B1C01",
+          "#643302",
+          "#914D02",
+          "#C16802",
+          "#EE8728",
+          "#FFB782",
+          "#FFEADC"
+        ]
+      },
+      "chart-3": {
+        "role": "tertiary",
+        "displayName": "Third Series Slate",
+        "canonical": "rgb(111 133 146)",
+        "cssVar": "--chart-3-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#000D16",
+          "#142832",
+          "#314551",
+          "#4F6571",
+          "#708693",
+          "#92A9B6",
+          "#B6CDDB",
+          "#DDF2FF"
+        ]
+      },
+      "hue-today": {
+        "role": "primary",
+        "displayName": "Munich Light Blue",
+        "canonical": "rgb(93 176 232)",
+        "cssVar": "--hue-today-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#000D18",
+          "#02283F",
+          "#01476B",
+          "#02689A",
+          "#358AC0",
+          "#5BAEE6",
+          "#92D1FF",
+          "#E0F1FE"
+        ]
+      },
+      "hue-checkin": {
+        "role": "primary",
+        "displayName": "Meadow Green",
+        "canonical": "rgb(77 184 106)",
+        "cssVar": "--hue-checkin-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#001003",
+          "#012E10",
+          "#015021",
+          "#017533",
+          "#299A4E",
+          "#54BF70",
+          "#7BE493",
+          "#C8FFD2"
+        ]
+      },
+      "hue-home": {
+        "role": "primary",
+        "displayName": "Games Orange",
+        "canonical": "rgb(245 154 59)",
+        "cssVar": "--hue-home-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#150800",
+          "#391D01",
+          "#613602",
+          "#8D5004",
+          "#BB6C06",
+          "#E68D29",
+          "#FFB878",
+          "#FEEADA"
+        ]
+      },
+      "hue-body": {
+        "role": "primary",
+        "displayName": "Park Lime",
+        "canonical": "rgb(169 209 90)",
+        "cssVar": "--hue-body-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#080E00",
+          "#1E2A01",
+          "#364A03",
+          "#516C02",
+          "#6D9106",
+          "#8FB53C",
+          "#B2DA64",
+          "#D9FF98"
+        ]
+      },
+      "hue-more": {
+        "role": "primary",
+        "displayName": "Aluminium Silver",
+        "canonical": "rgb(196 203 207)",
+        "cssVar": "--hue-more-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#070C0F",
+          "#212629",
+          "#3D4346",
+          "#5C6266",
+          "#7D8387",
+          "#9FA6AA",
+          "#C3CACE",
+          "#E8F0F4"
+        ]
+      },
+      "on-hue": {
+        "role": "primary",
+        "displayName": "Field Ink",
+        "canonical": "rgb(13 36 51)",
+        "cssVar": "--on-hue-rgb",
+        "scheme": "light",
+        "tonalRamp": [
+          "#000D17",
+          "#112837",
+          "#2E4556",
+          "#4C6576",
+          "#6D8699",
+          "#8FA9BC",
+          "#B2CDE1",
+          "#DFF1FF"
+        ]
+      },
+      "scrim": {
+        "role": "neutral",
+        "displayName": "Navy Scrim",
+        "canonical": "rgb(13 36 51 / 0.45)",
+        "cssVar": "--scrim",
+        "scheme": "light",
+        "tonalRamp": [
+          "#000D17",
+          "#112837",
+          "#2E4556",
+          "#4C6576",
+          "#6D8699",
+          "#8FA9BC",
+          "#B2CDE1",
+          "#DFF1FF"
+        ]
+      },
+      "bg-dark": {
+        "role": "neutral",
+        "displayName": "Night Ground",
+        "canonical": "rgb(9 24 33)",
+        "cssVar": "--bg-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#020D15",
+          "#182731",
+          "#34444F",
+          "#53646F",
+          "#738591",
+          "#95A8B4",
+          "#B9CCD9",
+          "#DEF2FF"
+        ]
+      },
+      "surface-dark": {
+        "role": "neutral",
+        "displayName": "Night Panel",
+        "canonical": "rgb(16 36 47)",
+        "cssVar": "--surface-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#000D16",
+          "#142833",
+          "#304551",
+          "#4F6572",
+          "#6F8694",
+          "#91A9B7",
+          "#B5CDDC",
+          "#DEF2FE"
+        ]
+      },
+      "surface-2-dark": {
+        "role": "neutral",
+        "displayName": "Night Recess",
+        "canonical": "rgb(22 48 63)",
+        "cssVar": "--surface-2-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#000D17",
+          "#0E2837",
+          "#2B4655",
+          "#4A6576",
+          "#6A8798",
+          "#8CAABC",
+          "#B0CEE1",
+          "#DFF2FE"
+        ]
+      },
+      "border-dark": {
+        "role": "neutral",
+        "displayName": "Night Hairline",
+        "canonical": "rgb(36 63 78)",
+        "cssVar": "--border-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#000D16",
+          "#0D2836",
+          "#2B4655",
+          "#496676",
+          "#6A8798",
+          "#8CAABC",
+          "#AFCEE1",
+          "#DDF2FF"
+        ]
+      },
+      "text-dark": {
+        "role": "neutral",
+        "displayName": "Frost Ink",
+        "canonical": "rgb(230 238 242)",
+        "cssVar": "--text-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#070C0F",
+          "#202629",
+          "#3D4346",
+          "#5C6266",
+          "#7C8487",
+          "#9FA6AA",
+          "#C3CBCE",
+          "#E8F0F4"
+        ]
+      },
+      "muted-dark": {
+        "role": "neutral",
+        "displayName": "Night Slate",
+        "canonical": "rgb(147 170 184)",
+        "cssVar": "--muted-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#000D16",
+          "#142833",
+          "#314551",
+          "#4F6571",
+          "#708693",
+          "#92A9B7",
+          "#B5CDDC",
+          "#DEF2FE"
+        ]
+      },
+      "signal-dark": {
+        "role": "secondary",
+        "displayName": "Pale Ice",
+        "canonical": "rgb(168 214 255)",
+        "cssVar": "--signal-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#000C1A",
+          "#002743",
+          "#1A4567",
+          "#3B6589",
+          "#5C87AD",
+          "#7EAAD2",
+          "#A1CFF8",
+          "#E1F1FF"
+        ]
+      },
+      "signal-ink-dark": {
+        "role": "secondary",
+        "displayName": "Ice Ink",
+        "canonical": "rgb(4 18 27)",
+        "cssVar": "--signal-ink-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#010D15",
+          "#172731",
+          "#34454F",
+          "#52646F",
+          "#738591",
+          "#95A8B5",
+          "#B9CCDA",
+          "#DFF2FE"
+        ]
+      },
+      "gate-green-dark": {
+        "role": "tertiary",
+        "displayName": "Progress Green (Night)",
+        "canonical": "rgb(76 201 124)",
+        "cssVar": "--gate-green-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#000F04",
+          "#012E14",
+          "#005028",
+          "#05753D",
+          "#049C53",
+          "#42C174",
+          "#6CE697",
+          "#C7FFD6"
+        ]
+      },
+      "gate-yellow-dark": {
+        "role": "tertiary",
+        "displayName": "Hold Amber (Night)",
+        "canonical": "rgb(242 163 65)",
+        "cssVar": "--gate-yellow-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#140800",
+          "#371F01",
+          "#5E3801",
+          "#885405",
+          "#B57104",
+          "#DF922B",
+          "#FEB96B",
+          "#FEEBD7"
+        ]
+      },
+      "gate-red-dark": {
+        "role": "tertiary",
+        "displayName": "Back-off Red (Night)",
+        "canonical": "rgb(255 111 82)",
+        "cssVar": "--gate-red-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#1D0200",
+          "#490901",
+          "#7B1601",
+          "#B02402",
+          "#D94C30",
+          "#FF7559",
+          "#FFB4A3",
+          "#FEE9E4"
+        ]
+      },
+      "chart-2-dark": {
+        "role": "tertiary",
+        "displayName": "Second Series Orange (Night)",
+        "canonical": "rgb(242 163 65)",
+        "cssVar": "--chart-2-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#140800",
+          "#371F01",
+          "#5E3801",
+          "#885405",
+          "#B57104",
+          "#DF922B",
+          "#FEB96B",
+          "#FEEBD7"
+        ]
+      },
+      "chart-3-dark": {
+        "role": "tertiary",
+        "displayName": "Third Series Slate (Night)",
+        "canonical": "rgb(111 138 153)",
+        "cssVar": "--chart-3-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#000D16",
+          "#102835",
+          "#2D4653",
+          "#4B6574",
+          "#6C8796",
+          "#8EAAB9",
+          "#B1CEDE",
+          "#DDF2FF"
+        ]
+      },
+      "hue-today-dark": {
+        "role": "primary",
+        "displayName": "Night Today Blue",
+        "canonical": "rgb(56 136 196)",
+        "cssVar": "--hue-today-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#000C19",
+          "#002742",
+          "#014670",
+          "#0866A0",
+          "#3989C5",
+          "#5EACEB",
+          "#98D0FF",
+          "#E2F1FE"
+        ]
+      },
+      "hue-checkin-dark": {
+        "role": "primary",
+        "displayName": "Meadow Green (Night)",
+        "canonical": "rgb(63 168 94)",
+        "cssVar": "--hue-checkin-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#001003",
+          "#012E11",
+          "#015022",
+          "#057535",
+          "#2E9A51",
+          "#57BE73",
+          "#7DE496",
+          "#C8FFD2"
+        ]
+      },
+      "hue-home-dark": {
+        "role": "primary",
+        "displayName": "Games Orange (Night)",
+        "canonical": "rgb(232 137 44)",
+        "cssVar": "--hue-home-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#160700",
+          "#3A1C01",
+          "#633400",
+          "#8F4E03",
+          "#BF6901",
+          "#E98A2E",
+          "#FFB87E",
+          "#FFEADA"
+        ]
+      },
+      "hue-body-dark": {
+        "role": "primary",
+        "displayName": "Park Lime (Night)",
+        "canonical": "rgb(152 193 75)",
+        "cssVar": "--hue-body-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#070E00",
+          "#1D2A00",
+          "#354A02",
+          "#4F6D02",
+          "#6B9106",
+          "#8DB53E",
+          "#B0DB66",
+          "#D8FF9B"
+        ]
+      },
+      "hue-more-dark": {
+        "role": "primary",
+        "displayName": "Aluminium Silver (Night)",
+        "canonical": "rgb(140 154 162)",
+        "cssVar": "--hue-more-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#040D12",
+          "#1B272D",
+          "#38444B",
+          "#56636B",
+          "#77858C",
+          "#99A8B0",
+          "#BDCCD4",
+          "#E2F1FA"
+        ]
+      },
+      "on-hue-dark": {
+        "role": "primary",
+        "displayName": "Night Field Ink",
+        "canonical": "rgb(7 24 34)",
+        "cssVar": "--on-hue-rgb",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#010D16",
+          "#162732",
+          "#324550",
+          "#516471",
+          "#718693",
+          "#94A8B6",
+          "#B7CDDB",
+          "#DFF2FE"
+        ]
+      },
+      "scrim-dark": {
+        "role": "neutral",
+        "displayName": "Night Scrim",
+        "canonical": "rgb(0 8 14 / 0.6)",
+        "cssVar": "--scrim",
+        "scheme": "dark",
+        "tonalRamp": [
+          "#020D13",
+          "#18272F",
+          "#34454D",
+          "#53646D",
+          "#74868E",
+          "#96A8B2",
+          "#B9CDD6",
+          "#DEF2FC"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The Today day title, lowercase, wide (wdth 112). Once per screen."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles on secondary destinations, wide (wdth 112)."
+      },
+      "signage": {
+        "displayName": "Signage",
+        "purpose": "The venue name in the band; same treatment for the wordmark and the more-sheet title."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Exercise names in slot panels; card titles at 1rem, sheet titles at 1.25rem."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Descriptions, helper copy, empty states. Inputs run at 1rem on phones."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Lowercase button and nav-row labels."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Lowercase grid heads, tab labels, chip day numbers, badge text, stat captions."
+      },
+      "readout": {
+        "displayName": "Readout",
+        "purpose": "Every measurement: Archivo semi-condensed (wdth 88) with tabular figures. Stats scale 1.125rem to 3rem."
+      },
+      "readout-micro": {
+        "displayName": "Readout Micro",
+        "purpose": "Slot codes under session-rail segments."
+      }
+    },
+    "shadows": [
+      {
+        "name": "popover",
+        "value": "0 8px 24px rgb(var(--text-rgb) / 0.14)",
+        "purpose": "Dropdown menus, select lists, tooltips."
+      },
+      {
+        "name": "sheet",
+        "value": "0 -8px 32px rgb(var(--text-rgb) / 0.12)",
+        "purpose": "Bottom sheets and dialogs presented as sheets; casts upward."
+      },
+      {
+        "name": "docked-rail",
+        "value": "0 6px 18px rgb(var(--text-rgb) / 0.08)",
+        "purpose": "The session rail's docked copy, only while docked under the band."
+      },
+      {
+        "name": "pull-indicator",
+        "value": "0 4px 12px rgb(var(--text-rgb) / 0.12)",
+        "purpose": "The round pull-to-refresh puck."
+      },
+      {
+        "name": "segment-lift",
+        "value": "0 1px 2px rgb(var(--text-rgb) / 0.12)",
+        "purpose": "Active trigger inside a recessed tab list; the only ink-tinted resting shadow."
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 2px var(--bg), 0 0 0 4px var(--signal)",
+        "purpose": "Global :focus-visible treatment: paper gap, then signal ring."
+      },
+      {
+        "name": "slot-focus-halo",
+        "value": "0 0 0 4px rgb(var(--signal-rgb) / 0.10)",
+        "purpose": "A slot panel while one of its fields has focus (with border at signal/50)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-venue",
+        "value": "cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "House easing: route cross-fade, band and tab-marker glide, set-mark pop."
+      },
+      {
+        "name": "route-crossfade",
+        "value": "140ms",
+        "purpose": "View-transition cross-fade of the page root on navigation."
+      },
+      {
+        "name": "venue-glide",
+        "value": "220ms",
+        "purpose": "Named view-transition groups: the venue band and the tab marker gliding to their next state."
+      },
+      {
+        "name": "band-retint",
+        "value": "200ms",
+        "purpose": "Venue band colour change between venues."
+      },
+      {
+        "name": "press",
+        "value": "150ms; scale(0.97)",
+        "purpose": "Button press compression (tab cells 0.94, chips 0.97, week cells 0.95)."
+      },
+      {
+        "name": "set-mark",
+        "value": "180ms cubic-bezier(0.2, 0, 0, 1); scale 0.4 to 1, fade in",
+        "purpose": "A set mark filling with signal when the set gets reps."
+      },
+      {
+        "name": "rail-fill",
+        "value": "300ms ease-out; scaleX 0 to 1 from the left",
+        "purpose": "Session-rail segment sweeping full when its slot gets its first set."
+      },
+      {
+        "name": "sheet-open",
+        "value": "300ms ease-out",
+        "purpose": "Bottom sheet slide-in; overlay fades."
+      },
+      {
+        "name": "sheet-close",
+        "value": "200ms",
+        "purpose": "Bottom sheet slide-out."
+      },
+      {
+        "name": "drag-settle",
+        "value": "240ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "A dragged sheet springing back when not dismissed."
+      },
+      {
+        "name": "route-progress",
+        "value": "width 3.5s cubic-bezier(0.15, 0.8, 0.35, 1)",
+        "purpose": "Signal progress bar at the top edge while a route loads."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Under prefers-reduced-motion every animation and transition collapses; JS motion (rail jump, drag settle) checks the media query itself."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px",
+        "purpose": "Dialogs stop being bottom sheets and center; inputs drop to 0.875rem; page top padding grows to 24px."
+      },
+      {
+        "name": "md",
+        "value": "768px",
+        "purpose": "A 240px sidebar replaces the mobile tab bar; the day strip wraps."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Signal-blue action, lowercase label; the finish-session button on Today.",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z\"/><line x1=\"4\" x2=\"4\" y1=\"22\" y2=\"15\"/></svg>finish session</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 20px; border: 0; border-radius: 0.625rem; font-family: var(--font-archivo), Archivo, system-ui, sans-serif; font-size: 0.9375rem; font-weight: 600; letter-spacing: -0.005em; cursor: pointer; transition: background-color 150ms, color 150ms, transform 150ms; background: var(--signal); color: var(--signal-ink); } .ds-btn-primary:hover { background: rgb(var(--signal-rgb) / 0.9); } .ds-btn-primary:active { background: rgb(var(--signal-rgb) / 0.8); transform: scale(0.97); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--signal); } .ds-btn-primary:disabled { background: var(--surface-2); color: var(--muted); pointer-events: none; } @media (prefers-reduced-motion: reduce) { .ds-btn-primary { transition: none; } .ds-btn-primary:active { transform: none; } }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Recess-filled secondary action, e.g. \"add set\" under the set grid.",
+      "html": "<button class=\"ds-btn-secondary\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"M12 5v14\"/></svg>add set</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 20px; border: 0; border-radius: 0.625rem; font-family: var(--font-archivo), Archivo, system-ui, sans-serif; font-size: 0.9375rem; font-weight: 600; letter-spacing: -0.005em; cursor: pointer; transition: background-color 150ms, color 150ms, transform 150ms; background: var(--surface-2); color: var(--text); } .ds-btn-secondary:hover { background: rgb(var(--border-rgb) / 0.7); } .ds-btn-secondary:active { background: var(--border); transform: scale(0.97); } .ds-btn-secondary:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--signal); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Panel-white button on a hairline; the per-exercise \"feedback\" trigger.",
+      "html": "<button class=\"ds-btn-outline\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z\"/><path d=\"M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27\"/></svg>feedback</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 20px; border: 0; border-radius: 0.625rem; font-family: var(--font-archivo), Archivo, system-ui, sans-serif; font-size: 0.9375rem; font-weight: 600; letter-spacing: -0.005em; cursor: pointer; transition: background-color 150ms, color 150ms, transform 150ms; gap: 6px; height: 40px; padding: 0 16px; font-size: 0.875rem; background: var(--surface); color: var(--text); border: 1px solid var(--border); } .ds-btn-outline:hover { background: var(--surface-2); } .ds-btn-outline:active { background: var(--surface-2); transform: scale(0.97); } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--signal); }"
+    },
+    {
+      "name": "Set Entry Row",
+      "kind": "input",
+      "refersTo": "set-field",
+      "description": "One set: a set mark, then load / reps / RIR fields in semi-condensed tabular readout type, then a 44px remove button.",
+      "html": "<div class=\"ds-set-row\"><span class=\"ds-set-mark ds-set-mark-done\">1</span><input class=\"ds-set-field\" inputmode=\"decimal\" value=\"0\" aria-label=\"Set 1 load\"><input class=\"ds-set-field\" inputmode=\"numeric\" value=\"5\" aria-label=\"Set 1 reps\"><input class=\"ds-set-field\" inputmode=\"decimal\" placeholder=\"2\" aria-label=\"Set 1 RIR\"><button class=\"ds-set-remove\" aria-label=\"Remove set 1\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/></svg></button></div>",
+      "css": ".ds-set-row { display: grid; grid-template-columns: 2.25rem 1fr 1fr 1fr 2.75rem; align-items: center; gap: 8px; font-family: var(--font-archivo), Archivo, system-ui, sans-serif; } .ds-set-mark { margin: 0 auto; display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 9999px; border: 2px solid var(--border); color: var(--muted); font-size: 0.875rem; font-weight: 700; font-variant-numeric: tabular-nums; font-feature-settings: \"tnum\" 1; font-variation-settings: \"wdth\" 88; } .ds-set-mark-done { border-color: transparent; background: var(--signal); color: var(--signal-ink); } .ds-set-field { height: 48px; width: 100%; min-width: 0; padding: 0 4px; border: 1px solid var(--border); border-radius: 0.625rem; background: var(--surface); color: var(--text); text-align: center; font: inherit; font-size: 1.125rem; font-weight: 700; font-variant-numeric: tabular-nums; font-feature-settings: \"tnum\" 1; font-variation-settings: \"wdth\" 88; transition: border-color 150ms, background-color 150ms; } .ds-set-field::placeholder { color: var(--muted); font-weight: 500; } .ds-set-field:focus-visible { outline: none; border-color: var(--signal); background: rgb(var(--signal-rgb) / 0.05); box-shadow: 0 0 0 2px rgb(var(--signal-rgb) / 0.25); } .ds-set-remove { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; border: 0; border-radius: 0.625rem; background: transparent; color: var(--muted); cursor: pointer; transition: background-color 150ms, color 150ms; } .ds-set-remove:hover { background: rgb(var(--gate-red-rgb) / 0.1); color: var(--gate-red); } .ds-set-remove:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--signal); }"
+    },
+    {
+      "name": "Venue Band",
+      "kind": "nav",
+      "refersTo": "venue-band",
+      "description": "Full-bleed venue field naming where you are: filled pictogram plus lowercase signage, with the account button at the end.",
+      "html": "<header class=\"ds-band\"><div class=\"ds-band-row\"><div class=\"ds-band-title\"><svg class=\"ds-band-picto\" width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><rect x=\"2\" y=\"0.6\" width=\"2.8\" height=\"4.4\" rx=\"0.5\"/><rect x=\"19.2\" y=\"0.6\" width=\"2.8\" height=\"4.4\" rx=\"0.5\"/><path d=\"M2.4 2.8H21.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\"/><path d=\"M7.5 2.8V10H16.5V2.8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\"/><circle cx=\"12\" cy=\"6.2\" r=\"2\"/><path d=\"M12 10V15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.6\"/><path d=\"M7.4 22.5V18.6L12 14L16.6 18.6V22.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.8\"/></svg><span>today</span></div><button class=\"ds-band-account\" aria-label=\"Account menu\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"8\" r=\"5\"/><path d=\"M20 21a8 8 0 0 0-16 0\"/></svg></button></div></header>",
+      "css": ".ds-band { display: flex; align-items: flex-end; height: 56px; background: rgb(var(--hue-today-rgb)); color: var(--on-hue); transition: background-color 200ms; } .ds-band-row { margin: 0 auto; display: flex; width: 100%; max-width: 48rem; height: 56px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; } .ds-band-title { display: flex; min-width: 0; align-items: center; gap: 10px; } .ds-band-title span { font-family: var(--font-archivo), Archivo, system-ui, sans-serif; font-size: 1.375rem; font-weight: 800; line-height: 1; letter-spacing: -0.02em; font-variation-settings: \"wdth\" 112; } .ds-band-picto { flex-shrink: 0; } .ds-band-account { display: inline-flex; width: 40px; height: 40px; align-items: center; justify-content: center; border: 0; border-radius: 9999px; background: rgb(var(--on-hue-rgb) / 0.1); color: var(--on-hue); cursor: pointer; transition: background-color 150ms, transform 150ms; } .ds-band-account:hover { background: rgb(var(--on-hue-rgb) / 0.15); } .ds-band-account:active { transform: scale(0.95); } .ds-band-account:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--on-hue); }"
+    },
+    {
+      "name": "Mobile Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-bar-cell",
+      "description": "Five venues as filled pictograms over lowercase labels; the active tab turns navy and carries a 3px hue marker on its top edge.",
+      "html": "<nav class=\"ds-tabbar\" aria-label=\"Primary\"><a class=\"ds-tab ds-tab-active\" aria-current=\"page\" href=\"#\"><span class=\"ds-tab-marker\"></span><svg class=\"\" width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><rect x=\"2\" y=\"0.6\" width=\"2.8\" height=\"4.4\" rx=\"0.5\"/><rect x=\"19.2\" y=\"0.6\" width=\"2.8\" height=\"4.4\" rx=\"0.5\"/><path d=\"M2.4 2.8H21.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\"/><path d=\"M7.5 2.8V10H16.5V2.8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\"/><circle cx=\"12\" cy=\"6.2\" r=\"2\"/><path d=\"M12 10V15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.6\"/><path d=\"M7.4 22.5V18.6L12 14L16.6 18.6V22.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.8\"/></svg><span>today</span></a><a class=\"ds-tab\" href=\"#\"><svg class=\"\" width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path fill-rule=\"evenodd\" d=\"M6 4.5H8.5V2.5A1 1 0 0 1 9.5 1.5H14.5A1 1 0 0 1 15.5 2.5V4.5H18A1.5 1.5 0 0 1 19.5 6V20.5A1.5 1.5 0 0 1 18 22H6A1.5 1.5 0 0 1 4.5 20.5V6A1.5 1.5 0 0 1 6 4.5Z M8.92 12.08L11 14.16L15.58 9.58L17.42 11.42L11 17.84L7.08 13.92Z\"/></svg><span>check-in</span></a><a class=\"ds-tab\" href=\"#\"><svg class=\"\" width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M12 2.5L21.5 12H19V21.5H14V15H10V21.5H5V12H2.5Z\"/></svg><span>home</span></a><a class=\"ds-tab\" href=\"#\"><svg class=\"\" width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"3.8\" r=\"2.3\"/><path d=\"M5.6 13.4L10.4 8.6H13.6L18.4 13.4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.8\"/><path d=\"M12 8.6V14.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.4\"/><path d=\"M9.4 22.5V18L12 15.4L14.6 18V22.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\"/></svg><span>body</span></a><a class=\"ds-tab\" href=\"#\"><svg class=\"\" width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><rect x=\"3.5\" y=\"3.5\" width=\"7.5\" height=\"7.5\" rx=\"1\"/><rect x=\"13\" y=\"3.5\" width=\"7.5\" height=\"7.5\" rx=\"1\"/><rect x=\"3.5\" y=\"13\" width=\"7.5\" height=\"7.5\" rx=\"1\"/><rect x=\"13\" y=\"13\" width=\"7.5\" height=\"7.5\" rx=\"1\"/></svg><span>more</span></a></nav>",
+      "css": ".ds-tabbar { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--border); background: var(--surface); } .ds-tab { position: relative; display: flex; height: 68px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--muted); text-decoration: none; font-family: var(--font-archivo), Archivo, system-ui, sans-serif; font-size: 0.75rem; font-weight: 600; transition: color 150ms, transform 150ms; } .ds-tab:hover { color: var(--text); } .ds-tab:active { transform: scale(0.94); } .ds-tab:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--signal); } .ds-tab-active { color: var(--text); } .ds-tab-marker { position: absolute; top: 0; left: 12px; right: 12px; height: 3px; border-radius: 0 0 9999px 9999px; background: rgb(var(--hue-today-rgb)); }"
+    },
+    {
+      "name": "Day Chips",
+      "kind": "chip",
+      "refersTo": "day-chip",
+      "description": "Training-day picker: the selected day takes the today field; a finished day carries a green check.",
+      "html": "<nav class=\"ds-days\" aria-label=\"Training day\"><a class=\"ds-day ds-day-active\" aria-current=\"page\" href=\"#\"><span class=\"ds-day-num\">day 1</span><span class=\"ds-day-name\">chest / back</span></a><a class=\"ds-day\" href=\"#\"><span class=\"ds-day-num\">day 2 <svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" class=\"ds-day-check\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg></span><span class=\"ds-day-name\">arms</span></a></nav>",
+      "css": ".ds-days { display: flex; gap: 8px; font-family: var(--font-archivo), Archivo, system-ui, sans-serif; } .ds-day { display: flex; min-height: 56px; min-width: 5.5rem; flex-direction: column; justify-content: center; gap: 4px; padding: 8px 14px; border-radius: 0.625rem; background: var(--surface); color: var(--text); text-decoration: none; transition: background-color 150ms, transform 150ms; } .ds-day:hover { background: var(--surface-2); } .ds-day:active { transform: scale(0.97); } .ds-day:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--signal); } .ds-day-active, .ds-day-active:hover { background: rgb(var(--hue-today-rgb)); color: var(--on-hue); } .ds-day-num { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 600; line-height: 1; color: var(--muted); } .ds-day-active .ds-day-num { color: inherit; opacity: 0.75; } .ds-day-check { color: var(--gate-green); } .ds-day-name { white-space: nowrap; font-size: 0.9375rem; font-weight: 700; line-height: 1; }"
+    },
+    {
+      "name": "Slot Panel",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat white panel on a hairline: navy slot-code tag, exercise name, the target readout line, and a recessed footer band.",
+      "html": "<article class=\"ds-slot\"><header class=\"ds-slot-head\"><span class=\"ds-slot-code\">D1A1</span><span class=\"ds-slot-name\">Barbell Bench Press</span></header><p class=\"ds-slot-target\"><span class=\"ds-slot-cap\">target</span><b>0<small>lb</small></b><i>·</i><b>2<small>×</small>5</b><i>·</i><b>2<small>rir</small></b></p><footer class=\"ds-slot-foot\">Log a set to preview next session's call.</footer></article>",
+      "css": ".ds-slot { overflow: hidden; border: 1px solid var(--border); border-radius: 0.875rem; background: var(--surface); color: var(--text); font-family: var(--font-archivo), Archivo, system-ui, sans-serif; transition: border-color 200ms, box-shadow 200ms; } .ds-slot:focus-within { border-color: rgb(var(--signal-rgb) / 0.5); box-shadow: 0 0 0 4px rgb(var(--signal-rgb) / 0.10); } .ds-slot-head { display: flex; align-items: baseline; gap: 8px; padding: 22px 16px 6px; } .ds-slot-code { border-radius: 0.375rem; background: var(--text); color: var(--bg); padding: 4px 6px; font-size: 0.75rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; font-feature-settings: \"tnum\" 1; font-variation-settings: \"wdth\" 88; } .ds-slot-name { font-size: 1.125rem; font-weight: 700; line-height: 1.375; letter-spacing: -0.01em; } .ds-slot-target { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0; padding: 0 16px 16px; font-variant-numeric: tabular-nums; font-feature-settings: \"tnum\" 1; font-variation-settings: \"wdth\" 88; } .ds-slot-target b { font-size: 1.0625rem; font-weight: 700; } .ds-slot-target small { margin-left: 2px; font-size: 0.75rem; font-weight: 600; color: var(--muted); } .ds-slot-target i { font-style: normal; color: var(--muted); } .ds-slot-cap { font-size: 0.75rem; font-weight: 600; color: var(--muted); } .ds-slot-foot { border-top: 1px solid var(--border); background: rgb(var(--surface-2-rgb) / 0.6); padding: 16px; font-size: 0.875rem; color: var(--muted); }"
+    },
+    {
+      "name": "Session Rail",
+      "kind": "custom",
+      "refersTo": "rail-segment",
+      "description": "One hue stripe per exercise slot: logged slots sweep full, the slot on screen gets a navy ring, codes sit underneath in readout micro type.",
+      "html": "<nav class=\"ds-rail\" aria-label=\"Exercises in this session\"><ol><li><button class=\"ds-rail-seg ds-rail-logged\"><span class=\"ds-rail-track\"><span class=\"ds-rail-fill\"></span></span><span class=\"ds-rail-code\">D1A1</span></button></li><li><button class=\"ds-rail-seg ds-rail-current ds-rail-logged\" aria-current=\"step\"><span class=\"ds-rail-track\"><span class=\"ds-rail-fill\"></span></span><span class=\"ds-rail-code\">D1A2</span></button></li><li><button class=\"ds-rail-seg\"><span class=\"ds-rail-track\"><span class=\"ds-rail-fill\"></span></span><span class=\"ds-rail-code\">D1A3</span></button></li><li><button class=\"ds-rail-seg\"><span class=\"ds-rail-track\"><span class=\"ds-rail-fill\"></span></span><span class=\"ds-rail-code\">D1A4</span></button></li><li><button class=\"ds-rail-seg\"><span class=\"ds-rail-track\"><span class=\"ds-rail-fill\"></span></span><span class=\"ds-rail-code\">D1A5</span></button></li><li><button class=\"ds-rail-seg\"><span class=\"ds-rail-track\"><span class=\"ds-rail-fill\"></span></span><span class=\"ds-rail-code\">D1A6</span></button></li></ol></nav>",
+      "css": ".ds-rail ol { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; } .ds-rail li { min-width: 0; flex: 1; } .ds-rail-seg { display: flex; width: 100%; height: 48px; flex-direction: column; justify-content: flex-start; gap: 6px; padding: 4px 0 0; border: 0; border-radius: 0.375rem; background: transparent; cursor: pointer; font-family: var(--font-archivo), Archivo, system-ui, sans-serif; } .ds-rail-seg:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--signal); } .ds-rail-track { position: relative; display: block; height: 14px; width: 100%; overflow: hidden; border-radius: 3px; background: rgb(var(--hue-today-rgb) / 0.25); transition: box-shadow 200ms; } .ds-rail-current .ds-rail-track { box-shadow: 0 0 0 2px var(--text); } .ds-rail-fill { position: absolute; inset: 0; transform-origin: left; transform: scaleX(0); background: rgb(var(--hue-today-rgb)); transition: transform 300ms ease-out; } .ds-rail-logged .ds-rail-fill { transform: scaleX(1); } .ds-rail-seg:hover .ds-rail-fill { opacity: 0.9; } .ds-rail-code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: 0.6875rem; font-weight: 700; line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums; font-feature-settings: \"tnum\" 1; font-variation-settings: \"wdth\" 88; } .ds-rail-current .ds-rail-code, .ds-rail-logged .ds-rail-code { color: var(--text); } @media (prefers-reduced-motion: reduce) { .ds-rail-fill { transition: none; } }"
+    },
+    {
+      "name": "Decision Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "The engine's next-session call as a tinted gate tag with an icon, plus a one-line reason in slate.",
+      "html": "<span class=\"ds-decision\"><span class=\"ds-badge ds-badge-green\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m5 12 7-7 7 7\"/><path d=\"M12 19V5\"/></svg>Add 1 rep</span><span class=\"ds-decision-why\">Performance supports more work — push for one more rep next session.</span></span>",
+      "css": ".ds-decision { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; font-family: var(--font-archivo), Archivo, system-ui, sans-serif; } .ds-badge { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border-radius: 0.375rem; padding: 6px 10px; font-size: 0.875rem; font-weight: 600; line-height: 1; } .ds-badge-green { background: rgb(var(--gate-green-rgb) / 0.1); color: var(--gate-green); } .ds-badge-green:hover { background: rgb(var(--gate-green-rgb) / 0.16); } .ds-badge:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--signal); } .ds-decision-why { font-size: 0.75rem; line-height: 1.375; color: var(--muted); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The One-Athlete Games",
+    "overview": "simplegym is dressed as a games identity for an audience of one, in the manner of Otl Aicher's 1972 Munich program. Every primary destination is a venue with its own colour field, and you find your way by hue and pictogram before you read a word. The band across the top of the screen names the venue in lowercase signage, and the tab bar repeats that hue as a marker on the active tab. The system turns down the usual look of this category: near-black panels, one neon accent, and stacks of stat cards.\n\nThe materials are cool paper, white panels that lie flat on 1px hairlines, and deep navy ink. Archivo is the only typeface and does every job through its width axis: wide for signage, regular for reading, semi-condensed with tabular figures for every measurement, so loads, reps and RIR line up like a results board. Density is set for the gym floor: one column, controls sized for a thumb, and the prescription numbers at the front of every screen.\n\nDark mode is a night version of the same venues rather than a separate theme. It follows `prefers-color-scheme` and is built on navy, never black. The hues deepen, and the action colour becomes pale ice so it stays clearly apart from the today field. Motion is small and tied to function: presses compress, the band and tab marker glide between venues, and rail segments sweep full as a set is logged. Under reduced motion all of it collapses to instant changes.",
+    "keyCharacteristics": [
+      "Five venue hues for wayfinding: today light blue, check-in green, home orange, body lime, more silver.",
+      "Lowercase signage; full sentences keep sentence case.",
+      "One family, three widths: Archivo wdth 112 for signage, default for reading, wdth 88 with tabular figures for numbers.",
+      "White panels lie flat on hairlines. Shadows appear only on things that float: popovers, sheets, the docked rail.",
+      "Ink is deep navy, never black, in both schemes.",
+      "Venue pictograms are filled marks on a 45/90-degree grid. Utility icons are lucide outlines.",
+      "A fixed app frame: only the content region scrolls, and every bar is pinned to the frame."
+    ],
+    "rules": [
+      {
+        "name": "The Venue Rule",
+        "body": "Each primary destination owns one field hue and only one. A hue means \"you are here\" (band, active tab marker, active sidebar row, selected day). It is never a status, a button fill or decoration. To find a route's hue, use the venue→hue map in `components/app/nav-items.ts`; never pick a hue by eye.",
+        "section": "colors"
+      },
+      {
+        "name": "The Signal Is Not a Venue Rule",
+        "body": "Signal Blue belongs to action and focus, and venue hues belong to place. In dark mode the signal moves to Pale Ice (#A8D6FF) specifically so it never reads as the today field (#3888C4). Keep that separation (2.5:1 between them) whenever either one changes.",
+        "section": "colors"
+      },
+      {
+        "name": "The Navy Ink Rule",
+        "body": "Ink is deep navy (#0D2433), never black. Text, on-hue labels, the scrim and every shadow are tinted from the `--text-rgb` channels.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three Widths Rule",
+        "body": "Width carries the hierarchy, not extra families. Use signage width (112) for names of places and titles, default width for anything you read, and semi-condensed width (88) with tabular figures for anything you measure. Never add a second typeface.",
+        "section": "typography"
+      },
+      {
+        "name": "The Lowercase Signage Rule",
+        "body": "Venue names, nav labels, button labels, chips, field labels, stat captions and day names are lowercase (\"check-in\", \"finish session\", \"day 1 · chest / back\"). Full sentences keep sentence case and their period: helper copy, empty states, toasts and errors (\"Log a set to preview next session's call.\").",
+        "section": "typography"
+      },
+      {
+        "name": "The One Column Rule",
+        "body": "Every page builds into the same 768px column with a 16px gutter, aligned under the venue band. Don't center narrower islands or invent new widths. The program editor's 1024px is the only exception.",
+        "section": "layout"
+      },
+      {
+        "name": "The Pinned Bar Rule",
+        "body": "Bars are pinned to the frame (band at the top, tab bar and session bar at the bottom) and never float mid-screen. The one sticky element is the docked session rail, anchored to the top of the scroll region.",
+        "section": "layout"
+      },
+      {
+        "name": "The Thumb Rule",
+        "body": "Anything tappable is at least 44px tall. Default controls are 48px (buttons, inputs, set fields, tab lists). Primary thumb actions and day chips are 56px, and tab bar cells are 68px.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Panel Rule",
+        "body": "Cards, slot panels, chips and bars carry no shadow at rest. If a surface needs separation, give it a hairline or a tone step. A shadow means the surface is floating above the page.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Ink-Tinted Shadow Rule",
+        "body": "Shadows are built from `rgb(var(--text-rgb) / a)` so they stay navy in light mode and track the ink in dark mode. Don't use Tailwind's default black shadow presets.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Square-Cut Rule",
+        "body": "Venue pictograms are drawn from straight bars with butt caps, mitred joins and 45/90-degree angles, plus round heads. Don't add curves, outlines or rounded stroke ends to a venue mark.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** map each destination to its venue hue through `VENUE_BG` / `routeVenue` in `components/app/nav-items.ts`: today #5DB0E8, check-in #4DB86A, home #F59A3B, body #A9D15A, more #C4CBCF.",
+      "**Do** set navy field ink (`text-on-hue`) on every venue fill, and navy ink (#0D2433) for text everywhere else.",
+      "**Do** keep Signal Blue (#1769B8 light, #A8D6FF dark) for actions, focus, selection and completed sets, and keep it visibly apart from the today hue.",
+      "**Do** set signage (venue names, page titles, the wordmark) in Archivo at `font-wide` (wdth 112), weight 800, with tight negative tracking.",
+      "**Do** set every measurement (load, reps, RIR, weeks, codes, stats) in `font-mono` / `.nums`, which is Archivo at wdth 88 with tabular figures.",
+      "**Do** write labels, buttons, chips and venue names in lowercase, and full sentences in sentence case with a period.",
+      "**Do** build panels as Panel White on Cool Paper with a 1px hairline and a 0.875rem radius, and no shadow.",
+      "**Do** build into the 768px column with a 16px gutter, aligned under the band. Go to 1024px only for the program editor.",
+      "**Do** make tappable controls 44px or taller: 48px by default, 56px for primary thumb actions.",
+      "**Do** use bottom sheets with drag-to-dismiss for secondary tasks on phones. Let `Dialog` become a sheet below 640px.",
+      "**Do** pair every transition and animation with a `motion-reduce` fallback. The global reduced-motion rule already zeroes durations; JS-driven motion checks `prefers-reduced-motion` itself, as the rail and drag-dismiss do.",
+      "**Do** theme the browser surfaces from tokens: the caret and selection come from signal, the focus ring is a paper gap plus a signal ring, and the scrollbar uses the hairline."
+    ],
+    "donts": [
+      "**Don't** use near-black panels with a single neon accent or stacks of stat cards. That is the category default this identity was built to refuse.",
+      "**Don't** use pure black (#000) for ink, scrims or shadows. Tint from `--text-rgb`.",
+      "**Don't** use a venue hue as a button fill, a status colour or decoration, and don't use Signal Blue as a venue field.",
+      "**Don't** put a shadow on a resting card, chip or bar, and don't reach for Tailwind's `shadow-md`/`shadow-lg`/`shadow-xl` presets.",
+      "**Don't** set signage, labels or eyebrows in uppercase with wide letter-spacing, and never put an eyebrow line above a heading.",
+      "**Don't** draw a venue pictogram as an outline icon, or use a filled pictogram for a utility action.",
+      "**Don't** add a second typeface or a real monospace font. Width and tabular figures do that job.",
+      "**Don't** let a bar float mid-screen or make the page chrome scroll. Only `<main>` scrolls.",
+      "**Don't** add gradient washes or decorative glows to panels or dialogs. The only halo is the focus state.",
+      "**Don't** introduce a new content width, or let content drift off the band's left edge."
+    ]
+  }
+}
