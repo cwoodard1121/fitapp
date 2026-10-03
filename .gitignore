@@ -51,3 +51,6 @@ supabase/.branches/
 
 # local QA artifacts
 screenshots/
+
+# impeccable review captures
+.impeccable/review/
