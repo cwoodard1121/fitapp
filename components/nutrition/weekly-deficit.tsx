@@ -404,7 +404,7 @@ export function DeficitTracker({
                 type="button"
                 onClick={() => setWin(w)}
                 className={cn(
-                  'rounded px-3 py-1 text-xs font-medium transition-colors',
+                  'h-10 rounded-sm px-3.5 text-sm font-semibold transition-colors',
                   active === w ? 'bg-signal text-signal-foreground' : 'text-muted hover:text-foreground',
                 )}
               >
@@ -414,13 +414,13 @@ export function DeficitTracker({
           </div>
 
           {/* Outlier filter — drop under-logged completed days from the stats. */}
-          <label className="flex items-center gap-2 text-xs text-muted">
+          <label className="flex items-center gap-2 text-sm text-muted">
             <Switch
               checked={ignoreLow}
               onCheckedChange={toggleIgnore}
               aria-label="Ignore low-calorie days"
             />
-            <span className="whitespace-nowrap">Ignore days under</span>
+            <span className="whitespace-nowrap">ignore days under</span>
             <Input
               type="number"
               inputMode="numeric"
@@ -431,7 +431,7 @@ export function DeficitTracker({
               }}
               disabled={!ignoreLow}
               aria-label="Minimum calories"
-              className="h-7 w-16 px-2 py-1 text-center font-mono text-xs tabular-nums"
+              className="h-11 w-20 px-2 text-center font-mono tabular-nums"
             />
             <span>kcal</span>
           </label>
