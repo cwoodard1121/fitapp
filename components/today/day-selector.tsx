@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Check } from 'lucide-react'
 
 import type { ProgramDay, SessionStatus } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import { cn, dayName } from '@/lib/utils'
 
 interface DaySelectorProps {
   days: ProgramDay[]
@@ -64,7 +64,7 @@ export function DaySelector({
               ) : null}
             </span>
             <span className="whitespace-nowrap text-[0.9375rem] font-bold lowercase leading-none">
-              {day.label}
+              {dayName(day.label)}
             </span>
           </Link>
         )

@@ -20,6 +20,15 @@ export const TAP_SCALE =
   "transition-transform active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100";
 
 /**
+ * A program day's name without a leading "Day 3 ·" style prefix, for places
+ * that already print the day number beside it.
+ */
+export function dayName(label: string): string {
+  const stripped = label.replace(/^\s*day\s*\d+\s*[·:|\-–—]\s*/i, "").trim();
+  return stripped.length > 0 ? stripped : label;
+}
+
+/**
  * Round a number to `decimals` places (default 0) using half-up rounding.
  */
 export function roundTo(value: number, decimals = 0): number {

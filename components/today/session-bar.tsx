@@ -7,6 +7,7 @@ import { format } from 'date-fns'
 
 import type { SessionStatus } from '@/lib/types'
 import { Button } from '@/components/ui/button'
+import { dayName } from '@/lib/utils'
 import { finishSession, getSessionRecap, reopenSession, type SessionRecapData } from '@/app/(app)/today/actions'
 import { flushTrainingSaves } from '@/lib/client/training-save-queue'
 import { SessionWrappedRecap } from '@/components/today/session-wrapped-recap'
@@ -83,7 +84,7 @@ export function SessionBar({
       <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-[0.9375rem] font-bold lowercase leading-tight text-foreground">
-            day {dayNumber} · {dayLabel}
+            day {dayNumber} · {dayName(dayLabel)}
           </p>
           <p className="mt-0.5 font-mono text-xs font-semibold text-muted">
             {done && performedAt

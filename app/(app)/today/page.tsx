@@ -31,6 +31,7 @@ import {
   mergeSessionExerciseSlots,
 } from '@/lib/data/training-history'
 import { Badge } from '@/components/ui/badge'
+import { dayName } from '@/lib/utils'
 import { ExerciseAdvice } from '@/components/today/exercise-advice'
 import { WeekSelector } from '@/components/today/week-selector'
 import { DaySelector } from '@/components/today/day-selector'
@@ -244,9 +245,11 @@ export default async function TodayPage({
 
       <header className="mt-5">
         <h1 className="text-[2.125rem] font-extrabold lowercase leading-[1.05] tracking-[-0.03em] font-wide">
-          {selectedDay.label}
+          {dayName(selectedDay.label)}
         </h1>
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm font-semibold text-muted">
+          <span className="font-mono">day {selectedDay.day_number}</span>
+          <span aria-hidden>·</span>
           <span className="font-mono">
             week {week} of {program.length_weeks}
           </span>
