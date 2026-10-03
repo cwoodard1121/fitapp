@@ -1,12 +1,16 @@
+import { cache } from 'react'
 import type { Profile } from '@/lib/types'
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId } from '@/lib/data/auth'
 
 /**
  * Read the current user's profile (1:1 with auth user, id = auth.uid()).
- * Returns null if the row does not exist yet.
+ * Returns null if the row does not exist yet. Deduped per render: the app
+ * shell and the page both read it.
  */
-export async function getProfile(): Promise<Profile | null> {
+export const getProfile = cache(fetchProfile)
+
+async function fetchProfile(): Promise<Profile | null> {
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
   const { data, error } = await supabase

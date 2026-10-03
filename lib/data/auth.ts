@@ -1,20 +1,24 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { cache } from 'react'
 
+export type SessionUser = { id: string; email: string | null }
+
 /**
- * `auth.getUser()` always makes a network round-trip to Supabase's Auth
- * server to revalidate the session (unlike `getSession()`, which trusts the
- * local cookie) — correct for security, expensive to repeat. `createClient()`
- * is itself `cache()`d per request, so every caller within one render passes
- * the SAME client instance here, which lets this dedupe down to one real
- * network call no matter how many `getX()` helpers ask for the user id.
+ * The project signs sessions with an asymmetric (ES256) key, so `getClaims()`
+ * verifies the JWT locally against the cached JWKS instead of round-tripping
+ * to Supabase Auth like `getUser()` does. Deduped per render via `cache()`.
  */
-export const getCachedUser = cache(async (supabase: SupabaseClient) => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  return user
-})
+export const getCachedUser = cache(
+  async (supabase: SupabaseClient): Promise<SessionUser | null> => {
+    const { data, error } = await supabase.auth.getClaims()
+    if (error || !data?.claims?.sub) return null
+    const email = data.claims.email
+    return {
+      id: data.claims.sub,
+      email: typeof email === 'string' && email.length > 0 ? email : null,
+    }
+  },
+)
 
 /**
  * Resolve the authenticated user id, or throw. Every insert in the data layer

@@ -56,10 +56,11 @@ export async function updateSession(request: NextRequest) {
       },
     })
 
-    // Do not run code between createServerClient and getUser() — it refreshes the token.
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    // Do not run code between createServerClient and getClaims() — it refreshes
+    // the token. Asymmetric signing keys make this a local JWT check rather
+    // than a network round-trip on every request.
+    const { data: claimsData } = await supabase.auth.getClaims()
+    const user = claimsData?.claims?.sub ? claimsData.claims : null
 
     if (!user && !isAuthRoute) {
       const url = request.nextUrl.clone()

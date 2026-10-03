@@ -4,6 +4,7 @@
  * ANALYSIS_ALLOWED_EMAILS env var. When unset, only the owner is allowed.
  */
 import { createClient } from '@/lib/supabase/server'
+import { getCachedUser } from '@/lib/data/auth'
 
 /** Fallback allowed account when ANALYSIS_ALLOWED_EMAILS is unset/empty. */
 const DEFAULT_ALLOWED = ['cameronwoodard1121@gmail.com']
@@ -38,9 +39,7 @@ export async function getAnalysisAccess(): Promise<{
   email: string | null
 }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getCachedUser(supabase)
   const email = user?.email ?? null
   return { allowed: isEmailAllowed(email), email }
 }

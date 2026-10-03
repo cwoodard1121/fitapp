@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import type { ExerciseSlot, Program, ProgramDay, ProgramFull } from '@/lib/types'
 import { createClient } from '@/lib/supabase/server'
 import { requireUserId } from '@/lib/data/auth'
@@ -7,7 +8,9 @@ import { insertDaysAndSlots } from '@/lib/data/program-write'
 /**
  * The user's active program, or null if none exists yet.
  */
-export async function getActiveProgram(): Promise<Program | null> {
+export const getActiveProgram = cache(fetchActiveProgram)
+
+async function fetchActiveProgram(): Promise<Program | null> {
   const supabase = await createClient()
   const userId = await requireUserId(supabase)
   const { data, error } = await supabase

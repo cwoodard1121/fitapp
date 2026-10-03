@@ -3,7 +3,7 @@ import { CalendarDays } from 'lucide-react'
 
 import {
   getProfile,
-  getPrograms,
+  getActiveProgram,
   getProgramFull,
   getSessionForDay,
   getSetLogsForSession,
@@ -15,7 +15,9 @@ import {
   requireUserId,
 } from '@/lib/data'
 import type {
+  AnalysisPayload,
   ExerciseSlot,
+  Program,
   RecoveryMetric,
   Session,
   SessionStatus,
@@ -53,11 +55,10 @@ export default async function TodayPage({
   const params = await searchParams
   const dayParam = typeof params.day === 'string' ? params.day : undefined
 
-  const [profile, programs] = await Promise.all([
+  const [profile, program] = await Promise.all([
     getProfile(),
-    getPrograms(),
+    getActiveProgram(),
   ])
-  const program = programs.find((p) => p.is_active) ?? null
 
   const unit = profile?.unit ?? 'lb'
   const supabase = await createClient()
@@ -72,6 +73,11 @@ export default async function TodayPage({
       </div>
     )
   }
+
+  // Coaching + recovery inputs don't depend on the session branch below, so
+  // start them now and await them only once the slots are built.
+  const coachingPromise = loadCoachingInputs(supabase, userId, program)
+  coachingPromise.catch(() => {})
 
   const full = await getProgramFull(program.id)
   if (!full || full.days.length === 0) {
@@ -196,44 +202,7 @@ export default async function TodayPage({
     )
   }).length
 
-  // Cheap AI coaching, gated to allowed accounts. Skips the analysis query
-  // entirely when the account is not allowed; renders nothing when empty.
-  const { allowed } = await getAnalysisAccess()
-  const payload = allowed ? (await getLatestAnalysis())?.payload ?? null : null
-
-  // Wearable-derived recovery score — not displayed on Today (that card lives
-  // on Check-in now), but still computed here because it feeds the readiness
-  // auto-suggestion below.
-  let latestRecovery: RecoveryMetric | null = null
-  let recoveryScore: RecoveryScore | null = null
-  if (allowed) {
-    const { data: trainingBlockRows, error: trainingBlockError } = await supabase
-      .from('blocks')
-      .select('program_id,phase,start_date')
-      .eq('user_id', userId)
-      .eq('kind', 'training')
-      .eq('is_active', true)
-      .order('start_date', { ascending: false })
-    if (trainingBlockError) throw trainingBlockError
-    const trainingBlock =
-      trainingBlockRows?.find((block) => block.program_id === program.id) ??
-      trainingBlockRows?.find((block) => block.program_id == null) ??
-      trainingBlockRows?.[0] ??
-      null
-    const recoveryBaselineStart = trainingBlock?.start_date ?? program.start_date
-    const recent = await getRecoveryRange(supabase, userId, 35)
-    for (let i = recent.length - 1; i >= 0; i--) {
-      if (recent[i].steps != null || recent[i].sleep_minutes_asleep != null) {
-        latestRecovery = recent[i]
-        break
-      }
-    }
-    if (latestRecovery) {
-      recoveryScore = computeRecoveryScore(recent, latestRecovery.metric_date, {
-        baselineStart: recoveryBaselineStart,
-      })
-    }
-  }
+  const { payload, recoveryScore } = await coachingPromise
 
   // Match the AI's per-lift advice to the exercises on the selected day so the
   // log can show inline "coach notes" exactly where they're relevant.
@@ -340,6 +309,55 @@ export default async function TodayPage({
       />
     </div>
   )
+}
+
+async function loadCoachingInputs(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  program: Program,
+): Promise<{
+  payload: AnalysisPayload | null
+  recoveryScore: RecoveryScore | null
+}> {
+  // AI coaching and the wearable recovery score are gated to allowed accounts.
+  const { allowed } = await getAnalysisAccess()
+  if (!allowed) return { payload: null, recoveryScore: null }
+
+  const [analysis, blocksRes, recent] = await Promise.all([
+    getLatestAnalysis(),
+    supabase
+      .from('blocks')
+      .select('program_id,phase,start_date')
+      .eq('user_id', userId)
+      .eq('kind', 'training')
+      .eq('is_active', true)
+      .order('start_date', { ascending: false }),
+    getRecoveryRange(supabase, userId, 35),
+  ])
+  if (blocksRes.error) throw blocksRes.error
+  const trainingBlockRows = blocksRes.data
+  const trainingBlock =
+    trainingBlockRows?.find((block) => block.program_id === program.id) ??
+    trainingBlockRows?.find((block) => block.program_id == null) ??
+    trainingBlockRows?.[0] ??
+    null
+
+  // Not displayed on Today (that card lives on Check-in) but it feeds the
+  // readiness auto-suggestion.
+  let latestRecovery: RecoveryMetric | null = null
+  for (let i = recent.length - 1; i >= 0; i--) {
+    if (recent[i].steps != null || recent[i].sleep_minutes_asleep != null) {
+      latestRecovery = recent[i]
+      break
+    }
+  }
+  const recoveryScore = latestRecovery
+    ? computeRecoveryScore(recent, latestRecovery.metric_date, {
+        baselineStart: trainingBlock?.start_date ?? program.start_date,
+      })
+    : null
+
+  return { payload: analysis?.payload ?? null, recoveryScore }
 }
 
 function Header({
