@@ -164,10 +164,12 @@ export function SessionRail({
       <div className="sticky top-0 z-20 -mx-4 h-0" aria-hidden={!docked}>
         <div
           className={cn(
-            'absolute inset-x-0 top-0 overflow-hidden border-b border-border bg-surface/95 px-4 pb-1 pt-1.5 backdrop-blur-md transition-[transform,box-shadow] duration-200 ease-out supports-[backdrop-filter]:bg-surface/85 motion-reduce:transition-none',
+            'absolute inset-x-0 top-0 border-b border-border bg-surface/95 px-4 pb-1 pt-1.5 backdrop-blur-md transition-[transform,opacity,visibility,box-shadow] duration-200 ease-out supports-[backdrop-filter]:bg-surface/85 motion-reduce:transition-none',
+            // Undocked, the anchor sits in flow just above the rail, so the
+            // copy must be invisible there, not merely shifted up.
             docked
-              ? 'translate-y-0 shadow-[0_6px_18px_rgb(var(--text-rgb)/0.08)]'
-              : 'pointer-events-none -translate-y-[110%]',
+              ? 'visible translate-y-0 opacity-100 shadow-[0_6px_18px_rgb(var(--text-rgb)/0.08)]'
+              : 'pointer-events-none invisible -translate-y-full opacity-0',
           )}
         >
           {band('docked')}
