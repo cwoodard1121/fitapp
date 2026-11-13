@@ -1,5 +1,7 @@
 'use client'
 
+import { toast } from 'sonner'
+
 /**
  * Offline write queue. A wrapped server action runs normally when the device
  * is online. When the device is offline, or the request fails at the network
@@ -16,8 +18,10 @@ interface QueuedCall {
   key: string | null
   args: unknown[]
   at: number
+  attempts?: number
 }
 
+const MAX_ATTEMPTS = 5
 const STORAGE_KEY = 'simplegym:offline-queue:v1'
 const registry = new Map<string, AnyAction>()
 const listeners = new Set<(count: number) => void>()
@@ -127,17 +131,24 @@ export function flushOfflineQueue(): Promise<number> {
         )) as Partial<{ ok: boolean; error: string }> | undefined
         if (res && res.ok === false && /session expired|sign in/i.test(res.error ?? '')) {
           // Keep the change until you sign in again.
+          toast.error('Sign in again to sync your offline changes.')
           break
         }
         if (res && res.ok === false) {
-          console.error('Offline replay refused', next.name, res.error)
+          toast.error(`An offline change did not sync: ${res.error ?? 'unknown error'}`)
         } else {
           sent += 1
         }
       } catch (error) {
         if (isNetworkError(error)) break
-        // The server refused this call. Drop it so it cannot block the rest.
+        // Keep the change and retry later. Give up after MAX_ATTEMPTS tries.
+        const attempts = (next.attempts ?? 0) + 1
+        if (attempts < MAX_ATTEMPTS) {
+          write(read().map((call) => (call.id === next.id ? { ...call, attempts } : call)))
+          break
+        }
         console.error('Offline replay failed', next.name, error)
+        toast.error('An offline change did not sync after several tries.')
       }
       write(read().filter((call) => call.id !== next.id))
     }
