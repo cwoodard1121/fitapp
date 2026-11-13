@@ -5,7 +5,7 @@ import { Activity, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { SorenessCheckInPrompt } from '@/lib/types'
-import { saveSorenessCheckIns } from '@/app/(app)/today/actions'
+import { saveSorenessCheckIns } from '@/lib/client/offline-actions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {

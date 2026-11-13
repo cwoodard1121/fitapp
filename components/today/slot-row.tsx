@@ -11,7 +11,7 @@ import { DecisionBadge } from '@/components/ui/decision-badge'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { announceSlotProgress } from '@/lib/client/slot-progress'
-import { saveSetEntries } from '@/app/(app)/today/actions'
+import { saveSetEntries } from '@/lib/client/offline-actions'
 import { ReadinessSheet } from '@/components/today/readiness-sheet'
 import {
   enqueueTrainingSave,

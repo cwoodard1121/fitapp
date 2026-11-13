@@ -8,7 +8,8 @@ import { format } from 'date-fns'
 import type { SessionStatus } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { dayName } from '@/lib/utils'
-import { finishSession, getSessionRecap, reopenSession, type SessionRecapData } from '@/app/(app)/today/actions'
+import { getSessionRecap, reopenSession, type SessionRecapData } from '@/app/(app)/today/actions'
+import { finishSession } from '@/lib/client/offline-actions'
 import { flushTrainingSaves } from '@/lib/client/training-save-queue'
 import { SessionWrappedRecap } from '@/components/today/session-wrapped-recap'
 
@@ -62,8 +63,12 @@ export function SessionBar({
         toast.error(res.error)
         return
       }
-      const recapRes = await getSessionRecap({ sessionId })
-      if (recapRes.ok) {
+      if (navigator.onLine === false) {
+        toast.success('Session finished offline. It syncs when you reconnect.')
+        return
+      }
+      const recapRes = await getSessionRecap({ sessionId }).catch(() => null)
+      if (recapRes?.ok) {
         setRecap(recapRes.data)
       } else {
         toast.success('Session finished — nice work.')

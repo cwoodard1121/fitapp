@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { OfflineSync } from '@/components/app/offline-sync'
 import Link from "next/link"
 
 import { ensureProfile, seedDefaultProgram, getCachedUser } from "@/lib/data"
@@ -58,6 +59,7 @@ export default async function AppLayout({
       {isEmailAllowed(user?.email) ? <CoachWidget /> : null}
 
       <WearableAutoSync />
+      <OfflineSync />
     </div>
   )
 }

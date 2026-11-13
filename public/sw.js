@@ -1,10 +1,33 @@
-/* simplegym service worker — minimal, network-first for a fresh-but-installable PWA. */
-const CACHE = "simplegym-v2";
-const SHELL = ["/today", "/manifest.webmanifest", "/icon.svg", "/icon-192.png"];
+/* simplegym service worker. Network-first pages with an offline cache. */
+const CACHE = "simplegym-v3";
+const ASSETS = ["/manifest.webmanifest", "/icon.svg", "/icon-192.png"];
+// Main pages, cached on install so they open with no wifi.
+const PAGES = ["/today", "/nutrition", "/history", "/program", "/progress", "/body", "/goals", "/overview", "/checkin", "/settings"];
+
+async function cachePage(cache, path) {
+  try {
+    const res = await fetch(path, { credentials: "same-origin" });
+    if (!res.ok || res.redirected) return;
+    const html = await res.clone().text();
+    await cache.put(path, res);
+    // Also cache the page's scripts and styles so it runs offline.
+    const assets = [...html.matchAll(/(?:src|href)="(\/_next\/static\/[^"]+)"/g)].map((m) => m[1]);
+    await Promise.all(
+      [...new Set(assets)].map((a) =>
+        cache.match(a).then((hit) => hit || cache.add(a).catch(() => {})),
+      ),
+    );
+  } catch {
+    /* offline or failed: skip */
+  }
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}),
+    caches.open(CACHE).then(async (c) => {
+      await c.addAll(ASSETS).catch(() => {});
+      await Promise.all(PAGES.map((p) => cachePage(c, p)));
+    }),
   );
   self.skipWaiting();
 });
@@ -33,12 +56,17 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
+          if (res.ok && !res.redirected) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(url.pathname, copy)).catch(() => {});
+          }
           return res;
         })
         .catch(() =>
-          caches.match(request).then((m) => m || caches.match("/today")),
+          caches
+            .match(url.pathname)
+            .then((m) => m || caches.match(request, { ignoreSearch: true }))
+            .then((m) => m || caches.match("/today")),
         ),
     );
     return;

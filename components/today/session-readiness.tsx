@@ -7,7 +7,7 @@ import { Check, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
-import { saveSessionReadiness } from '@/app/(app)/today/actions'
+import { saveSessionReadiness } from '@/lib/client/offline-actions'
 
 interface SessionReadinessProps {
   sessionId: string

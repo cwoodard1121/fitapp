@@ -3,7 +3,7 @@
 import Link from 'next/link'
 
 import { cn } from '@/lib/utils'
-import { setLastSelectedWeek } from '@/app/(app)/today/actions'
+import { setLastSelectedWeek } from '@/lib/client/offline-actions'
 
 interface WeekSelectorProps {
   lengthWeeks: number

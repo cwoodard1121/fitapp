@@ -21,8 +21,8 @@ import {
   createDailyHabit,
   resetHabit,
   setHabitArchived,
-  setHabitCompleted,
 } from '@/app/(app)/today/habit-actions'
+import { setHabitCompleted } from '@/lib/client/offline-actions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -122,7 +122,7 @@ export function DailyHabitsCard({ summaries }: DailyHabitsCardProps) {
         setKindInput('build')
         setDialogOpen(false)
         toast.success(`${normalizedName} added.`)
-        router.refresh()
+        if (navigator.onLine !== false) router.refresh()
       } finally {
         setPendingKey(null)
       }
@@ -160,7 +160,7 @@ export function DailyHabitsCard({ summaries }: DailyHabitsCardProps) {
         } else {
           toast.success(completed ? `Marked ${summary.name} done.` : `Unmarked that day.`)
         }
-        router.refresh()
+        if (navigator.onLine !== false) router.refresh()
       } finally {
         setPendingKey(null)
       }
@@ -178,7 +178,7 @@ export function DailyHabitsCard({ summaries }: DailyHabitsCardProps) {
         }
 
         toast.success(`${habitName} restored.`)
-        router.refresh()
+        if (navigator.onLine !== false) router.refresh()
       } finally {
         setPendingKey(null)
       }
@@ -207,7 +207,7 @@ export function DailyHabitsCard({ summaries }: DailyHabitsCardProps) {
 
         setResetTarget(null)
         toast.success(`${trimmedName || resetTarget.name} reset — fresh start.`)
-        router.refresh()
+        if (navigator.onLine !== false) router.refresh()
       } finally {
         setPendingKey(null)
       }
@@ -234,7 +234,7 @@ export function DailyHabitsCard({ summaries }: DailyHabitsCardProps) {
           return
         }
 
-        router.refresh()
+        if (navigator.onLine !== false) router.refresh()
         toast(`${summary.name} archived.`, {
           action: {
             label: 'Undo',

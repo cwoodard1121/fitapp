@@ -6,11 +6,8 @@ import { toast } from 'sonner'
 
 import type { Block, NutritionLog, Unit } from '@/lib/types'
 import type { Calibration } from '@/lib/nutrition/calibration'
-import {
-  upsertNutritionLog,
-  deleteNutritionLog,
-  type UpsertNutritionInput,
-} from '@/app/(app)/nutrition/actions'
+import type { UpsertNutritionInput } from '@/app/(app)/nutrition/actions'
+import { upsertNutritionLog, deleteNutritionLog } from '@/lib/client/offline-actions'
 
 import { DailyIntakeForm, type IntakeFormValues } from './daily-intake-form'
 import { TargetsProgress } from './targets-progress'
@@ -120,7 +117,7 @@ export function NutritionClient({
         if (values.logged_on !== today) {
           setValues(blankForm(today))
         }
-        router.refresh()
+        if (navigator.onLine !== false) router.refresh()
       } else {
         toast.error(res.error)
       }
@@ -143,7 +140,7 @@ export function NutritionClient({
         if (values.logged_on === loggedOn) {
           setValues(blankForm(today))
         }
-        router.refresh()
+        if (navigator.onLine !== false) router.refresh()
       } else {
         toast.error(res.error)
       }
